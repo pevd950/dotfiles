@@ -103,10 +103,21 @@ fi
 # Example aliases
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
-alias ibrew='arch -x86_64 /usr/local/bin/brew'
-alias sshmb='ssh pablovalero@Pablos-MacBook-Pro.local -p 26'
-alias python=/opt/homebrew/bin/python3
+
+#macOS
 alias o="open ."
+alias ibrew='arch -x86_64 /usr/local/bin/brew'
+alias python=/opt/homebrew/bin/python3
+
+#ssh
+alias sshmb='ssh pablovalero@Pablos-MacBook-Pro.local -p 26'
+
+# cd
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Git
 alias gs='git status'
 alias gc="git checkout"
 alias gcm="git checkout master"
@@ -116,7 +127,9 @@ alias gm="git merge"
 alias gbranch="git checkout -b"
 alias gclone="git clone"
 alias g="gittower ."
-alias zshrc="nova ~/.zshrc"
 
+# Editor
+alias zshrc="nova ~/.zshrc"
+alias nv='nova .'
 
 test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"
