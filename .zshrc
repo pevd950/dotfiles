@@ -1,6 +1,12 @@
-#If you come from bash you might have to change your $PATH.
-export PATH=$HOME/bin:/opt/homebrew/bin:/usr/local/bin:$PATH
+#Checking if arm64 or x86
+HOST_ARCH=$(uname -m)
 
+#If you come from bash you might have to change your $PATH.
+export PATH=$HOME/bin:/usr/local/bin:$PATH
+#arch conditional aliases
+if [ "arm64" = $HOST_ARCH ]; then
+   export PATH=/opt/homebrew/bin:$PATH
+fi
 # Path to your oh-my-zsh installation.
 export ZSH="/Users/pablovalero/.oh-my-zsh"
 
@@ -61,7 +67,7 @@ ZSH_THEME="robbyrussell"
 # HIST_STAMPS="mm/dd/yyyy"
 
 # Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
+ZSH_CUSTOM=~/.zshrc_custom/
 
 # Which plugins would you like to load?
 # Standard plugins can be found in $ZSH/plugins/
@@ -104,32 +110,11 @@ fi
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-#macOS
-alias o="open ."
-alias ibrew='arch -x86_64 /usr/local/bin/brew'
-alias python=/opt/homebrew/bin/python3
+#arch conditional aliases
+if [ "arm64" = $HOST_ARCH ]; then
+   alias ibrew='arch -x86_64 /usr/local/bin/brew'
+   alias python=/opt/homebrew/bin/python3
+fi
 
-#ssh
-alias sshmb='ssh pablovalero@Pablos-MacBook-Pro.local -p 26'
-
-# cd
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ....='cd ../../..'
-
-# Git
-alias gs='git status'
-alias gc="git checkout"
-alias gcm="git checkout master"
-alias gpull="git pull"
-alias gpush="git push"
-alias gm="git merge"
-alias gbranch="git checkout -b"
-alias gclone="git clone"
-alias g="gittower ."
-
-# Editor
-alias zshrc="nova ~/.zshrc"
-alias nv='nova .'
 
 test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"
