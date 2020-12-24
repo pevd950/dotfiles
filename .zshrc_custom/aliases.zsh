@@ -18,7 +18,7 @@ alias gpush="git push"
 alias gm="git merge"
 alias gbranch="git checkout -b"
 alias gclone="git clone"
-alias g="gittower ."
+alias gt="gittower ."
 
 # Editor
 alias zshrc="nova ~/.zshrc"
