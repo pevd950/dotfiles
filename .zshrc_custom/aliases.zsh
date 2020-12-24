@@ -20,6 +20,12 @@ alias gbranch="git checkout -b"
 alias gclone="git clone"
 alias gt="gittower ."
 
+# YADM
+alias ys="yadm status"
+alias ypull="yadm pull"
+alias ypush="yadm push"
+alias yadd="yadm add"
+
 # Editor
 alias zshrc="nova ~/.zshrc"
 alias nv='nova .'
