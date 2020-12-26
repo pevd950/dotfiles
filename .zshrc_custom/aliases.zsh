@@ -3,7 +3,7 @@ alias o="open ."
 
 #ssh
 alias sshmb='ssh pablovalero@Pablos-MacBook-Pro.local -p 26'
-
+alias ssmm='ssh pablovalero@Pablos-Mac-mini.local -p 22'
 # cd
 alias ..='cd ..'
 alias ...='cd ../..'
