@@ -3,6 +3,12 @@ HOST_ARCH=$(uname -m)
 
 #If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/bin:$PATH
+
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/tools/bin
+export PATH=$PATH:$ANDROID_HOME/platform-tools
 #arch conditional aliases
 if [ "arm64" = $HOST_ARCH ]; then
    export PATH=/opt/homebrew/bin:$PATH
