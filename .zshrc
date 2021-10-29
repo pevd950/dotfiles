@@ -3,7 +3,9 @@ HOST_ARCH=$(uname -m)
 
 #If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/bin:$PATH
-
+#Flutter
+export PATH=$PATH:$USER/flutter/bin
+#Android
 export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/tools
@@ -15,6 +17,10 @@ if [ "arm64" = $HOST_ARCH ]; then
 fi
 # Path to your oh-my-zsh installation.
 export ZSH="/Users/pablovalero/.oh-my-zsh"
+
+#Export Nova as React Editor
+export REACT_EDITOR=nova
+
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
