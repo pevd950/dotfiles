@@ -2,7 +2,7 @@
 alias o="open ."
 
 #ssh
-alias sshmb='ssh pablovalero@Pablos-MacBook-Pro.local -p 26'
+alias sshmb='ssh pablovalero@kakarot-mpb.local -p 26'
 alias sshmm='ssh pablovalero@Pablos-Mac-mini.local -p 22'
 alias sshpi='ssh pi@pvd950pi.local -p 22'
 
@@ -30,4 +30,5 @@ alias yadd="yadm add"
 
 # Editor
 alias zshrc="nova ~/.zshrc"
+alias aliases="code ~/.zshrc_custom/aliases.zsh"
 alias nv='nova .'
