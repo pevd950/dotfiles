@@ -30,5 +30,5 @@ alias yadd="yadm add"
 
 # Editor
 alias zshrc="nova ~/.zshrc"
-alias aliases="code ~/.zshrc_custom/aliases.zsh"
+alias myaliases="code ~/.zshrc_custom/aliases.zsh"
 alias nv='nova .'

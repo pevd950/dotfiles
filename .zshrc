@@ -86,7 +86,7 @@ ZSH_CUSTOM=~/.zshrc_custom/
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git)
+plugins=(git encode64 aliases copydir copyfile docker-compose macos) 
 
 ZSH_DISABLE_COMPFIX="true"
 source $ZSH/oh-my-zsh.sh
