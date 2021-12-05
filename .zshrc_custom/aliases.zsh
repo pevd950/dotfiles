@@ -2,9 +2,9 @@
 alias o="open ."
 
 #ssh
-alias sshmb='ssh pablovalero@kakarot-mpb.local -p 26'
-alias sshmm='ssh pablovalero@Pablos-Mac-mini.local -p 22'
-alias sshpi='ssh pi@pvd950pi.local -p 22'
+# alias sshmb='ssh pablovalero@kakarot-mpb.local -p 26'
+# alias sshmm='ssh pablovalero@Pablos-Mac-mini.local -p 22'
+# alias sshpi='ssh pi@pvd950pi.local -p 22'
 
 # cd
 alias ..='cd ..'
