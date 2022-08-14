@@ -20,7 +20,8 @@ export ZSH="/Users/pablovalero/.oh-my-zsh"
 
 #Export Nova as React Editor
 export REACT_EDITOR=nova
-
+#Init ruby env
+eval "$(rbenv init - zsh)"
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -91,7 +92,7 @@ plugins=(
    encode64
    common-aliases 
    aliases 
-   copydir
+   copypath
    copyfile 
    docker-compose 
    macos
@@ -141,5 +142,8 @@ if [ "arm64" = $HOST_ARCH ]; then
    alias python=/opt/homebrew/bin/python3
 fi
 
+#Completion for 1Password CLI
+eval "$(op completion zsh)"; compdef _op op
+eval "$(rbenv init -)"
 
 test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"
