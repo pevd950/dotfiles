@@ -1,0 +1,258 @@
+#!/bin/sh
+find_latest_ruby() {
+  rbenv install -l | grep -v - | tail -1 | sed -e 's/^ *//'
+}
+
+adopt_latest_ruby() {
+  fancy_echo "$FUNCNAME: Activating rbenv"
+  # shellcheck disable=SC2016
+  append_to_shellrc 'eval "$(rbenv init - --no-rehash)"' 1
+  eval "$(rbenv init -)"
+
+  ruby_version="$(find_latest_ruby)"
+  echo "$FUNCNAME: Latest ruby is $ruby_version."
+
+  if ! rbenv versions | grep -Fq "$ruby_version"; then
+    echo "$FUNCNAME: Ruby $ruby_version is not installed. Installing..."
+    RUBY_CONFIGURE_OPTS=--with-openssl-dir="$HOMEBREW_PREFIX/opt/openssl" \
+      rbenv install -s "$ruby_version"
+  fi
+
+  echo "$FUNCNAME: Setting global and shell Ruby versions to $ruby_version"
+  rbenv global "$ruby_version"
+  rbenv shell "$ruby_version"
+
+  echo "$FUNCNAME: Updating system gems..."
+  gem update --system
+
+  echo "$FUNCNAME: All done. Welcome to the brave new world of Ruby $ruby_version."
+}
+
+install_or_update_gem() {
+  if gem list "$1" --installed > /dev/null; then
+    gem update "$@"
+  else
+    gem install "$@"
+  fi
+  rbenv rehash
+}
+
+setup_bundler() {
+  local number_of_cores
+  local jobcount
+
+  fancy_echo "$FUNCNAME: Ensuring you have the bundler gem installed. This is used to create reliable, reproducible Ruby gem environments during development. Read more at: http://bundler.io/"
+  install_or_update_gem 'bundler'
+
+  number_of_cores=$(sysctl -n hw.ncpu)
+  jobcount=$((number_of_cores - 1))
+  bundle config --global jobs $jobcount
+  echo "$FUNCNAME: Configured bundler to run up to $jobcount jobs simultaneously, and you're good to go!"
+}
+
+main() {
+  adopt_latest_ruby
+  setup_bundler
+}
+
+system_type=$(uname -s)
+
+if [ "$system_type" = "Darwin" ]; then
+
+  # install homebrew if it's missing
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "Installing homebrew"
+    /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+  else
+    brew update
+	brew doctor
+  fi
+
+  if [ -f "$HOME/.Brewfile" ]; then
+    echo "Updating homebrew bundle"
+    brew bundle --global
+  fi
+
+fi
+
+echo_ok "Installing oh my zsh..."
+
+if [[ ! -f ~/.zshrc ]]; then
+	echo ''
+	echo '##### Installing oh-my-zsh...'
+	curl -L https://github.com/robbyrussell/oh-my-zsh/raw/master/tools/install.sh | sh
+
+	cp ~/.zshrc ~/.zshrc.orig
+	cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc
+	chsh -s /bin/zsh
+fi
+
+# echo_ok "Configuring Github"
+
+# if [[ ! -f ~/.ssh/id_rsa ]]; then
+# 	echo ''
+# 	echo '##### Please enter your github username: '
+# 	read github_user
+# 	echo '##### Please enter your github email address: '
+# 	read github_email
+
+# 	# setup github
+# 	if [[ $github_user && $github_email ]]; then
+# 		# setup config
+# 		git config --global user.name "$github_user"
+# 		git config --global user.email "$github_email"
+# 		git config --global github.user "$github_user"
+# 		# git config --global github.token your_token_here
+# 		git config --global color.ui true
+# 		git config --global push.default current
+# 		# VS Code support
+# 		git config --global core.editor "code --wait"
+
+# 		# set rsa key
+# 		curl -s -O http://github-media-downloads.s3.amazonaws.com/osx/git-credential-osxkeychain
+# 		chmod u+x git-credential-osxkeychain
+# 		sudo mv git-credential-osxkeychain "$(dirname $(which git))/git-credential-osxkeychain"
+# 		git config --global credential.helper osxkeychain
+
+# 		# generate ssh key
+# 		cd ~/.ssh || exit
+# 		ssh-keygen -t rsa -C "$github_email"
+# 		pbcopy <~/.ssh/id_rsa.pub
+# 		echo ''
+# 		echo '##### The following rsa key has been copied to your clipboard: '
+# 		cat ~/.ssh/id_rsa.pub
+# 		echo '##### Follow step 4 to complete: https://help.github.com/articles/generating-ssh-keys'
+# 		ssh -T git@github.com
+# 	fi
+# fi
+
+# VSCode Extentions
+echo_ok "Installing VS Code Extensions..."
+
+VSCODE_EXTENTIONS=(
+    alefragnani.Bookmarks
+    alefragnani.project-manager
+    arcticicestudio.nord-visual-studio-code
+    bierner.github-markdown-preview
+    bierner.markdown-checkbox
+    bierner.markdown-emoji
+    bierner.markdown-footnotes
+    bierner.markdown-mermaid
+    bierner.markdown-preview-github-styles
+    bierner.markdown-yaml-preamble
+    castwide.solargraph
+    christian-kohler.npm-intellisense
+    CraigMaslowski.erb
+    cschleiden.vscode-github-actions
+    DavidAnson.vscode-markdownlint
+    dbaeumer.vscode-eslint
+    deerawan.vscode-dash
+    eamodio.gitlens
+    EditorConfig.EditorConfig
+    eg2.vscode-npm-script
+    esbenp.prettier-vscode
+    formulahendry.code-runner
+    GabrielBB.vscode-lombok
+    GitHub.codespaces
+    GitHub.copilot
+    GitHub.github-vscode-theme
+    GitHub.remotehub
+    GitHub.vscode-pull-request-github
+    golang.go
+    Gruntfuggly.todo-tree
+    k--kato.intellij-idea-keybindings
+    kaleidoscope-app.vscode-ksdiff
+    kotfu.bunch
+    miguel-savignano.ruby-symbols
+    misogi.ruby-rubocop
+    morrislaptop.vscode-open-in-git-tower
+    ms-azuretools.vscode-bicep
+    ms-azuretools.vscode-docker
+    ms-dotnettools.vscode-dotnet-runtime
+    ms-kubernetes-tools.vscode-kubernetes-tools
+    ms-python.python
+    ms-python.vscode-pylance
+    ms-toolsai.jupyter
+    ms-toolsai.jupyter-keymap
+    ms-toolsai.jupyter-renderers
+    ms-vscode-remote.remote-containers
+    ms-vscode.remote-repositories
+    ms-vsliveshare.vsliveshare
+    Pivotal.vscode-boot-dev-pack
+    Pivotal.vscode-spring-boot
+    PKief.material-icon-theme
+    rebornix.ruby
+    redhat.java
+    redhat.vscode-xml
+    redhat.vscode-yaml
+    sharat.vscode-brewfile
+    sswg.swift-lang
+    timonwong.shellcheck
+    vadimcn.vscode-lldb
+    VisualStudioExptTeam.vscodeintellicode
+    vscjava.vscode-java-debug
+    vscjava.vscode-java-dependency
+    vscjava.vscode-java-pack
+    vscjava.vscode-java-test
+    vscjava.vscode-maven
+    vscjava.vscode-spring-boot-dashboard
+    vscjava.vscode-spring-initializr
+    vscode-icons-team.vscode-icons
+    wayou.vscode-todo-highlight
+    wingrunr21.vscode-ruby
+)
+
+if hash code &>/dev/null; then
+	echo_ok "Installing VS Code extensions..."
+	for i in "${VSCODE_EXTENTIONS[@]}"; do
+		code --install-extension "$i"
+	done
+fi
+
+echo "Updating the yadm repo origin URL"
+yadm remote set-url origin "git@github.com:MyUser/dotfiles.git"
+
+echo_ok "Configuring macOS..."
+
+# Set fast key repeat rate
+# The step values that correspond to the sliders on the GUI are as follow (lower equals faster):
+# KeyRepeat: 120, 90, 60, 30, 12, 6, 2
+# InitialKeyRepeat: 120, 94, 68, 35, 25, 15
+# defaults write NSGlobalDomain KeyRepeat -int 6
+# defaults write NSGlobalDomain InitialKeyRepeat -int 25
+
+# Always show scrollbars
+defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
+
+# Require password as soon as screensaver or sleep mode starts
+# defaults write com.apple.screensaver askForPassword -int 1
+# defaults write com.apple.screensaver askForPasswordDelay -int 0
+
+# Show filename extensions by default
+# defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+
+# Expanded Save menu
+# defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
+# defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
+
+# Expanded Print menu
+# defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
+# defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
+
+# Enable tap-to-click
+# defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
+# defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
+
+# Disable "natural" scroll
+# defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
+
+# echo_ok 'Running macOS Software Updates...'
+# sudo softwareupdate -i -a
+
+# echo_ok "Creating folder structure..."
+#[[ ! -d Wiki ]] && mkdir Wiki
+#[[ ! -d Workspace ]] && mkdir Workspace
+
+echo_ok "Bootstrapping complete"
+
+main

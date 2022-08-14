@@ -5,10 +5,14 @@ tap "buo/cask-upgrade"
 tap "homebrew/cask-fonts"
 
 brew "mas"
+brew "bash"
+brew "gist"
 brew "gh"
 brew "git"
+brew "jq"
 brew "node"
 brew "openjdk"
+brew "openssl"
 brew "python@3.9"
 brew "rbenv"
 brew "redis"
@@ -24,6 +28,7 @@ brew "gnupg"
 brew "github-keygen"
 
 cask "1password"
+cask "slack"
 cask "1password-cli"
 cask "raycast"
 cask "adoptopenjdk"
@@ -64,7 +69,21 @@ cask "bunch"
 cask "app-cleaner"
 cask "airbuddy"
 
+# Quicklook plugins
+cask "qlcolorcode"
+casl "qlmarkdown"
+cask "qlprettypatch"
+# cask "qlstephen"
+# cask "qlimagesize"
+cask "quicklook-csv"
+cask "quicklook-json"
+
+
+# Cask Fonts
+cask "font-roboto"
+
 # Mac App Store Apps
+mas "Xcode", id: 497799835
 mas "Pastel", id: 413897608
 mas "Twitter", id: 1482454543
 mas "Mela", id: 1568924476
@@ -93,7 +112,6 @@ mas "Pastebot", id: 1179623856
 mas "Dark Noise", id: 1465439395
 mas "Yoink", id: 457622435
 mas "Craft", id: 1487937127
-mas "Xcode", id: 497799835
 mas "Data Jar", id: 1453273600
 mas "Shortery", id: 1594183810
 mas "Hand Mirror", id: 1502839586
