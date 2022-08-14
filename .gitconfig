@@ -1,5 +1,5 @@
 [user]
-	name = Pablo Valero
+	name = pevd950
 	email = pabloevd950@icloud.com
 [filter "lfs"]
 	smudge = git-lfs smudge -- %f
@@ -8,3 +8,19 @@
 	clean = git-lfs clean -- %f
 [init]
 	defaultBranch = main
+[credential]
+	helper = store
+[mergetool]
+	keepBackup = true
+	prompt = false
+[difftool "Kaleidoscope"]
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[mergetool "Kaleidoscope"]
+	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+	trustExitCode = true
+[diff]
+	tool = Kaleidoscope
+[difftool]
+	prompt = false
+[merge]
+	tool = Kaleidoscope
