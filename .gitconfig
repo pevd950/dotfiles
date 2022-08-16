@@ -32,8 +32,10 @@
 	s = status
 	st = status
 	com = commit
+	c = commit
 	b = branch
 	ch = checkout
+	co = checkout
 	re = remote
 	d = diff
 	dc = diff --cached
