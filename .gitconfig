@@ -1,11 +1,6 @@
 [user]
-	name = pevd950
+	name = Pablo Valero
 	email = pabloevd950@icloud.com
-[filter "lfs"]
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
-	clean = git-lfs clean -- %f
 [init]
 	defaultBranch = main
 [credential]
