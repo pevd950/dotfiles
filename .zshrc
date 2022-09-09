@@ -1,8 +1,8 @@
-#Checking if arm64 or x86
-HOST_ARCH=$(uname -m)
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:/usr/local/bin:$PATH
 
-#If you come from bash you might have to change your $PATH.
-export PATH=$HOME/bin:/usr/local/bin:$PATH
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
 #Flutter
 export PATH=$PATH:$USER/flutter/bin
 #Android
@@ -11,16 +11,19 @@ export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/tools/bin
 export PATH=$PATH:$ANDROID_HOME/platform-tools
-#arch conditional aliases
-if [ "arm64" = $HOST_ARCH ]; then
-   export PATH=/opt/homebrew/bin:$PATH
-fi
-# Path to your oh-my-zsh installation.
-export ZSH="/Users/pablovalero/.oh-my-zsh"
 
-#Export Nova as React Editor
-export REACT_EDITOR=nova
+# export MANPATH="/usr/local/man:$MANPATH"
+export PATH=/opt/homebrew/bin:$PATH
+export PATH=$HOME/.rbenv/bin:$PATH
 
+# goproxy setup
+export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
+export GOPRIVATE=
+export GONOPROXY=
+export GONOSUMDB='github.com/github/*'
+
+# Go
+# export PATH=$PATH:$GOPATH/bin
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -41,14 +44,13 @@ ZSH_THEME="robbyrussell"
 # Case-sensitive completion must be off. _ and - will be interchangeable.
 # HYPHEN_INSENSITIVE="true"
 
-# Uncomment the following line to disable bi-weekly auto-update checks.
-# DISABLE_AUTO_UPDATE="true"
-
-# Uncomment the following line to automatically update without prompting.
-# DISABLE_UPDATE_PROMPT="true"
+# Uncomment one of the following lines to change the auto-update behavior
+# zstyle ':omz:update' mode disabled  # disable automatic updates
+# zstyle ':omz:update' mode auto      # update automatically without asking
+# zstyle ':omz:update' mode reminder  # just remind me to update when it's time
 
 # Uncomment the following line to change how often to auto-update (in days).
-# export UPDATE_ZSH_DAYS=13
+# zstyle ':omz:update' frequency 13
 
 # Uncomment the following line if pasting URLs and other text is messed up.
 # DISABLE_MAGIC_FUNCTIONS="true"
@@ -63,6 +65,9 @@ ZSH_THEME="robbyrussell"
 # ENABLE_CORRECTION="true"
 
 # Uncomment the following line to display red dots whilst waiting for completion.
+# You can also set it to another string to have that shown instead of the default red dots.
+# e.g. COMPLETION_WAITING_DOTS="%F{yellow}waiting...%f"
+# Caution: this setting can cause issues with multiline prompts in zsh < 5.7.1 (see #5765)
 # COMPLETION_WAITING_DOTS="true"
 
 # Uncomment the following line if you want to disable marking untracked files
@@ -79,7 +84,7 @@ ZSH_THEME="robbyrussell"
 # HIST_STAMPS="mm/dd/yyyy"
 
 # Would you like to use another custom folder than $ZSH/custom?
-ZSH_CUSTOM=~/.zshrc_custom/
+# ZSH_CUSTOM=/path/to/new-custom-folder
 
 # Which plugins would you like to load?
 # Standard plugins can be found in $ZSH/plugins/
@@ -87,26 +92,16 @@ ZSH_CUSTOM=~/.zshrc_custom/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
-   git
-   encode64
-   common-aliases 
-   aliases 
-   copydir
-   copyfile 
-   docker-compose 
-   macos
-   zsh-syntax-highlighting
-) 
-#Disabled plugins
-   # git-prompt 
-
-
-ZSH_DISABLE_COMPFIX="true"
-source $ZSH/oh-my-zsh.sh
-
-# User configuration
-
-# export MANPATH="/usr/local/man:$MANPATH"
+    git
+    encode64 
+    common-aliases 
+    aliases 
+    copypath
+    copyfile 
+    docker-compose 
+    macos
+    zsh-syntax-highlighting   
+)
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
@@ -117,11 +112,6 @@ source $ZSH/oh-my-zsh.sh
 # else
 #   export EDITOR='mvim'
 # fi
-
-#Host and user in prompt for ssh connections
-if [[ -n $SSH_CONNECTION ]]; then
-   PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
-fi
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
@@ -135,11 +125,17 @@ fi
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-#arch conditional aliases
-if [ "arm64" = $HOST_ARCH ]; then
-   alias ibrew='arch -x86_64 /usr/local/bin/brew'
-   alias python=/opt/homebrew/bin/python3
-fi
+
+source $ZSH/oh-my-zsh.sh
+source ~/.zshrc_custom/alias-local.zsh
+source ~/.zshrc_custom/exports-local.zsh
+# iTerm2 integration
+source ~/.iterm2_shell_integration.zsh
+
+eval "$(rbenv init - zsh)"
+[[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
+
+eval "$(op completion zsh)"; compdef _op op
+eval "$(rbenv init -)"
 
 
-test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"

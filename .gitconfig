@@ -1,10 +1,30 @@
 [user]
 	name = Pablo Valero
-	email = pabloevd950@icloud.com
+	email = pevd950@github.com
+[github]
+	user = pevd950
+[push]
+	default = simple
+[credential]
+	helper = osxkeychain
 [filter "lfs"]
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
 	clean = git-lfs clean -- %f
-[init]
-	defaultBranch = main
+[difftool "Kaleidoscope"]
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[mergetool "Kaleidoscope"]
+	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+	trustExitCode = true
+[diff]
+	tool = Kaleidoscope
+[difftool]
+	prompt = false
+[merge]
+	tool = Kaleidoscope
+[mergetool]
+	prompt = false
+[rebase]
+	# Automatically stash before a rebase and unstash afterwards.
+	autoStash = true
