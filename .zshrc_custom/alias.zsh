@@ -27,3 +27,7 @@ alias yadd="yadm add"
 alias zshrc="code ~/.zshrc"
 alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
 alias nv='nova .'
+
+# Apps
+# MacUpdater
+alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'

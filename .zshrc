@@ -140,7 +140,7 @@ plugins=(
 
 ZSH_DISABLE_COMPFIX="true"
 source $ZSH/oh-my-zsh.sh
-
+source $ZSH_CUSTOM/alias-local.zsh
 #Host and user in prompt for ssh connections
 if [[ -n $SSH_CONNECTION ]]; then
    PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
