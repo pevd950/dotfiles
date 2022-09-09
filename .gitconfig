@@ -3,7 +3,6 @@
 ###
 [include]
 	path = .gitconfig.local
-	
 [init]
 	defaultBranch = main	
 [github]
