@@ -1,5 +1,10 @@
-#Checking if arm64 or x86
-HOST_ARCH=$(uname -m)
+# #Checking if arm64 or x86
+# HOST_ARCH=$(uname -m)
+
+# Exports
+
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
 
 #If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/bin:$PATH
@@ -11,18 +16,22 @@ export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/tools/bin
 export PATH=$PATH:$ANDROID_HOME/platform-tools
-#arch conditional aliases
-if [ "arm64" = $HOST_ARCH ]; then
-   export PATH=/opt/homebrew/bin:$PATH
-fi
-# Path to your oh-my-zsh installation.
-export ZSH="/Users/pablovalero/.oh-my-zsh"
 
-#Export Nova as React Editor
-export REACT_EDITOR=nova
+#Export React Editor
+export REACT_EDITOR=code
+
+#arch conditional aliases
+# if [ "arm64" = $HOST_ARCH ]; then
+#    export PATH=/opt/homebrew/bin:$PATH
+# fi
+
+# Secrets sourced from 1Password
+eval "$(op signin --account github)"
+export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+
 #Init ruby env
 eval "$(rbenv init - zsh)"
-
+# eval "$(op signin)"
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
 # to know which specific one was loaded, run: echo $RANDOM_THEME
@@ -97,13 +106,11 @@ plugins=(
    docker-compose 
    macos
    zsh-syntax-highlighting
+   1password
 ) 
 #Disabled plugins
    # git-prompt 
 
-
-ZSH_DISABLE_COMPFIX="true"
-source $ZSH/oh-my-zsh.sh
 
 # User configuration
 
@@ -119,11 +126,6 @@ source $ZSH/oh-my-zsh.sh
 #   export EDITOR='mvim'
 # fi
 
-#Host and user in prompt for ssh connections
-if [[ -n $SSH_CONNECTION ]]; then
-   PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
-fi
-
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
 
@@ -136,11 +138,19 @@ fi
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
-#arch conditional aliases
-if [ "arm64" = $HOST_ARCH ]; then
-   alias ibrew='arch -x86_64 /usr/local/bin/brew'
-   alias python=/opt/homebrew/bin/python3
+ZSH_DISABLE_COMPFIX="true"
+source $ZSH/oh-my-zsh.sh
+
+#Host and user in prompt for ssh connections
+if [[ -n $SSH_CONNECTION ]]; then
+   PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
 fi
+
+#arch conditional aliases
+# if [ "arm64" = $HOST_ARCH ]; then
+#    alias ibrew='arch -x86_64 /usr/local/bin/brew'
+#    alias python=/opt/homebrew/bin/python3
+# fi
 
 #Completion for 1Password CLI
 eval "$(op completion zsh)"; compdef _op op
