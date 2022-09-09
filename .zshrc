@@ -31,19 +31,13 @@ export PATH=$HOME/.rbenv/bin:$PATH
 # Go
 # export PATH=$PATH:$GOPATH/bin
 
-
-#arch conditional aliases
-# if [ "arm64" = $HOST_ARCH ]; then
-#    export PATH=/opt/homebrew/bin:$PATH
-# fi
-
 # Secrets sourced from 1Password
-eval "$(op signin --account github)"
-export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
-export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
-
-#Init ruby env
-eval "$(rbenv init - zsh)"
+YADM_CLASS=$(yadm config local.class)
+if [ "$YADM_CLASS" = "work" ]; then
+   eval "$(op signin --account github)"
+   export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+   export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
+fi
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -172,12 +166,12 @@ source $ZSH_CUSTOM/exports-local.zsh
 # iTerm2 integration
 source ~/.iterm2_shell_integration.zsh
 
-eval "$(rbenv init - zsh)"
 [[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
 
 #Completion for 1Password CLI
 eval "$(op completion zsh)"; compdef _op op
-eval "$(rbenv init -)"
+# Init ruby env
+eval "$(rbenv init - zsh)"
 
 
 
