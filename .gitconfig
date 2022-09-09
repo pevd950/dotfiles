@@ -1,19 +1,25 @@
 [user]
 	name = Pablo Valero
 	email = pevd950@github.com
+[init]
+	defaultBranch = main	
 [github]
 	user = pevd950
 [push]
 	default = simple
+[pull]
+	rebase = true
+[rebase]
+	# Automatically stash before a rebase and unstash afterwards.
+	autoStash = true
+
 [credential]
 	helper = osxkeychain
-[filter "lfs"]
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
-	clean = git-lfs clean -- %f
-[difftool "Kaleidoscope"]
-	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[merge]
+	tool = Kaleidoscope
+[mergetool]
+	keepBackup = true
+	prompt = false
 [mergetool "Kaleidoscope"]
 	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
 	trustExitCode = true
@@ -21,10 +27,51 @@
 	tool = Kaleidoscope
 [difftool]
 	prompt = false
-[merge]
-	tool = Kaleidoscope
-[mergetool]
-	prompt = false
-[rebase]
-	# Automatically stash before a rebase and unstash afterwards.
-	autoStash = true
+[difftool "Kaleidoscope"]
+	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+
+[alias]
+	a = add
+	s = status
+	st = status
+	com = commit
+	c = commit
+	b = branch
+	ch = checkout
+	co = checkout
+	re = remote
+	d = diff
+	dc = diff --cached
+	lol = log --graph --decorate --pretty=oneline --abbrev-commit
+	lola = log --graph --decorate --pretty=oneline --abbrev-commit --all
+	ls = ls-files
+	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+	lgi = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%ci) %C(bold blue)<%an>%Creset' --abbrev-commit
+	# Pull Upstream
+	pu = !"git fetch origin -v; git fetch upstream -v; git merge upstream/master"
+	# Commit Amend Reuse Message HEAD
+	carmh = commit --amend --reuse-message=HEAD
+	# Push Current
+	# pc = !"f() { remote=\"${1:-origin}\"; git push -u \"$remote\" $(git rev-parse --abbrev-ref HEAD); }; f"
+	# Push Current Force
+	# pcf = !"f() { echo git pc \"$@\" -f; }; f"
+	# Mainly for YADM
+	# untracked = !"f() { git status --porcelain=v1 -zunormal | xargs -0n1 printf \"%s\\n\" | grep -E '^\\?\\? \\.' | cut -c4-; }; f"
+	# Current branch
+	current = rev-parse --abbrev-ref HEAD
+	cof = !git for-each-ref --format='%(refname:short)' refs/heads | fzf | xargs git checkout
+
+###
+### Include local overrides
+###
+[include]
+	path = .gitconfig.local
+
+[lfs]
+	fetchexclude = *
+	
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true

@@ -1,8 +1,11 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
+# #Checking if arm64 or x86
+# HOST_ARCH=$(uname -m)
+
+# Exports
 
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
+
 #Flutter
 export PATH=$PATH:$USER/flutter/bin
 #Android
@@ -12,9 +15,8 @@ export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/tools/bin
 export PATH=$PATH:$ANDROID_HOME/platform-tools
 
-# export MANPATH="/usr/local/man:$MANPATH"
-export PATH=/opt/homebrew/bin:$PATH
-export PATH=$HOME/.rbenv/bin:$PATH
+#Export React Editor
+export REACT_EDITOR=code
 
 # goproxy setup
 export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
@@ -22,8 +24,25 @@ export GOPRIVATE=
 export GONOPROXY=
 export GONOSUMDB='github.com/github/*'
 
+# export MANPATH="/usr/local/man:$MANPATH"
+export PATH=/opt/homebrew/bin:$PATH
+export PATH=$HOME/.rbenv/bin:$PATH
+
 # Go
 # export PATH=$PATH:$GOPATH/bin
+
+
+#arch conditional aliases
+# if [ "arm64" = $HOST_ARCH ]; then
+#    export PATH=/opt/homebrew/bin:$PATH
+# fi
+
+# Secrets sourced from 1Password
+eval "$(op signin --account github)"
+export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+
+#Init ruby env
+eval "$(rbenv init - zsh)"
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -84,7 +103,7 @@ ZSH_THEME="robbyrussell"
 # HIST_STAMPS="mm/dd/yyyy"
 
 # Would you like to use another custom folder than $ZSH/custom?
-# ZSH_CUSTOM=/path/to/new-custom-folder
+ZSH_CUSTOM=~/.zshrc_custom/
 
 # Which plugins would you like to load?
 # Standard plugins can be found in $ZSH/plugins/
@@ -92,16 +111,24 @@ ZSH_THEME="robbyrussell"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
-    git
-    encode64 
-    common-aliases 
-    aliases 
-    copypath
-    copyfile 
-    docker-compose 
-    macos
-    zsh-syntax-highlighting   
-)
+   git
+   encode64
+   common-aliases 
+   aliases 
+   copypath
+   copyfile 
+   docker-compose 
+   macos
+   zsh-syntax-highlighting
+   1password
+) 
+#Disabled plugins
+   # git-prompt 
+
+
+# User configuration
+
+# export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
@@ -125,17 +152,32 @@ plugins=(
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+#arch conditional aliases
+# if [ "arm64" = $HOST_ARCH ]; then
+#    alias ibrew='arch -x86_64 /usr/local/bin/brew'
+#    alias python=/opt/homebrew/bin/python3
+# fi
 
+#Host and user in prompt for ssh connections
+if [[ -n $SSH_CONNECTION ]]; then
+   PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
+fi
+
+ZSH_DISABLE_COMPFIX="true"
 source $ZSH/oh-my-zsh.sh
-source ~/.zshrc_custom/alias-local.zsh
-source ~/.zshrc_custom/exports-local.zsh
+source $ZSH_CUSTOM/alias-local.zsh
+source $ZSH_CUSTOM/exports-local.zsh
+
 # iTerm2 integration
 source ~/.iterm2_shell_integration.zsh
 
 eval "$(rbenv init - zsh)"
 [[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
 
+#Completion for 1Password CLI
 eval "$(op completion zsh)"; compdef _op op
 eval "$(rbenv init -)"
+
+
 
 

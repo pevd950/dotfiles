@@ -1,0 +1,139 @@
+tap "homebrew/core"
+tap "homebrew/bundle"
+tap "homebrew/cask"
+tap "buo/cask-upgrade"
+tap "homebrew/cask-fonts"
+
+brew "mas"
+brew "bash"
+brew "gist"
+brew "gh"
+brew "git"
+brew "jq"
+brew "node"
+brew "openjdk"
+brew "openssl"
+brew "python@3.9"
+brew "rbenv"
+brew "redis"
+brew "robotsandpencils/made/xcodes"
+brew "shellcheck"
+brew "speedtest-cli"
+brew "tree"
+brew "vapor"
+brew "wget"
+brew "yadm"
+brew "youtube-dl"
+brew "gnupg"
+brew "github-keygen"
+
+cask "1password"
+cask "slack"
+cask "1password-cli"
+cask "raycast"
+cask "adoptopenjdk"
+cask "cakebrew"
+cask "swiftbar"
+cask "xcodes"
+cask "visual-studio-code"
+cask "transmission"
+cask "transmit"
+cask 'dash'
+cask 'calibre'
+cask "tower"
+cask "sketch"
+cask "screens-connect"
+cask "screens"
+cask "rocket"
+cask "retroarch"
+cask "replacicon"
+cask "proxyman"
+cask "popclip"
+cask "paw"
+cask "nova"
+cask "mimestream"
+cask "little-snitch"
+cask "keyboard-maestro"
+cask "kaleidoscope"
+cask "istat-menus"
+cask "hook"
+cask "hazel"
+cask "fastscripts"
+cask "downie"
+cask "docker"
+cask "devutils"
+cask "customshortcuts"
+cask "cleanshot"
+cask "cheatsheet"
+cask "bunch" 
+cask "app-cleaner"
+cask "airbuddy"
+
+# Quicklook plugins
+cask "qlcolorcode"
+casl "qlmarkdown"
+cask "qlprettypatch"
+# cask "qlstephen"
+# cask "qlimagesize"
+cask "quicklook-csv"
+cask "quicklook-json"
+
+
+# Cask Fonts
+cask "font-roboto"
+
+# Mac App Store Apps
+mas "Xcode", id: 497799835
+mas "Pastel", id: 413897608
+mas "Twitter", id: 1482454543
+mas "Mela", id: 1568924476
+mas "Speedtest", id: 1153157709 
+mas "Paste", id:967805235  
+mas "PCalc", id: 403504866  
+mas "TestFlight", id: 899247664  
+mas "Streaks", id: 963034692  
+mas "HomeControl", id: 1547121417 
+mas "Speediness", id: 1596706466 
+mas "Reeder", id: 1529448980
+mas "Slack", id: 803453959
+mas "Infuse", id: 1136220934
+mas "Developer", id: 640199958
+mas "iMovie", id: 408981434
+mas "Image2icon", id: 992115977
+mas "Vectornator", id: 1219074514
+mas "Affinity Photo", id: 824183456
+mas "Things", id: 904280696
+mas "Day One", id: 1055511498
+mas "LookUp", id: 872564448
+mas "Affinity Designer", id: 824171161
+mas "Soulver 3", id: 1508732804
+mas "PastePal", id: 1503446680
+mas "Pastebot", id: 1179623856
+mas "Dark Noise", id: 1465439395
+mas "Yoink", id: 457622435
+mas "Craft", id: 1487937127
+mas "Data Jar", id: 1453273600
+mas "Shortery", id: 1594183810
+mas "Hand Mirror", id: 1502839586
+mas "Disk Speed Test", id: 425264550
+mas "Pixelmator Pro", id: 1289583905
+mas "GoodLinks", id: 1474335294
+mas "Actions", id: 1586435171
+mas "Magnet", id: 441258766
+mas "HomePass", id: 1330266650
+mas "Transloader", id: 572281534
+mas "Tweetbot", id: 1384080005
+
+# Mac App Store Extentions
+mas "Super Agent", id: 1568262835
+mas "Noir", id: 1592917505
+mas "1Blocker", id: 1365531024 
+mas "1Password for Safari", id: 1569813296
+mas "Matter", id: 1548677272
+
+# Mac App Store Games
+mas "Mini Motorways", id: 1456188526 
+mas "WHAT THE GOLF", id: 1474771319 
+mas "Doodle God Universe", id: 1539947531
+mas "Alto's Odyssey The Lost City", id:  1538650027
+mas "The Last Campfire", id:973039644

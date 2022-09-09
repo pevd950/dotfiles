@@ -1,11 +1,6 @@
 #macOS
 alias o="open ."
 
-#ssh
-# alias sshmb='ssh pablovalero@kakarot-mpb.local -p 26'
-# alias sshmm='ssh pablovalero@Pablos-Mac-mini.local -p 22'
-# alias sshpi='ssh pi@pvd950pi.local -p 22'
-
 # cd
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -30,4 +25,8 @@ alias yadd="yadm add"
 
 # Editor
 alias zshrc="code ~/.zshrc"
-alias myaliases="code ~/.zshrc_custom/aliases.zsh"
+alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
+
+# Apps
+# MacUpdater
+alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'
