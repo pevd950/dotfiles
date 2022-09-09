@@ -40,6 +40,7 @@ export PATH=$HOME/.rbenv/bin:$PATH
 # Secrets sourced from 1Password
 eval "$(op signin --account github)"
 export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
 
 #Init ruby env
 eval "$(rbenv init - zsh)"

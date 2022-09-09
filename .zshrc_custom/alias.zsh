@@ -17,6 +17,10 @@ alias gbranch="git checkout -b"
 alias gclone="git clone"
 alias gt="gittower ."
 
+# GitHub
+# gh alias set --shell startcs 'gh cs code -c $(gh cs list --json "name" | jq -r ".[].name" | grep -i "$1" -m 1)'
+# gh alias set --shell stopcs 'gh cs stop -c $(gh cs list --json "name" | jq -r ".[].name" | grep -i "$1" -m 1)'
+
 # YADM
 alias ys="yadm status"
 alias ypull="yadm pull"

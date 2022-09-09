@@ -1,6 +1,9 @@
-[user]
-	name = Pablo Valero
-	email = pevd950@github.com
+###
+### Include local overrides
+###
+[include]
+	path = .gitconfig.local
+	
 [init]
 	defaultBranch = main	
 [github]
@@ -60,12 +63,6 @@
 	# Current branch
 	current = rev-parse --abbrev-ref HEAD
 	cof = !git for-each-ref --format='%(refname:short)' refs/heads | fzf | xargs git checkout
-
-###
-### Include local overrides
-###
-[include]
-	path = .gitconfig.local
 
 [lfs]
 	fetchexclude = *
