@@ -98,34 +98,39 @@ cask "quicklook-json"
 cask "font-roboto"
 
 # Mac App Store Apps
-mas "Xcode", id: 497799835
-mas "Pastel", id: 413897608
-mas "Mela", id: 1568924476
-mas "Speedtest", id: 1153157709 
-mas "Paste", id:967805235  
-mas "PCalc", id: 403504866  
-mas "TestFlight", id: 899247664  
-mas "HomeControl", id: 1547121417 
-mas "Speediness", id: 1596706466 
-mas "Reeder", id: 1529448980
-mas "Slack", id: 803453959
-mas "Developer", id: 640199958
-mas "Image2icon", id: 992115977
-mas "Vectornator", id: 1219074514
-mas "Things", id: 904280696
-mas "LookUp", id: 872564448
-mas "Soulver 3", id: 1508732804
-mas "Pastebot", id: 1179623856
-mas "Yoink", id: 457622435
-mas "Data Jar", id: 1453273600
-mas "Shortery", id: 1594183810
-mas "Hand Mirror", id: 1502839586
-mas "Disk Speed Test", id: 425264550
-mas "Pixelmator Pro", id: 1289583905
-mas "GoodLinks", id: 1474335294
+
 mas "Actions", id: 1586435171
+mas "Boop", id: 1518425043
+mas "Data Jar", id: 1453273600
+mas "Developer", id: 640199958
+mas "Disk Speed Test", id: 425264550
+mas "Fantastical", : 975937182
+mas "GoodLinks", id: 1474335294
+mas "Hand Mirror", id: 1502839586
+mas "HomeControl", id: 1547121417 
 mas "HomePass", id: 1330266650
+mas "Image2icon", id: 992115977
+mas "LookUp", id: 872564448
+mas "Mela", id: 1568924476
+mas "Parcel", : 639968404
+mas "Paste", id:967805235  
+mas "Pastebot", id: 1179623856
+mas "Pastel", id: 413897608
+mas "PCalc", id: 403504866  
+mas "Pixelmator Pro", id: 1289583905
+mas "PopClip", : 445189367
+mas "Reeder", id: 1529448980
+mas "Shortery", id: 1594183810
+mas "Slack", id: 803453959
+mas "Soulver 3", id: 1508732804
+mas "Speediness", id: 1596706466 
+mas "Speedtest", id: 1153157709 
+mas "TestFlight", id: 899247664  
+mas "Things", id: 904280696
 mas "Transloader", id: 572281534
+mas "Vectornator", id: 1219074514
+mas "Xcode", id: 497799835
+mas "Yoink", id: 457622435
 
 # Mac App Store Extentions
 mas "Super Agent", id: 1568262835
