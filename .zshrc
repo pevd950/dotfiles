@@ -6,6 +6,11 @@
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 
+SAVEHIST=20000
+HISTSIZE=20000
+setopt HIST_FIND_NO_DUPS
+setopt HIST_IGNORE_ALL_DUPS
+
 #Flutter
 export PATH=$PATH:$USER/flutter/bin
 #Android
@@ -14,16 +19,17 @@ export PATH=$PATH:$ANDROID_HOME/emulator
 export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/tools/bin
 export PATH=$PATH:$ANDROID_HOME/platform-tools
-
 #Export React Editor
 export REACT_EDITOR=code
-
-# goproxy setup
+#Docker
+export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
+# go and goproxy setup
 export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
 export GOPRIVATE=
 export GONOPROXY=
 export GONOSUMDB='github.com/github/*'
-
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
 # export MANPATH="/usr/local/man:$MANPATH"
 export PATH=/opt/homebrew/bin:$PATH
 export PATH=$HOME/.rbenv/bin:$PATH
@@ -32,12 +38,12 @@ export PATH=$HOME/.rbenv/bin:$PATH
 # export PATH=$PATH:$GOPATH/bin
 
 # Secrets sourced from 1Password
-YADM_CLASS=$(yadm config local.class)
-if [ "$YADM_CLASS" = "work" ]; then
-   eval "$(op signin --account github)"
-   export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
-   export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
-fi
+# YADM_CLASS=$(yadm config local.class)
+# if [ "$YADM_CLASS" = "work" ]; then
+#    eval "$(op signin --account github)"
+#    export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+#    export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
+# fi
 
 # Set name of the theme to load --- if set to "random", it will
 # load a random theme each time oh-my-zsh is loaded, in which case,
@@ -106,16 +112,26 @@ ZSH_CUSTOM=~/.zshrc_custom/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
-   git
-   encode64
-   common-aliases 
-   aliases 
-   copypath
-   copyfile 
-   docker-compose 
-   macos
-   zsh-syntax-highlighting
    1password
+   aliases 
+   common-aliases 
+   copyfile 
+   copypath
+   dash
+   docker
+   docker-compose 
+   encode64
+   gh
+   golang
+   helm
+   kubectl
+   macos
+   per-directory-history
+   rails
+   ruby
+   zsh-syntax-highlighting
+   git
+   web-search
 ) 
 #Disabled plugins
    # git-prompt 
@@ -161,7 +177,8 @@ source ~/.iterm2_shell_integration.zsh
 eval "$(op completion zsh)"; compdef _op op
 # Init ruby env
 eval "$(rbenv init - zsh)"
-
+# Init node env
+eval "$(nodenv init -)"
 
 
 

@@ -9,8 +9,9 @@
 	user = pevd950
 [push]
 	default = simple
+	autoSetupRemote = true
 [pull]
-	rebase = true
+	# rebase = true
 [rebase]
 	# Automatically stash before a rebase and unstash afterwards.
 	autoStash = true
