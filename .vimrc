@@ -92,4 +92,5 @@ augroup END
 
 " Show the status on the second to last line.
 " set laststatus=2
+
 " }}}
