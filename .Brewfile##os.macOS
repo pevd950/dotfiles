@@ -7,6 +7,7 @@ tap "homebrew/cask-fonts"
 # Brew Packages
 
 brew "bash"
+brew "fzf"
 brew "gh"
 brew "gist"
 brew "git"
@@ -29,18 +30,20 @@ brew "robotsandpencils/made/xcodes"
 brew "shfmt"
 brew "shellcheck"
 brew "speedtest-cli"
+brew "the_silver_searcher"
+brew "tmux"
 brew "tree"
 brew "vapor"
 brew "wget"
 brew "xcodes"
 brew "yadm"
 brew "youtube-dl"
+brew "yq"
 
 ## Cask Packages
 
 cask 'calibre'
 cask 'dash'
-cask 'docker'
 cask "1password-cli"
 cask "1password"
 cask "adoptopenjdk"
@@ -51,7 +54,6 @@ cask "cakebrew"
 cask "cheatsheet"
 cask "cleanshot"
 cask "customshortcuts"
-cask "devutils"
 cask "docker"
 cask "downie"
 cask "fastscripts"
@@ -64,19 +66,15 @@ cask "keyboard-maestro"
 cask "little-snitch"
 cask "mimestream"
 cask "moom"
-cask "nova"
 cask "paw"
 cask "popclip"
 cask "proxyman"
 cask "raycast"
 cask "replacicon"
-cask "retroarch"
 cask "rocket"
 cask "screens-connect"
 cask "screens"
 cask "sketch"
-cask "slack"
-cask "swiftbar"
 cask "tower"
 cask "transmission"
 cask "transmit"
@@ -88,8 +86,6 @@ cask "xcodes"
 cask "qlcolorcode"
 casl "qlmarkdown"
 cask "qlprettypatch"
-# cask "qlstephen"
-# cask "qlimagesize"
 cask "quicklook-csv"
 cask "quicklook-json"
 
@@ -98,22 +94,17 @@ cask "quicklook-json"
 cask "font-roboto"
 
 # Mac App Store Apps
-
 mas "Actions", id: 1586435171
 mas "Boop", id: 1518425043
 mas "Data Jar", id: 1453273600
 mas "Developer", id: 640199958
-mas "Disk Speed Test", id: 425264550
 mas "Fantastical", : 975937182
 mas "GoodLinks", id: 1474335294
 mas "Hand Mirror", id: 1502839586
 mas "HomeControl", id: 1547121417 
 mas "HomePass", id: 1330266650
-mas "Image2icon", id: 992115977
-mas "LookUp", id: 872564448
 mas "Mela", id: 1568924476
 mas "Parcel", : 639968404
-mas "Paste", id:967805235  
 mas "Pastebot", id: 1179623856
 mas "Pastel", id: 413897608
 mas "PCalc", id: 403504866  
@@ -128,8 +119,7 @@ mas "Speedtest", id: 1153157709
 mas "TestFlight", id: 899247664  
 mas "Things", id: 904280696
 mas "Transloader", id: 572281534
-mas "Vectornator", id: 1219074514
-mas "Xcode", id: 497799835
+mas "Twitter", id: 1482454543
 mas "Yoink", id: 457622435
 
 # Mac App Store Extentions
