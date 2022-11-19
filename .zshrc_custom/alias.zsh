@@ -9,11 +9,11 @@ alias ....='cd ../../..'
 # Git
 alias gs='git status'
 alias gc="git checkout"
-alias gcm="git checkout master"
+alias gcm="git checkout main"
 alias gpull="git pull"
 alias gpush="git push"
 alias gm="git merge"
-alias gbranch="git checkout -b"
+alias gcb="git checkout -b"
 alias gclone="git clone"
 alias gt="gittower ."
 
@@ -30,7 +30,13 @@ alias yadd="yadm add"
 # Editor
 alias zshrc="code ~/.zshrc"
 alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
+alias myfunctions='code "$ZSH_CUSTOM"/functions.zsh'
+alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
+alias myzshrc='code "$ZSH_CUSTOM"'
 
 # Apps
 # MacUpdater
 alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'
+# VsCode
+alias vsc='code .'
+alias coden='code --new-window'
