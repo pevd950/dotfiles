@@ -112,8 +112,8 @@ ZSH_CUSTOM=~/.zshrc_custom/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
-   1password
-   aliases 
+   aliases
+   colored-man-pages
    common-aliases 
    copyfile 
    copypath
@@ -122,16 +122,19 @@ plugins=(
    docker-compose 
    encode64
    gh
+   git
    golang
    helm
+   history
    kubectl
    macos
    per-directory-history
    rails
    ruby
-   zsh-syntax-highlighting
-   git
+   tmux
    web-search
+   zsh-syntax-highlighting
+   1password
 ) 
 #Disabled plugins
    # git-prompt 
@@ -179,6 +182,3 @@ eval "$(op completion zsh)"; compdef _op op
 eval "$(rbenv init - zsh)"
 # Init node env
 eval "$(nodenv init -)"
-
-
-
