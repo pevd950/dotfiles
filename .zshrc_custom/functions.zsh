@@ -33,3 +33,7 @@ function myip() {
 function quick-look() {
   (( $# > 0 )) && qlmanage -p $* &>/dev/null &
 }
+
+preman() {
+    mandoc -T pdf "$(/usr/bin/man -w $@)" | open -fa Preview
+}
