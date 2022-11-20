@@ -92,6 +92,27 @@ cask "quicklook-json"
 
 # Cask Fonts
 cask "font-roboto"
+cask font-liberation-nerd-font
+cask font-league-mono
+cask font-jetbrains-mono-nerd-font
+cask font-im-writing-nerd-font
+cask font-hack-nerd-font	
+cask font-go-mono-nerd-font
+cask font-fira-mono-nerd-font
+cask font-fira-code-nerd-font
+cask font-droid-sans-mono-nerd-font
+cask font-space-mono-nerd-font
+cask font-blex-mono-nerd-font
+cask font-sauce-code-pro-nerd-font
+cask font-anonymous-pro
+cask font-roboto-mono-nerd-font
+cask font-anonymice-nerd-font
+cask font-redhat
+cask font-3270-nerd-font
+cask font-profont-nerd-font
+cask font-overpass-nerd-font
+cask font-noto-nerd-font
+cask font-meslo-lg-nerd-font
 
 # Mac App Store Apps
 mas "Actions", id: 1586435171
