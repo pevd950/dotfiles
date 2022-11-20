@@ -1,15 +1,14 @@
 # #Checking if arm64 or x86
 # HOST_ARCH=$(uname -m)
 
-# Exports
-
-# Path to your oh-my-zsh installation.
-export ZSH="$HOME/.oh-my-zsh"
-
 SAVEHIST=20000
 HISTSIZE=20000
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_ALL_DUPS
+
+# Exports
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
 
 #Flutter
 export PATH=$PATH:$USER/flutter/bin
@@ -33,9 +32,6 @@ export PATH=$PATH:$GOPATH/bin
 # export MANPATH="/usr/local/man:$MANPATH"
 export PATH=/opt/homebrew/bin:$PATH
 export PATH=$HOME/.rbenv/bin:$PATH
-
-# Go
-# export PATH=$PATH:$GOPATH/bin
 
 # Secrets sourced from 1Password
 # YADM_CLASS=$(yadm config local.class)
@@ -124,11 +120,11 @@ plugins=(
    gh
    git
    golang
+   per-directory-history
    helm
    history
    kubectl
    macos
-   per-directory-history
    rails
    ruby
    tmux
@@ -142,6 +138,8 @@ plugins=(
 
 # User configuration
 
+# export MANPATH="/usr/local/man:$MANPATH"
+
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 
@@ -154,6 +152,15 @@ plugins=(
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
+
+# Set personal aliases, overriding those provided by oh-my-zsh libs,
+# plugins, and themes. Aliases can be placed here, though oh-my-zsh
+# users are encouraged to define aliases within the ZSH_CUSTOM folder.
+# For a full list of active aliases, run `alias`.
+#
+# Example aliases
+# alias zshconfig="mate ~/.zshrc"
+# alias ohmyzsh="mate ~/.oh-my-zsh"
 
 #arch conditional aliases
 # if [ "arm64" = $HOST_ARCH ]; then
@@ -182,3 +189,9 @@ eval "$(op completion zsh)"; compdef _op op
 eval "$(rbenv init - zsh)"
 # Init node env
 eval "$(nodenv init -)"
+<<<<<<< HEAD
+=======
+# Init starship prompt
+eval "$(starship init zsh)"
+
+>>>>>>> 0ca4c5a (Added starship toml)
