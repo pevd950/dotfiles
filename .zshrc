@@ -135,20 +135,19 @@ plugins=(
 #Disabled plugins
    # git-prompt 
 
-
 # User configuration
 
-# export MANPATH="/usr/local/man:$MANPATH"
+export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
 
 # Preferred editor for local and remote sessions
-# if [[ -n $SSH_CONNECTION ]]; then
-#   export EDITOR='vim'
-# else
-#   export EDITOR='mvim'
-# fi
+if [[ -n $SSH_CONNECTION ]]; then
+   export EDITOR='vim'
+else
+   export EDITOR='nvim'
+fi
 
 # Compilation flags
 # export ARCHFLAGS="-arch x86_64"
@@ -189,9 +188,6 @@ eval "$(op completion zsh)"; compdef _op op
 eval "$(rbenv init - zsh)"
 # Init node env
 eval "$(nodenv init -)"
-<<<<<<< HEAD
-=======
 # Init starship prompt
 eval "$(starship init zsh)"
 
->>>>>>> 0ca4c5a (Added starship toml)
