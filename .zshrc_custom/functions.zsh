@@ -30,10 +30,17 @@ function myip() {
 	ifconfig en1 | grep 'inet6 ' | sed -e 's/ / /' | awk '{print "en1 (IPv6): " $2 " " $3 " " $4 " " $5 " " $6}'
 }
 
+# Show file in quick look
 function quick-look() {
   (( $# > 0 )) && qlmanage -p $* &>/dev/null &
 }
 
+# Open man page in preview app
 preman() {
     mandoc -T pdf "$(/usr/bin/man -w $@)" | open -fa Preview
+}
+# Expose kubernetes context for iTerm
+iterm2_print_user_vars() {
+	KUBECONTEXT=$(CTX=$(kubectl config current-context) 2> /dev/null;if [ $? -eq 0 ]; then echo $CTX;fi)
+	iterm2_set_user_var kubeContext $KUBECONTEXT
 }
