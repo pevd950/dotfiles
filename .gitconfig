@@ -32,6 +32,14 @@
 	prompt = false
 [difftool "Kaleidoscope"]
 	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+    navigate = true    # use n and N to move between diff sections
+    light = false
+    line-numbers = true
 
 [alias]
 	a = add
