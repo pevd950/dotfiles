@@ -87,6 +87,16 @@ if [[ ! -f ~/.zshrc ]]; then
 	chsh -s /bin/zsh
 fi
 
+  if [ -d "$HOME/.iterm2" ]; then
+    echo "Setting iTerm preference folder"
+    defaults write com.googlecode.iterm2 PrefsCustomFolder "$HOME/.iterm2"
+  fi
+
+  if command -v vim >/dev/null 2>&1; then
+    echo "Bootstraping Vim"
+    vim '+PlugUpdate' '+PlugClean!' '+PlugUpdate' '+qall'
+  fi
+
 # echo_ok "Configuring Github"
 
 # if [[ ! -f ~/.ssh/id_rsa ]]; then
@@ -195,8 +205,6 @@ VSCODE_EXTENTIONS=(
     vscjava.vscode-java-pack
     vscjava.vscode-java-test
     vscjava.vscode-maven
-    vscjava.vscode-spring-boot-dashboard
-    vscjava.vscode-spring-initializr
     vscode-icons-team.vscode-icons
     wayou.vscode-todo-highlight
     wingrunr21.vscode-ruby
@@ -210,7 +218,7 @@ if hash code &>/dev/null; then
 fi
 
 echo "Updating the yadm repo origin URL"
-yadm remote set-url origin "git@github.com:MyUser/dotfiles.git"
+yadm remote set-url origin "git@github.com:pevd950/dotfiles.git"
 
 echo_ok "Configuring macOS..."
 
@@ -224,6 +232,9 @@ echo_ok "Configuring macOS..."
 # Always show scrollbars
 defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
 
+# Enable text selection in quick look
+defaults write com.apple.finder QLEnableTextSelection -bool TRUE
+
 # Require password as soon as screensaver or sleep mode starts
 # defaults write com.apple.screensaver askForPassword -int 1
 # defaults write com.apple.screensaver askForPasswordDelay -int 0
@@ -235,23 +246,16 @@ defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
 # defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode -bool true
 # defaults write NSGlobalDomain NSNavPanelExpandedStateForSaveMode2 -bool true
 
-# Expanded Print menu
-# defaults write NSGlobalDomain PMPrintingExpandedStateForPrint -bool true
-# defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
-
 # Enable tap-to-click
 # defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
 # defaults -currentHost write NSGlobalDomain com.apple.mouse.tapBehavior -int 1
-
-# Disable "natural" scroll
-# defaults write NSGlobalDomain com.apple.swipescrolldirection -bool false
 
 # echo_ok 'Running macOS Software Updates...'
 # sudo softwareupdate -i -a
 
 # echo_ok "Creating folder structure..."
 #[[ ! -d Wiki ]] && mkdir Wiki
-#[[ ! -d Workspace ]] && mkdir Workspace
+[[ ! -d Developer ]] && mkdir Developer
 
 echo_ok "Bootstrapping complete"
 

@@ -8,7 +8,9 @@ tap "homebrew/cask-fonts"
 
 brew "act"
 brew "bash"
+brew "bottom"
 brew "exa"
+brew "carthage"
 brew "coreutils"
 brew "fzf"
 brew "fd"
@@ -29,6 +31,7 @@ brew "kubelogin"
 brew "kubectx"
 brew "kubernetes-cli"
 brew "mas"
+brew "mackup"
 brew "neovim"
 brew "node"
 brew "node-build"
@@ -43,7 +46,9 @@ brew "redis"
 brew "ripgrep"
 brew "robotsandpencils/made/xcodes"
 brew "shellcheck"
+brew "starship"
 brew "shfmt"
+brew "sqlite"
 brew "speedtest-cli"
 brew "the_silver_searcher"
 brew "tmux"
@@ -53,7 +58,6 @@ brew "vapor"
 brew "wget"
 brew "xcodes"
 brew "yadm"
-brew "ytop"
 brew "youtube-dl"
 brew "yq"
 
@@ -65,7 +69,7 @@ cask "1password-cli"
 cask "1password"
 cask "adoptopenjdk"
 cask "airbuddy"
-cask "app-cleaner"
+cask "appcleaner"
 cask "bunch" 
 cask "cakebrew"
 cask "cheatsheet"
@@ -92,6 +96,7 @@ cask "replacicon"
 cask "rocket"
 cask "screens-connect"
 cask "screens"
+cask "swiftbar"
 cask "sketch"
 cask "tower"
 cask "transmission"
@@ -101,36 +106,35 @@ cask "xcodes"
 
 # Quicklook plugins
 
-cask "qlcolorcode"
-casl "qlmarkdown"
-cask "qlprettypatch"
-cask "quicklook-csv"
-cask "quicklook-json"
+# cask "qlcolorcode"
+# cask "qlmarkdown"
+# cask "qlprettypatch"
+# cask "quicklook-csv"
+# cask "quicklook-json"
 
 
 # Cask Fonts
 cask "font-roboto"
-cask font-liberation-nerd-font
-cask font-league-mono
-cask font-jetbrains-mono-nerd-font
-cask font-im-writing-nerd-font
-cask font-hack-nerd-font	
-cask font-go-mono-nerd-font
-cask font-fira-mono-nerd-font
-cask font-fira-code-nerd-font
-cask font-droid-sans-mono-nerd-font
-cask font-space-mono-nerd-font
-cask font-blex-mono-nerd-font
-cask font-sauce-code-pro-nerd-font
-cask font-anonymous-pro
-cask font-roboto-mono-nerd-font
-cask font-anonymice-nerd-font
-cask font-redhat
-cask font-3270-nerd-font
-cask font-profont-nerd-font
-cask font-overpass-nerd-font
-cask font-noto-nerd-font
-cask font-meslo-lg-nerd-font
+cask "font-liberation-nerd-font"
+cask "font-league-mono"
+cask "font-jetbrains-mono-nerd-font"
+cask "font-im-writing-nerd-font"
+cask "font-hack-nerd-font"	
+cask "font-go-mono-nerd-font"
+cask "font-fira-mono-nerd-font"
+cask "font-fira-code-nerd-font"
+cask "font-droid-sans-mono-nerd-font"
+cask "font-space-mono-nerd-font"
+cask "font-blex-mono-nerd-font"
+cask "font-sauce-code-pro-nerd-font"
+cask "font-anonymous-pro"
+cask "font-roboto-mono-nerd-font"
+cask "font-anonymice-nerd-font"
+cask "font-3270-nerd-font"
+cask "font-profont-nerd-font"
+cask "font-overpass-nerd-font"
+cask "font-noto-nerd-font"
+cask "font-meslo-lg-nerd-font"
 
 # Mac App Store Apps
 mas "Actions", id: 1586435171
