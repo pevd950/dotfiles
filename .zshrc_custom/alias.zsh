@@ -36,6 +36,7 @@ alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
 alias myzshrc='code "$ZSH_CUSTOM"'
 
 alias ccat='bat -pp'
+alias lls='exa --icons -s=Name'
 
 # Apps
 # MacUpdater

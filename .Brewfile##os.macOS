@@ -45,6 +45,7 @@ brew "vapor"
 brew "wget"
 brew "xcodes"
 brew "yadm"
+brew "ytop"
 brew "youtube-dl"
 brew "yq"
 
