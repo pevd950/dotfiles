@@ -2,10 +2,10 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
 # Use custom format
-format = """
-[┌───────────────────>](bold green)
-[│](bold green) $hostname$directory$rust$package: $git_branch$git_status$kubernetes$fill$azure
-[└─> ](bold green)"""
+#format = """
+#[┌───────────────────>](bold green)
+#[│](bold green) $hostname$directory$rust$package: $git_branch$git_status$kubernetes$fill$azure
+#[└─> ](bold green)"""
 
 # Inserts a blank line between shell prompts
 add_newline = false
