@@ -1,0 +1,11 @@
+{
+    "Alt-/": "lua:comment.comment",
+    "Ctrl-F2": "command:toggleBookmark",
+    "CtrlShift-F2": "command:clearBookmarks",
+    "CtrlUnderscore": "lua:comment.comment",
+    "F2": "command:nextBookmark",
+    "F4": "command:jumptag",
+    "F5": "lua:wc.wordCount",
+    "F6": "command-edit:gorename ",
+    "Shift-F2": "command:prevBookmark"
+}
