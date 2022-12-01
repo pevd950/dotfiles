@@ -1,10 +1,15 @@
 # #Checking if arm64 or x86
 # HOST_ARCH=$(uname -m)
 
-SAVEHIST=20000
-HISTSIZE=20000
+SAVEHIST=50000
+HISTSIZE=50000
+setopt HIST_EXPIRE_DUPS_FIRST
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_SAVE_NO_DUPS
+
 
 # Exports
 # Path to your oh-my-zsh installation.
