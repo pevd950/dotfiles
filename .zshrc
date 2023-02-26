@@ -37,7 +37,7 @@ export PATH=$PATH:$GOPATH/bin
 # export MANPATH="/usr/local/man:$MANPATH"
 export PATH=/opt/homebrew/bin:$PATH
 export PATH=$HOME/.rbenv/bin:$PATH
-
+export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
 # Secrets sourced from 1Password
 # YADM_CLASS=$(yadm config local.class)
 # if [ "$YADM_CLASS" = "work" ]; then
@@ -196,3 +196,8 @@ eval "$(nodenv init -)"
 # Init starship prompt
 eval "$(starship init zsh)"
 
+autoload -U +X bashcompinit && bashcompinit
+complete -o nospace -C /opt/homebrew/bin/bit bit
+source /Users/pablovalero/.config/op/plugins.sh
+
+source /Users/pablovalero/.config/broot/launcher/bash/br

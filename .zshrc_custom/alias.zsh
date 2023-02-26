@@ -38,9 +38,8 @@ alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
 alias myzshrc='code "$ZSH_CUSTOM"'
 
 # Command Overrides
-alias cat='bat --paging=never'
-alias ls='exa --icons -s=Name'
-alias nv='nvim'
+# alias cat='bat --paging=never'
+# alias ls='exa --icons -s=Name'
 alias ql='quick-look'
 alias pman='preman'
 

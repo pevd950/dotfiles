@@ -80,3 +80,6 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+[user]
+	name = Pablo Valero
+	email = 12861801+pevd950@users.noreply.github.com

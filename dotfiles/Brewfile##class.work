@@ -49,7 +49,6 @@ brew "rbenv"
 brew "ruby-build"
 brew "redis"
 brew "ripgrep"
-brew "robotsandpencils/made/xcodes"
 brew "shfmt"
 brew "sqlite"
 brew "shellcheck"
@@ -83,7 +82,6 @@ cask "iterm2"
 
 
 ## Utility Casks
-cask "1password-cli"
 cask "1password"
 cask "airbuddy"
 cask "bunch" 
