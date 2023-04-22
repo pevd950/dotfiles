@@ -10,26 +10,22 @@ setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_SAVE_NO_DUPS
 
-
 # Paths and environment variables
 # Oh-my-zsh path
 export ZSH="$HOME/.oh-my-zsh"
 
-# Flutter
-export PATH=$PATH:$USER/flutter/bin
+if [[ "$(uname)" == "Darwin" ]]; then
+  # macOS-specific configurations
+  OS="macos"
+  source ~/.zshrc_custom/macos-exports.zsh
+elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
+  # Debian-based Linux configurations
+  OS="debian"
+  source ~/.zshrc_custom/debian_exports.zsh
+fi
 
-# Android
-export ANDROID_HOME=$HOME/Library/Android/sdk
-export PATH=$PATH:$ANDROID_HOME/emulator
-export PATH=$PATH:$ANDROID_HOME/tools
-export PATH=$PATH:$ANDROID_HOME/tools/bin
-export PATH=$PATH:$ANDROID_HOME/platform-tools
+# if macOS
 
-# Export React Editor
-export REACT_EDITOR=code
-
-# Docker
-export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
 
 # go and goproxy setup
 export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
@@ -41,17 +37,7 @@ export PATH=$PATH:$GOPATH/bin
 
 # Other paths
 export MANPATH="/usr/local/man:$MANPATH"
-export PATH=/opt/homebrew/bin:$PATH
 export PATH=$HOME/.rbenv/bin:$PATH
-export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
-
-# Secrets sourced from 1Password
-# YADM_CLASS=$(yadm config local.class)
-# if [ "$YADM_CLASS" = "work" ]; then
-#    eval "$(op signin --account github)"
-#    export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
-#    export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
-# fi
 
 # Set name of the theme to load --- if set to "random", it will
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
@@ -123,7 +109,17 @@ eval "$(nodenv init -)"
 eval "$(starship init zsh)"
 
 autoload -U +X bashcompinit && bashcompinit
+
+
 complete -o nospace -C /opt/homebrew/bin/bit bit
-source /Users/pablovalero/.config/op/plugins.sh
+
+# Source Last OS-specific export files
+if [ "$OS" = "macos" ]; then
+  source ~/.config/op/plugins.sh
+  source ~/.config/broot/launcher/bash/br
+elif [ "$OS" = "debian" ]; then
+#   source ~/.zsh_exports/debian_exports.zsh
+fi
+
 
 source /Users/pablovalero/.config/broot/launcher/bash/br
