@@ -90,11 +90,7 @@ brew "shellcheck"
 cask 'calibre'
 cask 'dash'
 cask "1password"
-cask "adoptopenjdk"
 cask "airbuddy"
-cask "appcleaner"
-cask "bunch"
-cask "cakebrew"
 cask "cheatsheet"
 cask "cleanshot"
 cask "customshortcuts"
@@ -102,19 +98,12 @@ cask "docker"
 cask "downie"
 cask "fastscripts"
 cask "hazel"
-cask "hook"
-cask "istat-menus"
 cask "iterm2"
 cask "kaleidoscope"
-cask "keyboard-maestro"
-cask "kubecontext"
-cask "mimestream"
-cask "moom"
 cask "paw"
 cask "popclip"
 cask "proxyman"
 cask "raycast"
-cask "replacicon"
 cask "rocket"
 cask "screens-connect"
 cask "screens"
@@ -162,22 +151,16 @@ mas "Mela", id: 1568924476
 mas "Parcel", : 639968404
 mas "Pastebot", id: 1179623856
 mas "Pastel", id: 413897608
-mas "PCalc", id: 403504866
 mas "Pixelmator Pro", id: 1289583905
 mas "PopClip", : 445189367
 mas "Reeder", id: 1529448980
-mas "Shortery", id: 1594183810
-mas "Slack", id: 803453959
 mas "Soulver 3", id: 1508732804
 mas "Speediness", id: 1596706466
-mas "Speedtest", id: 1153157709
 mas "TestFlight", id: 899247664
 mas "Things", id: 904280696
 mas "Transloader", id: 572281534
 mas "Yoink", id: 457622435
 
 # Mac App Store Extentions
-mas "Super Agent", id: 1568262835
-mas "Noir", id: 1592917505
 mas "1Blocker", id: 1365531024
 mas "1Password for Safari", id: 1569813296
