@@ -9,7 +9,7 @@ install_oh_my_zsh() {
 
 # Define a function to install Starship
 install_starship() {
-  curl -sS https://starship.rs/install.sh | sh --yes
+  curl -sS https://starship.rs/install.sh | sh
 }
 
 # Define a function to install rbenv
