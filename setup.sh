@@ -35,5 +35,9 @@ elif [[ "$(uname)" == "Linux" ]]; then
   # Install tools
   install_starship
   install_oh_my_zsh
-#   install_rbenv
+  # Get the directory of the current script
+  SCRIPT_DIR="$(dirname "$0")"
+  # Copy .zshrc and .zshrc_custom/ to $HOME
+  cp "${SCRIPT_DIR}/.zshrc" ~/
+  cp -r "${SCRIPT_DIR}/.zshrc_custom/" ~/
 fi
