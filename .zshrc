@@ -15,18 +15,13 @@ setopt HIST_SAVE_NO_DUPS
 export ZSH="$HOME/.oh-my-zsh"
 
 if [[ "$(uname)" == "Darwin" ]]; then
-  # macOS-specific configurations
-  OS="macos"
-  source ~/.zshrc_custom/macos-exports.zsh
+   # macOS-specific configurations
+   OS="macos"
+   source ~/.zshrc_custom/macos-exports.zsh
 elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
-  # Debian-based Linux configurations
-  OS="debian"
-  source ~/.zshrc_custom/debian_exports.zsh
-fi
-
-# Load Codespaces specific configurations if exists
-if [[ $CODESPACES == "true" ]]; then
-  source $HOME/.zshenv##os.codespaces
+   # Debian-based Linux configurations
+   OS="debian"
+   source ~/.zshrc_custom/debian-exports.zsh
 fi
 
 # go and goproxy setup
@@ -72,8 +67,8 @@ plugins=(
    1password
 )
 #Disabled plugins
-   # git-prompt
-   # git-open
+# git-prompt
+# git-open
 
 # User configuration
 export MANPATH="/usr/local/man:$MANPATH"
@@ -95,39 +90,37 @@ fi
 
 # Custom configurations
 ZSH_DISABLE_COMPFIX="true"
-ZSH_CUSTOM=~/.zshrc_custom/
+ZSH_CUSTOM=~/.zshrc_custom
 source $ZSH/oh-my-zsh.sh
 source $ZSH_CUSTOM/alias-local.zsh
 source $ZSH_CUSTOM/exports-local.zsh
 
-# iTerm2 integration
-source ~/.iterm2_shell_integration.zsh
-
-[[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
-
-#Completion for 1Password CLI
-eval "$(op completion zsh)"; compdef _op op
-# Init ruby env
-eval "$(rbenv init - zsh)"
-# Init node env
-eval "$(nodenv init -)"
 # Init starship prompt
 eval "$(starship init zsh)"
-# Init shadoe env
-eval "$(pyenv init -)"
 
 autoload -U +X bashcompinit && bashcompinit
 
 # Source Last OS-specific export files
 if [ "$OS" = "macos" ]; then
-complete -o nospace -C /opt/homebrew/bin/bit bit
-   source ~/.config/op/plugins.sh
-   source ~/.config/broot/launcher/bash/br
+   [[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
+   #Completion for 1Password CLI
+   eval "$(op completion zsh)"
+   compdef _op op
+   # Init ruby env
+   eval "$(rbenv init - zsh)"
+   # Init node env
+   eval "$(nodenv init -)"
+   # Init shadoe env
+   eval "$(pyenv init -)"
+   complete -o nospace -C /opt/homebrew/bin/bit bit
+   # iTerm2 integration
+   source ~/.iterm2_shell_integration.zsh
    export NVM_DIR="$HOME/.nvm"
-   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
+   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
    export PATH="/opt/homebrew/sbin:$PATH"
-   source /Users/pablovalero/.config/broot/launcher/bash/br
+   # source ~/.config/op/plugins.sh
+   # source ~/.config/broot/launcher/bash/br
+   # source /Users/pablovalero/.config/broot/launcher/bash/br
 elif [ "$OS" = "debian" ]; then
-#   source ~/.zsh_exports/debian_exports.zsh
 fi
