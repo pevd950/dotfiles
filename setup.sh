@@ -33,7 +33,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   install_rbenv
 elif [[ "$(uname)" == "Linux" ]]; then
   # Install tools
-  install_oh_my_zsh
   install_starship
+  install_oh_my_zsh
 #   install_rbenv
 fi
