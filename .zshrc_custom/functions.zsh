@@ -1,5 +1,5 @@
 # Xcode
-openx(){ 
+openx(){
   if test -n "$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)"
   then
 	echo "Opening workspace"
@@ -10,7 +10,7 @@ openx(){
 	then
 	  echo "Opening project"
 	  open *.xcodeproj
-	  return  
+	  return
 	else
 	  echo "Nothing found"
 	fi
@@ -43,4 +43,52 @@ preman() {
 iterm2_print_user_vars() {
 	KUBECONTEXT=$(CTX=$(kubectl config current-context) 2> /dev/null;if [ $? -eq 0 ]; then echo $CTX;fi)
 	iterm2_set_user_var kubeContext $KUBECONTEXT
+}
+
+copilot_gh-assist() {
+        TMPFILE=$(mktemp)
+        trap 'rm -f $TMPFILE' EXIT
+        if /Users/pvd950/.nvm/versions/node/v16.15.1/bin/github-copilot-cli gh-assist "$@" --shellout $TMPFILE; then
+                if [ -e "$TMPFILE" ]; then
+                        FIXED_CMD=$(cat $TMPFILE)
+                        print -s "$FIXED_CMD"
+                        eval "$FIXED_CMD"
+                else
+                        echo "Apologies! Extracting command failed"
+                fi
+        else
+                return 1
+        fi
+}
+
+copilot_git-assist() {
+        TMPFILE=$(mktemp)
+        trap 'rm -f $TMPFILE' EXIT
+        if /Users/pvd950/.nvm/versions/node/v16.15.1/bin/github-copilot-cli git-assist "$@" --shellout $TMPFILE; then
+                if [ -e "$TMPFILE" ]; then
+                        FIXED_CMD=$(cat $TMPFILE)
+                        print -s "$FIXED_CMD"
+                        eval "$FIXED_CMD"
+                else
+                        echo "Apologies! Extracting command failed"
+                fi
+        else
+                return 1
+        fi
+}
+
+copilot_what-the-shell() {
+        TMPFILE=$(mktemp)
+        trap 'rm -f $TMPFILE' EXIT
+        if /Users/pvd950/.nvm/versions/node/v16.15.1/bin/github-copilot-cli what-the-shell "$@" --shellout $TMPFILE; then
+                if [ -e "$TMPFILE" ]; then
+                        FIXED_CMD=$(cat $TMPFILE)
+                        print -s "$FIXED_CMD"
+                        eval "$FIXED_CMD"
+                else
+                        echo "Apologies! Extracting command failed"
+                fi
+        else
+                return 1
+        fi
 }

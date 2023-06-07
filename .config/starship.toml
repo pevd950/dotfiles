@@ -7,6 +7,21 @@
 #[│](bold green) $hostname$directory$rust$package: $git_branch$git_status$kubernetes$fill$azure
 #[└─> ](bold green)"""
 
+#format = """
+#$username\
+#$hostname\
+#$localip\
+#$kubernetes\
+#$helm\
+#$directory\
+#$git_branch\
+#$git_commit\
+#$git_state\
+#$git_metrics\
+#$git_status\
+#$azure\
+#"""
+
 # Inserts a blank line between shell prompts
 add_newline = false
 
@@ -20,6 +35,9 @@ disabled = false
 
 # Utils
 
+[docker_context]
+disabled = true
+
 [azure]
 disabled = true
 
@@ -27,10 +45,14 @@ disabled = true
 # format ='[- $symbol($cluster in )$context \($namespace\)](green) '
 # disabled = false
 # detect_files = ['k8s']
-# detect_folders = ['ghae']
+# detect_folders = ['ghae-kube', '!~/Developer', '!']
 
 [fill]
 symbol = ' '
+
+[nodejs]
+disabled = true
+detect_folders = ["!Developer"]
 
 [hostname]
 ssh_symbol="🌐"

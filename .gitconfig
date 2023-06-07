@@ -4,7 +4,7 @@
 [include]
 	path = .gitconfig.local
 [init]
-	defaultBranch = main	
+	defaultBranch = main
 [github]
 	user = pevd950
 [push]
@@ -18,14 +18,14 @@
 
 [credential]
 	helper = osxkeychain
-[merge]
-	tool = Kaleidoscope
-[mergetool]
-	keepBackup = true
-	prompt = false
-[mergetool "Kaleidoscope"]
-	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
-	trustExitCode = true
+# [merge]
+# 	tool = Kaleidoscope
+# [mergetool]
+# 	keepBackup = true
+	# prompt = false
+# [mergetool "Kaleidoscope"]
+# 	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
+# 	trustExitCode = true
 [diff]
 	tool = Kaleidoscope
 [difftool]
@@ -74,7 +74,7 @@
 
 [lfs]
 	fetchexclude = *
-	
+
 [filter "lfs"]
 	clean = git-lfs clean -- %f
 	smudge = git-lfs smudge -- %f
@@ -82,4 +82,4 @@
 	required = true
 [user]
 	name = Pablo Valero
-	email = 12861801+pevd950@users.noreply.github.com
+	email = pevd950@github.com
