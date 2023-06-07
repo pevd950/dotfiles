@@ -3,13 +3,13 @@
 # Define a function to install Oh My Zsh
 install_oh_my_zsh() {
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)" --yes
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
   fi
 }
 
 # Define a function to install Starship
 install_starship() {
-  curl -sS https://starship.rs/install.sh | sh
+  curl -sS https://starship.rs/install.sh | sh --yes
 }
 
 # Define a function to install rbenv
