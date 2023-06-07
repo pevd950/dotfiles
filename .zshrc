@@ -1,5 +1,5 @@
 # #Checking if arm64 or x86
-# HOST_ARCH=$(uname -m)
+HOST_ARCH=$(uname -m)
 
 # History settings
 SAVEHIST=50000
@@ -24,8 +24,10 @@ elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
   source ~/.zshrc_custom/debian_exports.zsh
 fi
 
-# if macOS
-
+# Load Codespaces specific configurations if exists
+if [[ $CODESPACES == "true" ]]; then
+  source $HOME/.zshenv##os.codespaces
+fi
 
 # go and goproxy setup
 export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
@@ -34,10 +36,6 @@ export GONOPROXY=
 export GONOSUMDB='github.com/github/*'
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
-
-# Other paths
-export MANPATH="/usr/local/man:$MANPATH"
-export PATH=$HOME/.rbenv/bin:$PATH
 
 # Set name of the theme to load --- if set to "random", it will
 # See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
@@ -51,7 +49,6 @@ ZSH_THEME="robbyrussell"
 plugins=(
    aliases
    colored-man-pages
-   common-aliases
    copyfile
    copypath
    dash
@@ -60,7 +57,6 @@ plugins=(
    encode64
    gh
    git
-   git-open
    golang
    per-directory-history
    helm
@@ -69,11 +65,21 @@ plugins=(
    macos
    rails
    ruby
+   terraform
    tmux
    web-search
    zsh-syntax-highlighting
    1password
 )
+#Disabled plugins
+   # git-prompt
+   # git-open
+
+# User configuration
+export MANPATH="/usr/local/man:$MANPATH"
+
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8
 
 # Preferred editor for local and remote sessions
 if [[ -n $SSH_CONNECTION ]]; then
@@ -107,19 +113,21 @@ eval "$(rbenv init - zsh)"
 eval "$(nodenv init -)"
 # Init starship prompt
 eval "$(starship init zsh)"
+# Init shadoe env
+eval "$(pyenv init -)"
 
 autoload -U +X bashcompinit && bashcompinit
 
-
-complete -o nospace -C /opt/homebrew/bin/bit bit
-
 # Source Last OS-specific export files
 if [ "$OS" = "macos" ]; then
-  source ~/.config/op/plugins.sh
-  source ~/.config/broot/launcher/bash/br
+complete -o nospace -C /opt/homebrew/bin/bit bit
+   source ~/.config/op/plugins.sh
+   source ~/.config/broot/launcher/bash/br
+   export NVM_DIR="$HOME/.nvm"
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+   export PATH="/opt/homebrew/sbin:$PATH"
+   source /Users/pablovalero/.config/broot/launcher/bash/br
 elif [ "$OS" = "debian" ]; then
 #   source ~/.zsh_exports/debian_exports.zsh
 fi
-
-
-source /Users/pablovalero/.config/broot/launcher/bash/br

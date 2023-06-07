@@ -23,11 +23,11 @@ disabled = false
 [azure]
 disabled = true
 
-[kubernetes]
-format ='[- $symbol($cluster in )$context \($namespace\)](green) '
-disabled = false
-detect_files = ['k8s']
-detect_folders = ['ghae']
+# [kubernetes]
+# format ='[- $symbol($cluster in )$context \($namespace\)](green) '
+# disabled = false
+# detect_files = ['k8s']
+# detect_folders = ['ghae']
 
 [fill]
 symbol = ' '

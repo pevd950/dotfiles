@@ -14,6 +14,10 @@ export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
 # Homebrew
 export PATH=/opt/homebrew/bin:$PATH
 
+# Other paths
+export MANPATH="/usr/local/man:$MANPATH"
+export PATH=$HOME/.rbenv/bin:$PATH
+
 # Export React Editor
 export REACT_EDITOR=code
 
