@@ -61,7 +61,6 @@ plugins=(
    rails
    ruby
    terraform
-   tmux
    web-search
    zsh-syntax-highlighting
    1password
@@ -92,8 +91,16 @@ fi
 ZSH_DISABLE_COMPFIX="true"
 ZSH_CUSTOM=~/.zshrc_custom
 source $ZSH/oh-my-zsh.sh
-source $ZSH_CUSTOM/alias-local.zsh
-source $ZSH_CUSTOM/exports-local.zsh
+
+# Source alias-local.zsh if it exists
+if [ -f "${ZSH_CUSTOM}/alias-local.zsh" ]; then
+    source "${ZSH_CUSTOM}/alias-local.zsh"
+fi
+
+# Source exports-local.zsh if it exists
+if [ -f "${ZSH_CUSTOM}/exports-local.zsh" ]; then
+    source "${ZSH_CUSTOM}/exports-local.zsh"
+fi
 
 # Init starship prompt
 eval "$(starship init zsh)"
