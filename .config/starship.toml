@@ -57,3 +57,5 @@ detect_folders = ["!Developer"]
 [hostname]
 ssh_symbol="🌐"
 format='[$ssh_symbol$hostname ](bold red)'
+
+# [git_status]

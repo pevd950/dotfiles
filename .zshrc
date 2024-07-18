@@ -26,7 +26,7 @@ fi
 
 # go and goproxy setup
 export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
-export GOPRIVATE=
+export GOPRIVATE=github.com
 export GONOPROXY=
 export GONOSUMDB='github.com/github/*'
 export GOPATH=$HOME/go
@@ -104,6 +104,8 @@ fi
 
 # Init starship prompt
 eval "$(starship init zsh)"
+# Init shadowenv
+eval "$(shadowenv init zsh)"  # for zsh
 
 autoload -U +X bashcompinit && bashcompinit
 

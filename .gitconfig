@@ -11,6 +11,7 @@
 	default = simple
 	autoSetupRemote = true
 [pull]
+	rebase = true
 	# rebase = true
 [rebase]
 	# Automatically stash before a rebase and unstash afterwards.
@@ -82,4 +83,4 @@
 	required = true
 [user]
 	name = Pablo Valero
-	email = pevd950@github.com
+	# email = pevd950@github.com # Derived from local .gitconfig.local
