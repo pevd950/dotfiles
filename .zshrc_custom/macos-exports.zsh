@@ -25,9 +25,14 @@ export REACT_EDITOR=code
 export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
 
 # Secrets sourced from 1Password
-# YADM_CLASS=$(yadm config local.class)
-# if [ "$YADM_CLASS" = "work" ]; then
-#    eval "$(op signin --account github)"
-#    export GITHUB_TOKEN=$(op item get GITHUB_TOKEN --fields credential)
+YADM_CLASS=$(yadm config local.class)
+if [ "$YADM_CLASS" = "work" ]; then
+   eval "$(op signin --account github)"
+   export GITHUB_TOKEN=$(op item get "Work General PAT Token" --fields token)
 #    export AZURE_DEVOPS_ACCESS_TOKEN=$(op item get AZURE_DEVOPS_ACCESS_TOKEN --fields credential)
-# fi
+fi
+
+if [ "$YADM_CLASS" = "personal" ]; then
+   eval "$(op signin --account valero)"
+   export GITHUB_TOKEN=$(op item get "Personal General PAT Token" --fields token)
+fi

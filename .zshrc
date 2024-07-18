@@ -126,6 +126,7 @@ if [ "$OS" = "macos" ]; then
    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
    export PATH="/opt/homebrew/sbin:$PATH"
+   # Enable this for 1Password CLI Plugins
    # source ~/.config/op/plugins.sh
    # source ~/.config/broot/launcher/bash/br
    # source /Users/pablovalero/.config/broot/launcher/bash/br
