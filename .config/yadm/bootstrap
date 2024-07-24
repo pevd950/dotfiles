@@ -140,74 +140,83 @@ fi
 echo_ok "Installing VS Code Extensions..."
 
 VSCODE_EXTENTIONS=(
-    alefragnani.Bookmarks
+    alefragnani.bookmarks
     alefragnani.project-manager
-    arcticicestudio.nord-visual-studio-code
+    benjaminbenais.copilot-theme
+    bierner.color-info
     bierner.github-markdown-preview
     bierner.markdown-checkbox
     bierner.markdown-emoji
     bierner.markdown-footnotes
     bierner.markdown-mermaid
     bierner.markdown-preview-github-styles
-    bierner.markdown-yaml-preamble
-    castwide.solargraph
     christian-kohler.npm-intellisense
-    CraigMaslowski.erb
-    cschleiden.vscode-github-actions
-    DavidAnson.vscode-markdownlint
+    davidanson.vscode-markdownlint
     dbaeumer.vscode-eslint
     deerawan.vscode-dash
     eamodio.gitlens
-    EditorConfig.EditorConfig
-    eg2.vscode-npm-script
+    editorconfig.editorconfig
     esbenp.prettier-vscode
+    fabiospampinato.vscode-open-in-github
+    formulahendry.auto-rename-tag
     formulahendry.code-runner
-    GabrielBB.vscode-lombok
-    GitHub.codespaces
-    GitHub.copilot
-    GitHub.github-vscode-theme
-    GitHub.remotehub
-    GitHub.vscode-pull-request-github
+    github.codespaces
+    github.copilot
+    github.copilot-chat
+    github.github-vscode-theme
+    github.remotehub
+    github.vscode-github-actions
+    github.vscode-pull-request-github
     golang.go
-    Gruntfuggly.todo-tree
+    graphql.vscode-graphql-syntax
+    gruntfuggly.todo-tree
+    hashicorp.terraform
+    honnamkuan.golang-snippets
+    idleberg.applescript
+    jock.svg
+    johnpapa.vscode-peacock
     k--kato.intellij-idea-keybindings
-    kaleidoscope-app.vscode-ksdiff
-    kotfu.bunch
-    miguel-savignano.ruby-symbols
-    misogi.ruby-rubocop
+    kamikillerto.vscode-colorize
+    mikestead.dotenv
+    mkhl.shfmt
+    monokai.theme-monokai-pro-vscode
     morrislaptop.vscode-open-in-git-tower
-    ms-azuretools.vscode-bicep
     ms-azuretools.vscode-docker
-    ms-dotnettools.vscode-dotnet-runtime
-    ms-kubernetes-tools.vscode-kubernetes-tools
+    ms-python.debugpy
+    ms-python.isort
     ms-python.python
     ms-python.vscode-pylance
-    ms-toolsai.jupyter
     ms-toolsai.jupyter-keymap
-    ms-toolsai.jupyter-renderers
     ms-vscode-remote.remote-containers
+    ms-vscode-remote.remote-ssh
+    ms-vscode-remote.remote-ssh-edit
+    ms-vscode.azure-repos
+    ms-vscode.live-server
+    ms-vscode.makefile-tools
+    ms-vscode.remote-explorer
     ms-vscode.remote-repositories
+    ms-vscode.remote-server
+    ms-vscode.vscode-js-profile-flame
     ms-vsliveshare.vsliveshare
-    Pivotal.vscode-boot-dev-pack
-    Pivotal.vscode-spring-boot
-    PKief.material-icon-theme
-    rebornix.ruby
-    redhat.java
+    mtxr.sqltools
+    mtxr.sqltools-driver-mysql
+    rapidapi.vscode-rapidapi-client
+    rapidapi.vscode-services
+    rcore.rcore-unused-css-classes
     redhat.vscode-xml
     redhat.vscode-yaml
     sharat.vscode-brewfile
     sswg.swift-lang
+    streetsidesoftware.code-spell-checker
+    stylelint.vscode-stylelint
+    tamasfe.even-better-toml
     timonwong.shellcheck
     vadimcn.vscode-lldb
-    VisualStudioExptTeam.vscodeintellicode
-    vscjava.vscode-java-debug
-    vscjava.vscode-java-dependency
-    vscjava.vscode-java-pack
-    vscjava.vscode-java-test
-    vscjava.vscode-maven
+    visualstudioexptteam.intellicode-api-usage-examples
+    visualstudioexptteam.vscodeintellicode
     vscode-icons-team.vscode-icons
-    wayou.vscode-todo-highlight
-    wingrunr21.vscode-ruby
+    yoavbls.pretty-ts-errors
+    zxh404.vscode-proto3
 )
 
 if hash code &>/dev/null; then
