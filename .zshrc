@@ -105,7 +105,7 @@ fi
 # Init starship prompt
 eval "$(starship init zsh)"
 # Init shadowenv
-eval "$(shadowenv init zsh)"  # for zsh
+# eval "$(shadowenv init zsh)"  # for zsh
 
 autoload -U +X bashcompinit && bashcompinit
 
