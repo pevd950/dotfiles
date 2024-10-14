@@ -83,4 +83,6 @@
 	required = true
 [user]
 	name = Pablo Valero
-	email = pabloevd950@icloud.com
+	# email = pevd950@github.com # Derived from local .gitconfig.local
+[commit]
+	gpgsign = false

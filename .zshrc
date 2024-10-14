@@ -17,11 +17,11 @@ export ZSH="$HOME/.oh-my-zsh"
 if [[ "$(uname)" == "Darwin" ]]; then
    # macOS-specific configurations
    OS="macos"
-   source ~/.zshrc_custom/macos-exports.zsh
+   source ~/.zshrc_custom/macos-exports
 elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
    # Debian-based Linux configurations
    OS="debian"
-   source ~/.zshrc_custom/debian-exports.zsh
+   source ~/.zshrc_custom/debian-exports
 fi
 
 # go and goproxy setup
