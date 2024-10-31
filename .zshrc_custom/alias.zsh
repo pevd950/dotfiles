@@ -63,6 +63,6 @@ alias coden='code --new-window'
 
 # Copilot CLI
 alias wts='copilot_what-the-shell'
-alias "??"='copilot_what-the-shell'
-alias "git?"='copilot_git-assist'
-alias "gh?"='copilot_gh-assist'
+alias '??'='copilot_shell_suggest'
+alias "git?"='copilot_git_suggest'
+alias 'gh?'='copilot_gh_suggest'
