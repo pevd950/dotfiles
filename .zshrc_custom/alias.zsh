@@ -1,6 +1,9 @@
 #macOS
 alias o="open ."
 
+# Search through your command history and print the top 10 commands
+alias history-stat="history 0 | awk '{print \$2}' | sort | uniq -c | sort -n -r | head"
+
 # cd
 alias ..='cd ..'
 alias ...='cd ../..'
@@ -66,3 +69,6 @@ alias wts='copilot_what-the-shell'
 alias '??'='copilot_shell_suggest'
 alias "git?"='copilot_git_suggest'
 alias 'gh?'='copilot_gh_suggest'
+
+# Fun
+alias shrug="echo '¯\_(ツ)_/¯' | pbcopy"

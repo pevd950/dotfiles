@@ -59,3 +59,8 @@ copilot_gh_suggest() {
 copilot_shell_suggest() {
         gh copilot suggest -t shell "$@"
 }
+
+# Fun
+flip() { echo -n "（╯°□°）╯ ┻━┻" |tee /dev/tty| pbcopy -selection clipboard; }
+
+# shrug() { echo -n "¯\_(ツ)_/¯" |tee /dev/tty| pbcopy -selection clipboard; }

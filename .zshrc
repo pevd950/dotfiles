@@ -58,8 +58,6 @@ plugins=(
    history
    kubectl
    macos
-   rails
-   ruby
    terraform
    web-search
    zsh-syntax-highlighting
