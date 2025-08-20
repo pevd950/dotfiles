@@ -81,8 +81,5 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
-[user]
-	name = Pablo Valero
-	# email = pevd950@github.com # Derived from local .gitconfig.local
 [commit]
 	gpgsign = false
