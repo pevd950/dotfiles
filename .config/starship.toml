@@ -59,3 +59,9 @@ ssh_symbol="🌐"
 format='[$ssh_symbol$hostname ](bold red)'
 
 # [git_status]
+
+[custom.yadm]
+command = "yadm status --porcelain 2>/dev/null | sed 's/^ M/!/' | sed 's/^A/+/' | sed 's/^ D/-/' | sed 's/^??/?/' | tr -d '\\n'"
+when = "[ \"$PWD\" = \"$HOME\" ] && [ -n \"$(yadm status --porcelain 2>/dev/null)\" ]"
+format = "[yadm:$output](bold yellow) "
+disabled = false
