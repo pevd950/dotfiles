@@ -36,7 +36,27 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Install tools via Homebrew (brew handles idempotency)
   echo "Installing/updating brew packages..."
   brew install --cask 1password-cli
-  brew install nodenv pyenv
+  brew install nodenv node-build pyenv
+  
+  # Setup Node with nodenv
+  if command -v nodenv &> /dev/null; then
+    echo "Setting up Node with nodenv..."
+    # Initialize nodenv if not already done
+    eval "$(nodenv init -)"
+    
+    # Install Node 20.17.0 if not already installed
+    if ! nodenv versions | grep -q "20.17.0"; then
+      echo "Installing Node 20.17.0..."
+      nodenv install 20.17.0
+    else
+      echo "Node 20.17.0 already installed"
+    fi
+    
+    # Set global Node version
+    nodenv global 20.17.0
+    nodenv rehash
+    echo "Node $(node -v) is now active"
+  fi
   
   # Install Oh My Zsh and other tools
   install_oh_my_zsh
