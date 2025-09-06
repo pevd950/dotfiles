@@ -65,10 +65,17 @@ brew "python@3.9"
 brew "openssl"
 brew "yq"
 brew "vapor"
+brew "1password-cli"
+brew "kube-linter"
+brew "kustomize"
+brew "swift-format"
+brew "xcbeautify"
+brew "yamlfmt"
+brew "yt-dlp"
+brew "zellij"
 
 {% if yadm.hostname == "kakarot" %}
 # Kakarot-specific (main personal laptop)
-brew "youtube-dl"
 brew "neofetch"
 {% endif %}
 
@@ -83,7 +90,7 @@ cask "tower"
 cask "proxyman" 
 cask "ghostty"
 cask "xcodes"
-cask "xcodes-app"
+cask "jordanbaird-ice"
 
 # Personal productivity (kakarot + broly)
 {% if yadm.hostname == "kakarot" %}
