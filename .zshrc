@@ -132,3 +132,17 @@ if [ "$OS" = "macos" ]; then
    # source /Users/pablovalero/.config/broot/launcher/bash/br
 elif [ "$OS" = "debian" ]; then
 fi
+
+
+
+# Added by Windsurf
+export PATH="/Users/pablovalero/.codeium/windsurf/bin:$PATH"
+
+[[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
+
+alias claude="/Users/pablovalero/.claude/local/claude"
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/pablovalero/.lmstudio/bin"
+# End of LM Studio CLI section
+
