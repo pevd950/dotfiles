@@ -21,6 +21,10 @@ brew "wget"
 brew "curl"
 brew "make"
 brew "mas"
+brew "bash"
+brew "coreutils"
+brew "git-lfs"
+brew "github-keygen"
 
 # Modern CLI tools
 brew "bat"
@@ -33,6 +37,11 @@ brew "bottom"
 brew "dust"
 brew "procs"
 brew "ncdu"
+brew "gping"
+brew "grex"
+brew "gtop"
+brew "diskonaut"
+brew "dive"
 
 # Development tools (all machines)
 brew "neovim"
@@ -73,6 +82,11 @@ brew "xcbeautify"
 brew "yamlfmt"
 brew "yt-dlp"
 brew "zellij"
+
+{% if yadm.hostname == "vegeta" %}
+# Vegeta-specific (headless mac mini)
+brew "openjdk"   # Java runtime
+{% endif %}
 
 {% if yadm.hostname == "kakarot" %}
 # Kakarot-specific (main personal laptop)
