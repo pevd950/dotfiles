@@ -122,9 +122,10 @@ if [ "$OS" = "macos" ]; then
    complete -o nospace -C /opt/homebrew/bin/bit bit
    # iTerm2 integration
    source ~/.iterm2_shell_integration.zsh
-   export NVM_DIR="$HOME/.nvm"
-   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
-   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
+   # NVM - commented out in favor of nodenv
+   # export NVM_DIR="$HOME/.nvm"
+   # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
+   # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
    export PATH="/opt/homebrew/sbin:$PATH"
    # Enable this for 1Password CLI Plugins
    # source ~/.config/op/plugins.sh
