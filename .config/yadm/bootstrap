@@ -13,18 +13,6 @@ yadm alt || true
 # Create necessary directories
 mkdir -p "$HOME/.config/Code/User"
 
-# macOS-specific: Create VS Code symlink for prompts (yadm-specific)
-if [[ "$os" == "Darwin" ]]; then
-  echo "Setting up VS Code prompts symlink..."
-  mkdir -p "$HOME/Library/Application Support/Code/User"
-  if [[ ! -L "$HOME/Library/Application Support/Code/User/prompts" ]]; then
-    ln -snf "$HOME/.config/Code/User/prompts" "$HOME/Library/Application Support/Code/User/prompts"
-    echo "VS Code prompts symlink created"
-  else
-    echo "VS Code prompts symlink already exists"
-  fi
-fi
-
 # Run the main setup script (shared with Codespaces)
 echo "Running main setup script..."
 if [[ -f "$HOME/setup.sh" ]]; then
