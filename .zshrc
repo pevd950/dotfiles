@@ -141,7 +141,6 @@ export PATH="/Users/pablovalero/.codeium/windsurf/bin:$PATH"
 
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
 
-alias claude="/Users/pablovalero/.claude/local/claude"
 
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:/Users/pablovalero/.lmstudio/bin"
