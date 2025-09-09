@@ -27,6 +27,9 @@ alias dcd="docker-compose down"
 alias dcb="docker-compose build"
 alias dcub="docker-compose up --build"
 
+# yadm
+alias yc='yadm-claude'
+
 # GitHub
 # gh alias set --shell startcs 'gh cs code -c $(gh cs list --json "name" | jq -r ".[].name" | grep -i "$1" -m 1)'
 # gh alias set --shell stopcs 'gh cs stop -c $(gh cs list --json "name" | jq -r ".[].name" | grep -i "$1" -m 1)'

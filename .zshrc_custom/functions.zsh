@@ -15,6 +15,16 @@ openx() {
         fi
 }
 
+# yadm function to auto-add Claude files
+yadm-claude() {
+    echo "Adding Claude files to yadm..."
+    yadm add ~/.claude/agents/*.md 2>/dev/null
+    yadm add ~/.claude/commands/*.md 2>/dev/null
+    yadm add ~/.claude/CLAUDE.md 2>/dev/null
+    yadm add ~/.claude/settings.json 2>/dev/null
+    yadm status
+}
+
 # turn hidden files on/off in Finder
 function hiddenOn() { defaults write com.apple.Finder AppleShowAllFiles YES; }
 function hiddenOff() { defaults write com.apple.Finder AppleShowAllFiles NO; }
