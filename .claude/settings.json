@@ -4,6 +4,7 @@
     "type": "command",
     "command": "input=$(cat); current_dir=$(echo \"$input\" | jq -r '.workspace.current_dir'); model=$(echo \"$input\" | jq -r '.model.display_name'); output_style=$(echo \"$input\" | jq -r '.output_style.name'); git_branch=$(cd \"$current_dir\" && git symbolic-ref --short HEAD 2>/dev/null || echo 'no-git'); git_status=$(cd \"$current_dir\" && git status --porcelain 2>/dev/null | wc -l | tr -d ' '); [ \"$git_status\" = \"0\" ] && git_clean=\"✓\" || git_clean=\"✗\"; printf \"\\033[32m➜\\033[0m \\033[36m%s\\033[0m \\033[90m(%s)\\033[0m \\033[33m%s\\033[0m \\033[32m%s\\033[0m \\033[90m[%s]\\033[0m\" \"$(basename \"$current_dir\")\" \"$git_branch\" \"$git_clean\" \"$model\" \"$output_style\""
   },
+  "alwaysThinkingEnabled": true,
   "feedbackSurveyState": {
     "lastShownTime": 1754084405712
   }
