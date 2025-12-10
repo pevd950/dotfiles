@@ -146,6 +146,4 @@ export PATH="/Users/pablovalero/.codeium/windsurf/bin:$PATH"
 export PATH="$PATH:/Users/pablovalero/.lmstudio/bin"
 # End of LM Studio CLI section
 
-
-# Added by Antigravity
-export PATH="/Users/pablovalero/.antigravity/antigravity/bin:$PATH"
+test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"
