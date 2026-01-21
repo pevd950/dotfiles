@@ -21,4 +21,44 @@ else
   echo "Warning: setup.sh not found in home directory"
 fi
 
+echo "Setting up agent skills symlinks..."
+skills_root="$HOME/.config/agent-skills/skills"
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+codex_dir="$codex_home/skills"
+claude_dir="$HOME/.claude/skills"
+copilot_dir="$HOME/.copilot/skills"
+
+mkdir -p "$codex_dir" "$claude_dir" "$copilot_dir"
+
+if [[ -d "$skills_root" ]]; then
+  shopt -s nullglob
+  for skill_path in "$skills_root"/*; do
+    [[ -d "$skill_path" ]] || continue
+    name=$(basename "$skill_path")
+    for target_dir in "$codex_dir" "$claude_dir" "$copilot_dir"; do
+      target="$target_dir/$name"
+      if [[ -L "$target" ]]; then
+        link_dest=$(readlink "$target" || true)
+        if [[ "$link_dest" == "$skill_path" ]]; then
+          continue
+        fi
+        if [[ ! -e "$target" ]]; then
+          echo "Removing broken symlink: $target"
+          rm "$target"
+        else
+          echo "Skipping existing non-matching path: $target"
+          continue
+        fi
+      elif [[ -e "$target" ]]; then
+        echo "Skipping existing non-matching path: $target"
+        continue
+      fi
+      ln -s "$skill_path" "$target"
+    done
+  done
+  shopt -u nullglob
+else
+  echo "No skills found at $skills_root"
+fi
+
 echo "=== Bootstrap complete ==="
