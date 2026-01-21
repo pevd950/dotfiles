@@ -34,10 +34,14 @@ get_repo() {
 
 issue_id() {
   local owner="$1" name="$2" number="$3"
-  local query
+  local query id
   query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issue(number:$number){id}}}'
-  gh api graphql -f query="$query" -F owner="$owner" -F name="$name" -F number="$number" \
-    --jq '.data.repository.issue.id'
+  id=$(gh api graphql -f query="$query" -F owner="$owner" -F name="$name" -F number="$number" \
+    --jq '.data.repository.issue.id')
+  if [[ -z "$id" || "$id" == "null" ]]; then
+    return 0
+  fi
+  echo "$id"
 }
 
 list_sub_issues() {
@@ -94,8 +98,16 @@ main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       list|add|remove) cmd="$1"; shift ;;
-      --repo) repo="$2"; shift 2 ;;
-      --limit) limit="$2"; shift 2 ;;
+      --repo)
+        if [[ $# -lt 2 || "$2" == -* ]]; then
+          die "--repo requires OWNER/REPO."
+        fi
+        repo="$2"; shift 2 ;;
+      --limit)
+        if [[ $# -lt 2 || "$2" == -* ]]; then
+          die "--limit requires a number."
+        fi
+        limit="$2"; shift 2 ;;
       -h|--help) usage; exit 0 ;;
       *) args+=("$1"); shift ;;
     esac

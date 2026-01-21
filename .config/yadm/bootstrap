@@ -37,10 +37,19 @@ if [[ -d "$skills_root" ]]; then
     name=$(basename "$skill_path")
     for target_dir in "$codex_dir" "$claude_dir" "$copilot_dir"; do
       target="$target_dir/$name"
-      if [[ -e "$target" ]]; then
-        if [[ -L "$target" && "$(readlink "$target")" == "$skill_path" ]]; then
+      if [[ -L "$target" ]]; then
+        link_dest=$(readlink "$target" || true)
+        if [[ "$link_dest" == "$skill_path" ]]; then
           continue
         fi
+        if [[ ! -e "$target" ]]; then
+          echo "Removing broken symlink: $target"
+          rm "$target"
+        else
+          echo "Skipping existing non-matching path: $target"
+          continue
+        fi
+      elif [[ -e "$target" ]]; then
         echo "Skipping existing non-matching path: $target"
         continue
       fi

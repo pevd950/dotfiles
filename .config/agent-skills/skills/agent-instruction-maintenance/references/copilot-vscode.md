@@ -3,7 +3,7 @@
 ## Scope
 - Agent Skills (open standard): foldered skills with `SKILL.md`.
 - VS Code agent/prompt files: user prompts under `~/Library/Application Support/Code/User/prompts`.
-- Repo custom instructions: `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md`.
+- GitHub repo custom instructions: `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md`.
 - Prompt files: `*.prompt.md` (public preview).
 - Agent instructions: `AGENTS.md`, `CLAUDE.md`, or `GEMINI.md` (repo-level).
 
@@ -13,7 +13,7 @@
 - Prompt: `mode` ("agent" or "ask"); optional `tools`
 
 ## Agent Skills
-- Copilot supports project skills in `.github/skills` or `.claude/skills`.
+- GitHub Copilot supports project skills in `.github/skills` or `.claude/skills`.
 - Personal skills live in `~/.copilot/skills` or `~/.claude/skills`.
 - GitHub Copilot CLI is public preview; VS Code stable support is rolling out (Insiders first).
 - `SKILL.md` requires `name` and `description`; optional `license`.
@@ -31,4 +31,4 @@
 - Avoid conflicting guidance across chatmodes and instructions.
 
 ## References
-- Response customization: https://docs.github.com/en/copilot/concepts/prompting/response-customization?tool=vscode
+- Response customization: [Response customization](https://docs.github.com/en/copilot/concepts/prompting/response-customization?tool=vscode)

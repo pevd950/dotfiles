@@ -15,6 +15,10 @@ description: "Triage and address PR review feedback and CI failures with minimal
 - Use when a PR has reviewer requests or failing checks.
 
 ## Step-by-step workflow
+0) Verify auth and connectivity: `gh auth status`.
+   - If auth fails or tokens are invalid, stop and ask the user to re-auth (`gh auth login -h github.com`) or fix `GITHUB_TOKEN`.
+   - Note: `GITHUB_TOKEN`/`GH_TOKEN` override keychain auth. If they are invalid, unset them so `gh` can use the keychain login.
+   - If the API is unreachable, ask the user to confirm network/proxy access or paste PR details.
 1) Confirm PR context with `gh pr view --json number,title,url,baseRefName,headRefName` (use provided PR number or current branch).
 2) Gather feedback and CI status: `gh pr checks <pr>` and review comments via `gh api` if needed.
 3) Summarize PR intent, scope, and risks; list failing checks and key feedback themes.
@@ -26,7 +30,10 @@ description: "Triage and address PR review feedback and CI failures with minimal
 
 ## CI failure triage (GitHub Actions only)
 - Use `gh pr checks <pr> --json name,state,conclusion,detailsUrl` to identify failures.
-- For GitHub Actions, extract the run id from `detailsUrl` and fetch logs:
+- If `conclusion` or `detailsUrl` are not supported (older gh), fall back to:
+  - `gh pr checks <pr> --json name,state,link,bucket,workflow,startedAt,completedAt`
+  - Use `link` as the details URL and `bucket` as a coarse failure signal.
+- For GitHub Actions, extract the run id from `detailsUrl` (or `link`) and fetch logs:
   - `gh run view <run-id> --log`
   - If logs are pending, retry or fetch job logs via `gh api /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`
 - For external checks (Buildkite, etc.), report the details URL and mark as out of scope.
