@@ -70,6 +70,19 @@ copilot_shell_suggest() {
         gh copilot suggest -t shell "$@"
 }
 
+codex() {
+        if [ -n "$CODEX_HOME" ]; then
+                command codex "$@"
+                return
+        fi
+
+        if [ "$PWD" = "$HOME" ]; then
+                CODEX_HOME="$HOME/.codex-home" command codex "$@"
+        else
+                command codex "$@"
+        fi
+}
+
 # Fun
 flip() { echo -n "（╯°□°）╯ ┻━┻" |tee /dev/tty| pbcopy -selection clipboard; }
 
