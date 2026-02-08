@@ -28,3 +28,6 @@ export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agen
 # Java Development Kit
 export JAVA_HOME=$(/usr/libexec/java_home -v 22)
 export PATH="$JAVA_HOME/bin:$PATH"
+
+# Projects
+export PLATO_ENV_SOURCE_DIR="$HOME/Developer/plato-ai"
