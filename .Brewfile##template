@@ -74,7 +74,6 @@ brew "python@3.9"
 brew "openssl"
 brew "yq"
 brew "vapor"
-brew "1password-cli"
 brew "kube-linter"
 brew "kustomize"
 brew "swift-format"
@@ -103,15 +102,22 @@ cask "1password"
 cask "tower"
 cask "proxyman" 
 cask "ghostty"
-cask "xcodes"
+cask "xcodes-app"
+cask "1password-cli"
 cask "jordanbaird-ice"
 
 # Personal productivity (kakarot + broly)
 {% if yadm.hostname == "kakarot" %}
 cask "raycast"
+cask "codex"
+cask "kubecontext"
+cask "xcodes-app"
 {% endif %}
 {% if yadm.hostname == "broly" %}
 cask "raycast"
+cask "codex"
+cask "kubecontext"
+cask "xcodes-app"
 {% endif %}
 
 {% if yadm.hostname == "kakarot" %}
@@ -132,7 +138,11 @@ cask "font-fira-code-nerd-font"
 cask "font-monaspace"
 
 # Mac App Store Apps
-{% if yadm.hostname == "kakarot" || yadm.hostname == "broly" %}
+{% if yadm.hostname == "kakarot" %}
+mas "Boop", id: 1518425043
+mas "Things", id: 904280696
+{% endif %}
+{% if yadm.hostname == "broly" %}
 mas "Boop", id: 1518425043
 mas "Things", id: 904280696
 {% endif %}
@@ -144,4 +154,3 @@ mas "Hand Mirror", id: 1502839586
 mas "Shortery", id: 1594183810
 mas "TestFlight", id: 899247664
 {% endif %}
-
