@@ -77,7 +77,11 @@ codex() {
         fi
 
         if [ "$PWD" = "$HOME" ]; then
-                CODEX_HOME="$HOME/.codex-home" command codex "$@"
+                local codex_home="$HOME/.codex-home"
+                if [ ! -d "$codex_home" ]; then
+                        codex_home="$HOME/.codex"
+                fi
+                CODEX_HOME="$codex_home" command codex "$@"
         else
                 command codex "$@"
         fi
