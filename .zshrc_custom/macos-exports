@@ -11,6 +11,9 @@ export PATH=$PATH:$ANDROID_HOME/platform-tools
 # Docker
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
 
+# Codex
+export PATH="$PATH:/Applications/Codex.app/Contents/Resources"
+
 # Homebrew
 export PATH=/opt/homebrew/bin:$PATH
 
