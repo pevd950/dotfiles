@@ -97,6 +97,10 @@ if [ -f "${ZSH_CUSTOM}/exports-local.zsh" ]; then
     source "${ZSH_CUSTOM}/exports-local.zsh"
 fi
 
+if [[ -d "${ZSH_CUSTOM}/bin" ]]; then
+   path=("${ZSH_CUSTOM}/bin" $path)
+fi
+
 # Init starship prompt when the terminal supports it.
 if [[ "${TERM:-}" != "dumb" ]]; then
    eval "$(starship init zsh)"

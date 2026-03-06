@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+actual="$HOME/.local/bin/coderabbit"
+config_path="$HOME/.gitconfig.coderabbit"
+
+if [[ ! -x "$actual" ]]; then
+  echo "coderabbit binary not found at $actual" >&2
+  exit 127
+fi
+
+if [[ ! -f "$config_path" ]]; then
+  printf '[include]\n\tpath = %s\n' "$HOME/.gitconfig" > "$config_path"
+fi
+
+GIT_CONFIG_GLOBAL="$config_path" exec "$actual" "$@"
