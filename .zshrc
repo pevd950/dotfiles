@@ -25,11 +25,12 @@ elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
    source ~/.zshrc_custom/debian-exports
 fi
 
-# go and goproxy setup
-export GOPROXY=https://goproxy.githubapp.com/mod,https://proxy.golang.org/,direct
-export GOPRIVATE=github.com
-export GONOPROXY=
-export GONOSUMDB='github.com/github/*'
+# go module auth / proxy setup
+# Use the public Go proxy for public modules and bypass it only for personal private modules.
+export GOPROXY=https://proxy.golang.org,direct
+export GOPRIVATE='github.com/pevd950/*'
+unset GONOPROXY
+unset GONOSUMDB
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 
