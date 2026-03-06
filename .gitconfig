@@ -83,5 +83,3 @@
 	required = true
 [commit]
 	gpgsign = false
-[coderabbit]
-	machineId = cli/60b742e339a14e308be1e984548ef1e6

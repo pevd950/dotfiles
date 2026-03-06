@@ -97,8 +97,10 @@ if [ -f "${ZSH_CUSTOM}/exports-local.zsh" ]; then
     source "${ZSH_CUSTOM}/exports-local.zsh"
 fi
 
-# Init starship prompt
-eval "$(starship init zsh)"
+# Init starship prompt when the terminal supports it.
+if [[ "${TERM:-}" != "dumb" ]]; then
+   eval "$(starship init zsh)"
+fi
 # Init shadowenv
 # eval "$(shadowenv init zsh)"  # for zsh
 
