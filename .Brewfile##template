@@ -1,8 +1,4 @@
-tap "homebrew/core"
-tap "homebrew/bundle"
-tap "homebrew/cask"
 tap "buo/cask-upgrade"
-tap "homebrew/cask-fonts"
 
 # Base packages for all hosts
 brew "git"
@@ -65,7 +61,6 @@ brew "helm"
 brew "k9s"
 brew "kubectx"
 brew "kubelogin"
-brew "kubeval"
 brew "terraform"
 brew "mysql"
 brew "mysql-client"
@@ -96,7 +91,6 @@ brew "neofetch"
 
 # Base casks for all machines
 cask "visual-studio-code"
-cask "iterm2"
 cask "orbstack"
 cask "1password"
 cask "tower"
@@ -104,20 +98,15 @@ cask "proxyman"
 cask "ghostty"
 cask "xcodes-app"
 cask "1password-cli"
-cask "jordanbaird-ice"
 
 # Personal productivity (kakarot + broly)
 {% if yadm.hostname == "kakarot" %}
 cask "raycast"
 cask "codex"
-cask "kubecontext"
-cask "xcodes-app"
 {% endif %}
 {% if yadm.hostname == "broly" %}
 cask "raycast"
 cask "codex"
-cask "kubecontext"
-cask "xcodes-app"
 {% endif %}
 
 {% if yadm.hostname == "kakarot" %}
@@ -136,16 +125,6 @@ cask "replacicon"
 cask "font-jetbrains-mono-nerd-font"
 cask "font-fira-code-nerd-font"
 cask "font-monaspace"
-
-# Mac App Store Apps
-{% if yadm.hostname == "kakarot" %}
-mas "Boop", id: 1518425043
-mas "Things", id: 904280696
-{% endif %}
-{% if yadm.hostname == "broly" %}
-mas "Boop", id: 1518425043
-mas "Things", id: 904280696
-{% endif %}
 
 {% if yadm.hostname == "kakarot" %}
 # Kakarot-only Mac App Store Apps

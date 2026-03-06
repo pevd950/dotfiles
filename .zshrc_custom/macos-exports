@@ -1,26 +1,17 @@
 # Flutter
-export PATH=$PATH:$USER/flutter/bin
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.rbenv/bin:$HOME/flutter/bin:$PATH"
+path=(${path:#${USER}/flutter/bin})
 
 # Android
 export ANDROID_HOME=$HOME/Library/Android/sdk
-export PATH=$PATH:$ANDROID_HOME/emulator
-export PATH=$PATH:$ANDROID_HOME/tools
-export PATH=$PATH:$ANDROID_HOME/tools/bin
-export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH="$PATH:$ANDROID_HOME/emulator:$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools"
 
 # Docker
 export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
 
 # Codex
 export PATH="$PATH:/Applications/Codex.app/Contents/Resources"
-
-# Homebrew
-export PATH=/opt/homebrew/bin:$PATH
-
-# Other paths
-export MANPATH="/usr/local/man:$MANPATH"
-export PATH=$HOME/.rbenv/bin:$PATH
-export PATH=$PATH:/opt/homebrew/bin
+export PATH="$PATH:/Users/pablovalero/.codeium/windsurf/bin:/Users/pablovalero/.lmstudio/bin"
 
 # Export React Editor
 export REACT_EDITOR=code

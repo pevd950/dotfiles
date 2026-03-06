@@ -28,14 +28,14 @@ yadm bootstrap  # Re-run to apply any new setup changes
 ```
 .
 ├── .config/
-│   ├── Code/User/prompts/      # VS Code prompts (XDG path)
+│   ├── Code/User/prompts/      # VS Code prompts source (XDG path)
 │   ├── yadm/bootstrap          # Main bootstrap script
 │   └── starship.toml           # Starship prompt config
 ├── .zshrc                      # Zsh configuration
 ├── .zshrc_custom/              # Custom shell functions/aliases
 ├── .Brewfile##template         # Base Homebrew packages
 ├── .Brewfile##os.Darwin,...    # Machine-specific Brewfiles
-└── setup.sh                    # Lightweight setup (Codespaces-compatible)
+└── setup.sh                    # Shared environment bootstrap
 ```
 
 ## 🔧 Machine-Specific Configuration
@@ -53,7 +53,7 @@ yadm alt  # Regenerate alternates
 - `.gitconfig.local##class.personal` - Personal git config
 
 ### VS Code Prompts
-Stored in `.config/Code/User/prompts/` and automatically symlinked to macOS Application Support path via bootstrap.
+Stored in `.config/Code/User/prompts/`. If an app still expects the macOS Application Support path, create the symlink manually.
 
 ## 🔀 GitHub Codespaces
 
@@ -62,19 +62,21 @@ This repo auto-configures Codespaces. GitHub runs `setup.sh` automatically (not 
 ## 📝 Scripts
 
 ### `setup.sh`
-Lightweight setup for shells/tools (Codespaces-compatible):
+Shared environment bootstrap used by yadm bootstrap and Codespaces:
 - Oh My Zsh + plugins
 - Starship prompt
-- Development tools (nodenv, pyenv, rbenv)
-- Homebrew packages
+- Homebrew installation (if needed) and `brew bundle --global`
+- Development tools via Brewfile plus Node version setup with nodenv
+- iTerm2 shell integration
 
 ### `.config/yadm/bootstrap`
 Full yadm bootstrap:
 1. Runs `yadm alt` for machine-specific configs
-2. Creates VS Code prompts symlink (macOS)
+2. Creates required local directories
 3. Calls `setup.sh` for remaining setup
+4. Symlinks shared agent skills into Codex, Claude, and Copilot
 
-Both scripts are idempotent.
+Both scripts are designed to be safe to re-run.
 
 ## 🧪 Testing
 
@@ -88,7 +90,7 @@ yadm alt --force
 
 ## 🆘 Common Issues
 
-**VS Code prompts missing**: Bootstrap creates the symlink automatically. Manual fix:
+**VS Code prompts missing**: Create the symlink manually if a macOS app expects the Application Support path:
 ```bash
 ln -snf ~/.config/Code/User/prompts ~/Library/Application\ Support/Code/User/prompts
 ```

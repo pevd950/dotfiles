@@ -93,7 +93,6 @@ cask "cleanshot"
 cask "orbstack"
 cask "downie"
 cask "hazel"
-cask "iterm2"
 cask "kaleidoscope"
 cask "paw"
 cask "proxyman"
@@ -126,7 +125,6 @@ cask "font-meslo-lg-nerd-font"
 
 # Mac App Store Apps
 mas "Actions", id: 1586435171
-mas "Boop", id: 1518425043
 mas "Data Jar", id: 1453273600
 mas "Developer", id: 640199958
 mas "Hand Mirror", id: 1502839586
@@ -140,7 +138,6 @@ mas "Reeder", id: 1529448980
 mas "Soulver 3", id: 1508732804
 mas "Speediness", id: 1596706466
 mas "TestFlight", id: 899247664
-mas "Things", id: 904280696
 mas "Transloader", id: 572281534
 
 # Mac App Store Safari Extensions

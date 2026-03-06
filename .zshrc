@@ -9,6 +9,7 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_SAVE_NO_DUPS
+typeset -U path PATH
 
 # Paths and environment variables
 # Oh-my-zsh path
@@ -32,9 +33,8 @@ export GONOSUMDB='github.com/github/*'
 export GOPATH=$HOME/go
 export PATH=$PATH:$GOPATH/bin
 
-# Set name of the theme to load --- if set to "random", it will
-# See https://github.com/ohmyzsh/ohmyzsh/wiki/Themes
-ZSH_THEME="robbyrussell"
+# Starship handles the prompt, so skip OMZ theme loading.
+ZSH_THEME=""
 
 # Which plugins would you like to load?
 # Standard plugins can be found in $ZSH/plugins/
@@ -46,7 +46,6 @@ plugins=(
    colored-man-pages
    copyfile
    copypath
-   dash
    docker
    docker-compose
    encode64
@@ -54,7 +53,6 @@ plugins=(
    git
    golang
    per-directory-history
-   helm
    history
    kubectl
    macos
@@ -86,7 +84,6 @@ if [[ -n $SSH_CONNECTION ]]; then
 fi
 
 # Custom configurations
-ZSH_DISABLE_COMPFIX="true"
 ZSH_CUSTOM=~/.zshrc_custom
 source $ZSH/oh-my-zsh.sh
 
@@ -126,7 +123,6 @@ if [ "$OS" = "macos" ]; then
    # export NVM_DIR="$HOME/.nvm"
    # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
    # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-   export PATH="/opt/homebrew/sbin:$PATH"
    # Enable this for 1Password CLI Plugins
    # source ~/.config/op/plugins.sh
    # source ~/.config/broot/launcher/bash/br
@@ -134,16 +130,6 @@ if [ "$OS" = "macos" ]; then
 elif [ "$OS" = "debian" ]; then
 fi
 
-
-
-# Added by Windsurf
-export PATH="/Users/pablovalero/.codeium/windsurf/bin:$PATH"
-
 [[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
-
-
-# Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/pablovalero/.lmstudio/bin"
-# End of LM Studio CLI section
 
 test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"

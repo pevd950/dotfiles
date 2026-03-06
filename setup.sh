@@ -9,18 +9,8 @@ install_oh_my_zsh() {
 
 # Define a function to install Starship
 install_starship() {
-  curl -fsSL https://starship.rs/install.sh | sh -s -- -y
-}
-
-# Define a function to install rbenv
-install_rbenv() {
-  if ! command -v rbenv &> /dev/null; then
-    if [[ "$(uname)" == "Darwin" ]]; then
-      brew install rbenv
-    elif [[ "$(uname)" == "Linux" ]]; then
-      sudo apt update
-      sudo apt install -y rbenv
-    fi
+  if ! command -v starship &> /dev/null; then
+    curl -fsSL https://starship.rs/install.sh | sh -s -- -y
   fi
 }
 
@@ -33,44 +23,39 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "Homebrew already installed"
   fi
   
-  # Install tools via Homebrew (brew handles idempotency)
-  echo "Installing/updating brew packages..."
-  brew install --cask 1password-cli
-  brew install nodenv node-build pyenv
-  
-  # Setup Node with nodenv
+  # Install packages from Brewfile if it exists
+  if [ -f "$HOME/.Brewfile" ]; then
+    echo "Installing packages from ~/.Brewfile..."
+    brew bundle --global
+  else
+    echo "No ~/.Brewfile found, skipping brew bundle"
+  fi
+
+  # Setup Node with nodenv after Brewfile installs it
   if command -v nodenv &> /dev/null; then
     echo "Setting up Node with nodenv..."
-    # Initialize nodenv if not already done
     eval "$(nodenv init -)"
-    
-    # Install Node 20.17.0 if not already installed
+
     if ! nodenv versions | grep -q "20.17.0"; then
       echo "Installing Node 20.17.0..."
       nodenv install 20.17.0
     else
       echo "Node 20.17.0 already installed"
     fi
-    
-    # Set global Node version
+
     nodenv global 20.17.0
+    # Clean up a stale shim left behind by older nodenv runs before rehashing.
+    if [ -f "$HOME/.nodenv/shims/.nodenv-shim" ]; then
+      rm -f "$HOME/.nodenv/shims/.nodenv-shim"
+    fi
     nodenv rehash
     echo "Node $(node -v) is now active"
   fi
-  
+
   # Install Oh My Zsh and other tools
   install_oh_my_zsh
   install_starship
-  install_rbenv
-  
-  # Install packages from Brewfile if it exists
-  if [ -f "$HOME/Brewfile" ]; then
-    echo "Installing packages from Brewfile..."
-    brew bundle --global
-  else
-    echo "No Brewfile found, skipping brew bundle"
-  fi
-  
+
   # Install Oh My Zsh plugins
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
   if [ ! -d "$ZSH_HIGHLIGHT_DIR" ]; then
@@ -89,18 +74,15 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "iTerm2 shell integration already installed"
   fi
 elif [[ "$(uname)" == "Linux" ]]; then
-# TODO: This should be shared
+  # TODO: This should be shared
   # Install tools
   install_starship
   install_oh_my_zsh
-  # Get the directory of the current script
-  SCRIPT_DIR="$(dirname "$0")"
 
   # Install Oh My Zsh plugins
-  mkdir -p "${SCRIPT_DIR}/.zshrc_custom/plugins"  # make sure the target directory exists
-  git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "${SCRIPT_DIR}/.zshrc_custom/plugins/zsh-syntax-highlighting"
-
-  # Copy .zshrc and .zshrc_custom/ to $HOME
-  cp "${SCRIPT_DIR}/.zshrc" ~/
-  cp -r "${SCRIPT_DIR}/.zshrc_custom/" ~/
+  ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+  if [ ! -d "$ZSH_HIGHLIGHT_DIR" ]; then
+    mkdir -p "$(dirname "$ZSH_HIGHLIGHT_DIR")"
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_HIGHLIGHT_DIR"
+  fi
 fi

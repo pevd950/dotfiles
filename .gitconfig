@@ -60,7 +60,7 @@
 	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
 	lgi = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%ci) %C(bold blue)<%an>%Creset' --abbrev-commit
 	# Pull Upstream
-	pu = !"git fetch origin -v; git fetch upstream -v; git merge upstream/master"
+		pu = !"git fetch origin -v; git fetch upstream -v; git merge upstream/main"
 	# Commit Amend Reuse Message HEAD
 	carmh = commit --amend --reuse-message=HEAD
 	# Push Current
@@ -83,3 +83,5 @@
 	required = true
 [commit]
 	gpgsign = false
+[coderabbit]
+	machineId = cli/60b742e339a14e308be1e984548ef1e6

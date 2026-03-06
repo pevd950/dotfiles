@@ -1,28 +1,71 @@
 # Xcode
 openx() {
-        if test -n "$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)"; then
-                echo "Opening workspace"
-                open *.xcworkspace
-                return
-        else
-                if test -n "$(find . -maxdepth 1 -name '*.xcodeproj' -print -quit)"; then
-                        echo "Opening project"
-                        open *.xcodeproj
-                        return
-                else
-                        echo "Nothing found"
-                fi
-        fi
+	        local selected
+	        local -a workspaces projects
+
+	        workspaces=( *.xcworkspace(N) )
+	        projects=( *.xcodeproj(N) )
+
+	        if (( ${#workspaces[@]} == 1 )); then
+	                echo "Opening workspace: ${workspaces[1]}"
+	                open "${workspaces[1]}"
+	                return
+	        elif (( ${#workspaces[@]} > 1 )); then
+	                echo "Multiple workspaces found:"
+	                select selected in "${workspaces[@]}"; do
+	                        [[ -n "$selected" ]] || continue
+	                        open "$selected"
+	                        return
+	                done
+	        elif (( ${#projects[@]} == 1 )); then
+	                echo "Opening project: ${projects[1]}"
+	                open "${projects[1]}"
+	                return
+	        elif (( ${#projects[@]} > 1 )); then
+	                echo "Multiple projects found:"
+	                select selected in "${projects[@]}"; do
+	                        [[ -n "$selected" ]] || continue
+	                        open "$selected"
+	                        return
+	                done
+	        else
+	                echo "No Xcode project or workspace found"
+	        fi
 }
 
 # yadm function to auto-add Claude files
 yadm-claude() {
-    echo "Adding Claude files to yadm..."
-    yadm add ~/.claude/agents/*.md 2>/dev/null
-    yadm add ~/.claude/commands/*.md 2>/dev/null
-    yadm add ~/.claude/CLAUDE.md 2>/dev/null
-    yadm add ~/.claude/settings.json 2>/dev/null
-    yadm status
+	        echo "Adding Claude files to yadm..."
+	        local file
+	        local added=0
+	        local -a files
+
+	        files=(
+	                "$HOME/.claude/CLAUDE.md"
+	                "$HOME/.claude/settings.json"
+	        )
+
+	        if [[ -d "$HOME/.claude/agents" ]]; then
+	                while IFS= read -r -d '' file; do
+	                        files+=("$file")
+	                done < <(find "$HOME/.claude/agents" -type f -name '*.md' -print0)
+	        fi
+
+	        if [[ -d "$HOME/.claude/commands" ]]; then
+	                while IFS= read -r -d '' file; do
+	                        files+=("$file")
+	                done < <(find "$HOME/.claude/commands" -type f -name '*.md' -print0)
+	        fi
+
+	        for file in "${files[@]}"; do
+	                [[ -f "$file" ]] || continue
+	                if yadm add "$file"; then
+	                        ((added += 1))
+	                fi
+	        done
+
+	        echo "Added $added files to yadm"
+	        yadm status
 }
 
 # turn hidden files on/off in Finder
@@ -31,11 +74,17 @@ function hiddenOff() { defaults write com.apple.Finder AppleShowAllFiles NO; }
 
 # myIP address
 function myip() {
-        ifconfig lo0 | grep 'inet ' | sed -e 's/:/ /' | awk '{print "lo0       : " $2}'
-        ifconfig en0 | grep 'inet ' | sed -e 's/:/ /' | awk '{print "en0 (IPv4): " $2 " " $3 " " $4 " " $5 " " $6}'
-        ifconfig en0 | grep 'inet6 ' | sed -e 's/ / /' | awk '{print "en0 (IPv6): " $2 " " $3 " " $4 " " $5 " " $6}'
-        ifconfig en1 | grep 'inet ' | sed -e 's/:/ /' | awk '{print "en1 (IPv4): " $2 " " $3 " " $4 " " $5 " " $6}'
-        ifconfig en1 | grep 'inet6 ' | sed -e 's/ / /' | awk '{print "en1 (IPv6): " $2 " " $3 " " $4 " " $5 " " $6}'
+	        local iface
+	        local addr
+	        local found=0
+
+	        for iface in ${(z)$(ifconfig -l)}; do
+	                addr=$(ipconfig getifaddr "$iface" 2>/dev/null) || continue
+	                printf "%-10s %s\n" "$iface" "$addr"
+	                found=1
+	        done
+
+	        (( found )) || echo "No active connection"
 }
 
 # Show file in quick look
