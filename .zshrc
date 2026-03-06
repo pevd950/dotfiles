@@ -108,19 +108,33 @@ autoload -U +X bashcompinit && bashcompinit
 
 # Source Last OS-specific export files
 if [ "$OS" = "macos" ]; then
-   [[ /opt/homebrew/bin/kubectl ]] && source <(kubectl completion zsh)
+   if command -v kubectl >/dev/null 2>&1; then
+      source <(kubectl completion zsh)
+   fi
    #Completion for 1Password CLI
-   eval "$(op completion zsh)"
-   compdef _op op
+   if command -v op >/dev/null 2>&1; then
+      eval "$(op completion zsh)"
+      compdef _op op
+   fi
    # Init ruby env
-   eval "$(rbenv init - zsh)"
+   if command -v rbenv >/dev/null 2>&1; then
+      eval "$(rbenv init - zsh)"
+   fi
    # Init node env
-   eval "$(nodenv init -)"
+   if command -v nodenv >/dev/null 2>&1; then
+      eval "$(nodenv init -)"
+   fi
    # Init shadoe env
-   eval "$(pyenv init -)"
-   complete -o nospace -C /opt/homebrew/bin/bit bit
+   if command -v pyenv >/dev/null 2>&1; then
+      eval "$(pyenv init -)"
+   fi
+   if command -v bit >/dev/null 2>&1; then
+      complete -o nospace -C "$(command -v bit)" bit
+   fi
    # iTerm2 integration
-   source ~/.iterm2_shell_integration.zsh
+   if [[ -f "$HOME/.iterm2_shell_integration.zsh" ]]; then
+      source "$HOME/.iterm2_shell_integration.zsh"
+   fi
    # NVM - commented out in favor of nodenv
    # export NVM_DIR="$HOME/.nvm"
    # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
@@ -132,6 +146,10 @@ if [ "$OS" = "macos" ]; then
 elif [ "$OS" = "debian" ]; then
 fi
 
-[[ "$TERM_PROGRAM" == "kiro" ]] && . "$(kiro --locate-shell-integration-path zsh)"
+if [[ "$TERM_PROGRAM" == "kiro" ]] && command -v kiro >/dev/null 2>&1; then
+   . "$(kiro --locate-shell-integration-path zsh)"
+fi
 
-test -e "$HOME/.shellfishrc" && source "$HOME/.shellfishrc"
+if [[ -e "$HOME/.shellfishrc" ]]; then
+   source "$HOME/.shellfishrc"
+fi

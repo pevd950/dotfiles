@@ -11,7 +11,7 @@ export PATH="$PATH:/Applications/Docker.app/Contents/Resources/bin/"
 
 # Codex
 export PATH="$PATH:/Applications/Codex.app/Contents/Resources"
-export PATH="$PATH:/Users/pablovalero/.codeium/windsurf/bin:/Users/pablovalero/.lmstudio/bin"
+export PATH="$PATH:$HOME/.codeium/windsurf/bin:$HOME/.lmstudio/bin"
 
 # Export React Editor
 export REACT_EDITOR=code

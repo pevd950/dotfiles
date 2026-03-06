@@ -8,7 +8,7 @@ os=$(uname -s)
 
 # Run yadm alternates (only needed for yadm)
 echo "Setting up yadm alternates..."
-yadm alt || true
+yadm alt
 
 # Create necessary directories
 mkdir -p "$HOME/.config/Code/User"
