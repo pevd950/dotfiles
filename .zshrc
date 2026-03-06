@@ -97,6 +97,7 @@ if [ -f "${ZSH_CUSTOM}/exports-local.zsh" ]; then
     source "${ZSH_CUSTOM}/exports-local.zsh"
 fi
 
+# Keep wrapper scripts ahead of ~/.local/bin even if local overrides prepend it.
 if [[ -d "${ZSH_CUSTOM}/bin" ]]; then
    path=("${ZSH_CUSTOM}/bin" $path)
 fi

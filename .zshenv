@@ -4,7 +4,7 @@ typeset -U path PATH
 
 [[ -d "/Applications/Codex.app/Contents/Resources" ]] && path=("/Applications/Codex.app/Contents/Resources" $path)
 [[ -d "/opt/homebrew/bin" ]] && path=("/opt/homebrew/bin" $path)
-[[ -d "$HOME/.zshrc_custom/bin" ]] && path=("$HOME/.zshrc_custom/bin" $path)
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
+[[ -d "$HOME/.zshrc_custom/bin" ]] && path=("$HOME/.zshrc_custom/bin" $path)
 
 export PATH
