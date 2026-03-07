@@ -20,16 +20,22 @@ Optional snapshots (useful if you might update the PR description later):
 - `gh pr view <pr> --json commits -q '.commits[].messageHeadline' > /tmp/pr-commits.before.txt`
 
 ### 2) Fetch all feedback
-There are two comment streams you usually need:
+There are three feedback sources you should treat as required:
 
 - Line review comments (inline on diffs):
   - `gh api repos/{owner}/{repo}/pulls/<pr>/comments --paginate --jq '.[] | {id, path, line, body, user: .user.login}'`
 - Issue-style PR comments (timeline):
   - `gh api repos/{owner}/{repo}/issues/<pr>/comments --paginate --jq '.[] | {id, body, user: .user.login}'`
-
-Optional context:
 - Reviews (high-level approvals/requests):
   - `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate --jq '.[] | {id, user: .user.login, state, body}'`
+
+Important:
+- Do not treat `pulls/<pr>/reviews` as optional context. Some bot reviewers, especially `chatgpt-codex-connector[bot]`, may surface actionable findings only in the review body and not as replyable inline `pulls/comments` objects.
+- Always inspect new review bodies from bot reviewers for code-linked findings, even when `pulls/<pr>/comments` shows no new items.
+
+Optional extra coverage:
+- Review threads (useful when the UI shows a comment that is missing from the simpler REST views):
+  - `gh api graphql -f query='query { repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<pr>) { reviewThreads(first:100) { nodes { isResolved comments(first:20) { nodes { databaseId author { login } body path line createdAt } } } } } } }'`
 
 ### 3) Triage and validate (don’t fix blindly)
 For each comment, classify it as one of:
@@ -82,6 +88,14 @@ gh api -X POST repos/{owner}/{repo}/pulls/<pr>/comments \
 #### Reply to issue-style PR comments
 - `gh pr comment <pr> -b 'Addressed in <sha>: <summary>.'`
 - Or: `gh api -X POST repos/{owner}/{repo}/issues/<pr>/comments -F body='...'`
+
+#### Reply when a finding exists only in a review summary
+- If a bot finding appears in `pulls/<pr>/reviews` (or the GitHub UI) but GitHub does not expose a replyable inline comment object, do not wait indefinitely for it to appear in `pulls/<pr>/comments`.
+- Post a top-level PR comment with the same evidence you would have used in a thread reply:
+  - what changed (or why no change was needed)
+  - commit SHA or explicit “already addressed in <sha>”
+  - tests run
+  - a direct reference to the review URL when available
 
 ## Common Pitfalls
 - 404 when calling `/pulls/comments/<id>/replies`: use `/pulls/<pr>/comments` with `in_reply_to`.
