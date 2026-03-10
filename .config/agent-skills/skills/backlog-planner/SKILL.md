@@ -17,11 +17,19 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 ## Step-by-step workflow
 1) Confirm repo context with `gh repo view --json nameWithOwner -q .nameWithOwner` and verify `gh auth status`.
 2) Check for duplicates with `gh issue list --search "keywords" --state all --limit 20`.
-3) List labels with `gh label list --limit 200` and map to type, component, priority, and AI labels when available.
+3) List labels with `gh label list --limit 200` and map to type, component, priority, and workflow labels that match the repo policy.
 4) List milestones with `gh api repos/{owner}/{repo}/milestones --jq '.[].title'` and select if relevant.
 5) Draft the issue body with clear Overview, Current State, Acceptance Criteria, and Technical Context.
 6) Create or update the issue with `gh issue create` / `gh issue edit` using `--label` and `--milestone`.
 7) If the work is an epic, decide on sub-issues and manage them with `scripts/gh-sub-issues.sh` when supported.
+
+## Label workflow
+- Prefer one active workflow state at a time: `needs-grooming`, `agent-ready`, or `wip`.
+- Use `plan-me` only when the repo reserves it for an automation queue (for example, CodeRabbit planning). Do not treat it as equivalent to `agent-ready`.
+- Use `ai-needs-review` for AI-drafted or AI-rewritten issues that still need human review.
+- Treat `ai-created` and `ai-modified` as legacy transient provenance labels unless the repo explicitly requires them.
+- Do not use retired duplicates such as `reviewed` or `ai-ready`.
+- When moving an issue to a human-reviewed workflow state, remove stale AI/provenance labels instead of stacking them.
 
 ## Sub-issues: when and how
 Use sub-issues when:
