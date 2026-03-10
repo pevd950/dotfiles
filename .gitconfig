@@ -3,6 +3,7 @@
 ###
 [include]
 	path = .gitconfig.local
+	path = .gitconfig.auth
 [init]
 	defaultBranch = main
 [github]
@@ -83,9 +84,3 @@
 	required = true
 [commit]
 	gpgsign = false
-[credential "https://github.com"]
-	helper = 
-	helper = !gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = 
-	helper = !gh auth git-credential
