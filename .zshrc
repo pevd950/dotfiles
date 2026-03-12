@@ -130,9 +130,9 @@ if [ "$OS" = "macos" ]; then
    if command -v nodenv >/dev/null 2>&1; then
       eval "$(nodenv init -)"
    fi
-   # Init shadoe env
+   # Skip startup-time shim rebuilds; manual and install-time rehashes still work.
    if command -v pyenv >/dev/null 2>&1; then
-      eval "$(pyenv init -)"
+      eval "$(pyenv init - --no-rehash)"
    fi
    if command -v bit >/dev/null 2>&1; then
       complete -o nospace -C "$(command -v bit)" bit
