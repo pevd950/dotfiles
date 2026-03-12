@@ -78,6 +78,12 @@ Full yadm bootstrap:
 
 Both scripts are designed to be safe to re-run.
 
+### Shared AI Skills
+- Canonical skill source lives in `.config/agent-skills/skills/`.
+- Bootstrap symlinks each shared skill folder into `CODEX_HOME/skills` (defaulting to `.codex/skills/`), `.claude/skills/`, and `.copilot/skills/`.
+- Skills that depend on machine-local secrets should read them from env vars at runtime rather than storing them in tracked files.
+- Example: `poke-notify` uses `POKE_API_KEY`.
+
 ## 🧪 Testing
 
 ```bash
