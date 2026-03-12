@@ -1,0 +1,10 @@
+interface:
+  display_name: "Apple UI Design"
+  short_description: "Design polished Apple-platform UI."
+  icon_small: "./assets/apple-ui-design-icon.svg"
+  icon_large: "./assets/apple-ui-design-icon.png"
+  brand_color: "#2563EB"
+  default_prompt: "Use $apple-ui-design to design and implement a production-ready SwiftUI/UIKit interface aligned with Apple HIG and Liquid Glass, including accessibility and OS-version fallbacks."
+
+policy:
+  allow_implicit_invocation: true

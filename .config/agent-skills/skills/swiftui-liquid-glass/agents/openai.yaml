@@ -1,0 +1,10 @@
+interface:
+  display_name: "SwiftUI Liquid Glass"
+  short_description: "Implement native Liquid Glass UI."
+  icon_small: "./assets/swiftui-liquid-glass-icon.svg"
+  icon_large: "./assets/swiftui-liquid-glass-icon.png"
+  brand_color: "#0EA5E9"
+  default_prompt: "Use $swiftui-liquid-glass to implement or review iOS 26+ Liquid Glass in SwiftUI with native APIs, availability fallbacks, and coherent glass composition."
+
+policy:
+  allow_implicit_invocation: true

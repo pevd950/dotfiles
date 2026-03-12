@@ -1,0 +1,10 @@
+interface:
+  display_name: "Swift Concurrency Expert"
+  short_description: "Review and fix Swift 6.2 concurrency."
+  icon_small: "./assets/swift-concurrency-expert-icon.svg"
+  icon_large: "./assets/swift-concurrency-expert-icon.png"
+  brand_color: "#10B981"
+  default_prompt: "Use $swift-concurrency-expert to review Swift 6.2 concurrency code, fix actor-isolation and Sendable issues, and preserve behavior with the smallest safe change."
+
+policy:
+  allow_implicit_invocation: true

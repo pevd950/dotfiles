@@ -1,0 +1,10 @@
+interface:
+  display_name: "SwiftUI Performance Audit"
+  short_description: "Find and fix SwiftUI performance issues."
+  icon_small: "./assets/swiftui-performance-audit-icon.svg"
+  icon_large: "./assets/swiftui-performance-audit-icon.png"
+  brand_color: "#F97316"
+  default_prompt: "Use $swiftui-performance-audit to diagnose SwiftUI performance problems, identify likely invalidation or layout issues, and suggest targeted fixes."
+
+policy:
+  allow_implicit_invocation: true

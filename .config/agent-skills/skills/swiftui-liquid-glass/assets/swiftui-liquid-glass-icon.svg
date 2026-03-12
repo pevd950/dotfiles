@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="56" x2="440" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#312E81"/>
+    </linearGradient>
+    <linearGradient id="glassA" x1="130" y1="112" x2="312" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#BFDBFE" stop-opacity="0.3"/>
+    </linearGradient>
+    <linearGradient id="glassB" x1="214" y1="178" x2="392" y2="390" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E0F2FE" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#C4B5FD" stop-opacity="0.26"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="120" fill="url(#bg)"/>
+  <rect x="116" y="116" width="196" height="208" rx="52" fill="url(#glassA)" stroke="#F8FAFC" stroke-opacity="0.8" stroke-width="8"/>
+  <rect x="204" y="188" width="192" height="208" rx="52" fill="url(#glassB)" stroke="#E0F2FE" stroke-opacity="0.7" stroke-width="8"/>
+  <circle cx="252" cy="222" r="24" fill="#FFFFFF" fill-opacity="0.45"/>
+  <circle cx="334" cy="290" r="18" fill="#FFFFFF" fill-opacity="0.35"/>
+</svg>

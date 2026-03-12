@@ -2,6 +2,14 @@
 
 Use this file to find component-specific guidance. Each entry lists when to use it.
 
+## General review references
+
+- Structure and data flow: `references/structure-and-data-flow.md` — Use first when reviewing or refactoring a SwiftUI file.
+- Modern API review: `references/modern-api-review.md` — Use for deprecations and current SwiftUI/Foundation replacements.
+- Accessibility review: `references/accessibility-review.md` — Use for VoiceOver, Dynamic Type, input semantics, and inclusive UI checks.
+- Navigation and presentation review: `references/navigation-and-presentation-review.md` — Use for stacks, tabs, sheets, alerts, and dialogs.
+- Review checklist: `references/review-checklist.md` — Use as a short final pass for performance and hygiene.
+
 ## Available components
 
 - TabView: `references/tabview.md` — Use when building a tab-based app or any tabbed feature set.
