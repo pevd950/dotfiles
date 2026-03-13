@@ -79,18 +79,18 @@ augroup END
 " Status bar code goes here.
 
 " Clear status line when vimrc is reloaded.
-" set statusline=
+set statusline=
 
 " Status line left side.
-" set statusline+=\ %F\ %M\ %Y\ %R
+set statusline+=\ %F\ %M\ %Y\ %R
 
 " Use a divider to separate the left side from the right side.
-" set statusline+=%=
+set statusline+=%=
 
 " Status line right side.
-" set statusline+=\ row:\ %l\ col:\ %c\
+set statusline+=\ row:\ %l\ col:\ %c\
 
 " Show the status on the second to last line.
-" set laststatus=2
+set laststatus=2
 
 " }}}
