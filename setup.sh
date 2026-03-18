@@ -14,6 +14,23 @@ install_starship() {
   fi
 }
 
+install_zsh_syntax_highlighting() {
+  local plugin_dir="$1"
+  local pinned_commit="f1944d8f8b7628f409f90adcf1d40eb6aa797e53"
+
+  if [ -d "$plugin_dir" ]; then
+    echo "zsh-syntax-highlighting plugin already installed"
+    return
+  fi
+
+  echo "Installing zsh-syntax-highlighting plugin at pinned commit..."
+  mkdir -p "$(dirname "$plugin_dir")"
+  git init -q "$plugin_dir"
+  git -C "$plugin_dir" remote add origin https://github.com/zsh-users/zsh-syntax-highlighting.git
+  git -C "$plugin_dir" fetch --depth 1 origin "$pinned_commit"
+  git -C "$plugin_dir" checkout --detach -q FETCH_HEAD
+}
+
 if [[ "$(uname)" == "Darwin" ]]; then
   # Install Homebrew if not present
   if ! command -v brew &> /dev/null; then
@@ -58,12 +75,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 
   # Install Oh My Zsh plugins
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  if [ ! -d "$ZSH_HIGHLIGHT_DIR" ]; then
-    echo "Installing zsh-syntax-highlighting plugin..."
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_HIGHLIGHT_DIR"
-  else
-    echo "zsh-syntax-highlighting plugin already installed"
-  fi
+  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR"
   
   # Install iTerm2 shell integration
   if [ ! -f ~/.iterm2_shell_integration.zsh ]; then
@@ -81,8 +93,5 @@ elif [[ "$(uname)" == "Linux" ]]; then
 
   # Install Oh My Zsh plugins
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  if [ ! -d "$ZSH_HIGHLIGHT_DIR" ]; then
-    mkdir -p "$(dirname "$ZSH_HIGHLIGHT_DIR")"
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git "$ZSH_HIGHLIGHT_DIR"
-  fi
+  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR"
 fi
