@@ -54,8 +54,23 @@ install_zsh_syntax_highlighting() {
     return 1
   fi
 
-  rm -rf "$plugin_dir"
-  mv "$tmp_dir" "$plugin_dir" || return 1
+  local backup_dir=""
+  if [ -e "$plugin_dir" ]; then
+    backup_dir="$(dirname "$plugin_dir")/.zsh-syntax-highlighting-backup.$(basename "$plugin_dir").$$"
+    rm -rf "$backup_dir"
+    mv "$plugin_dir" "$backup_dir" || return 1
+  fi
+
+  if ! mv "$tmp_dir" "$plugin_dir"; then
+    if [ -n "$backup_dir" ] && [ -e "$backup_dir" ]; then
+      command mv "$backup_dir" "$plugin_dir" || true
+    fi
+    return 1
+  fi
+
+  if [ -n "$backup_dir" ] && [ -e "$backup_dir" ]; then
+    rm -rf "$backup_dir"
+  fi
   trap - RETURN
 }
 
