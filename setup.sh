@@ -21,9 +21,10 @@ sha256_file() {
 }
 
 run_verified_script() {
-  local url="$1"
-  local expected_sha256="$2"
-  shift 2
+  local interpreter="$1"
+  local url="$2"
+  local expected_sha256="$3"
+  shift 3
 
   local tmp_script
   tmp_script="$(mktemp)"
@@ -40,21 +41,20 @@ run_verified_script() {
     return 1
   fi
 
-  chmod +x "$tmp_script"
-  "$tmp_script" "$@"
+  "$interpreter" "$tmp_script" "$@"
 }
 
 # Define a function to install Oh My Zsh
 install_oh_my_zsh() {
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    run_verified_script "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256" --unattended
+    run_verified_script /bin/sh "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256" --unattended
   fi
 }
 
 # Define a function to install Starship
 install_starship() {
   if ! command -v starship &> /dev/null; then
-    run_verified_script "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
+    run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
   fi
 }
 
@@ -62,7 +62,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Install Homebrew if not present
   if ! command -v brew &> /dev/null; then
     echo "Installing Homebrew..."
-    run_verified_script "$HOMEBREW_INSTALL_URL" "$HOMEBREW_INSTALL_SHA256"
+    run_verified_script /bin/bash "$HOMEBREW_INSTALL_URL" "$HOMEBREW_INSTALL_SHA256"
   else
     echo "Homebrew already installed"
   fi
