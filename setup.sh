@@ -18,7 +18,6 @@ install_zsh_syntax_highlighting() {
   local plugin_dir="$1"
   local pinned_commit="1d85c692615a25fe2293bdd44b34c217d5d2bf04"
   local repo_url="https://github.com/zsh-users/zsh-syntax-highlighting.git"
-  local pinned_ref="master"
 
   if ! command -v git &> /dev/null; then
     echo "git is required to install zsh-syntax-highlighting" >&2
@@ -47,7 +46,7 @@ install_zsh_syntax_highlighting() {
 
   git init -q "$tmp_dir" &&
   git -C "$tmp_dir" remote add origin "$repo_url" &&
-  git -C "$tmp_dir" fetch --depth 1 origin "$pinned_ref" &&
+  git -C "$tmp_dir" fetch --depth 1 origin "$pinned_commit" &&
   git -C "$tmp_dir" checkout --detach -q FETCH_HEAD || return 1
 
   if [ "$(git -C "$tmp_dir" rev-parse HEAD)" != "$pinned_commit" ]; then
