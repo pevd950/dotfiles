@@ -16,19 +16,48 @@ install_starship() {
 
 install_zsh_syntax_highlighting() {
   local plugin_dir="$1"
-  local pinned_commit="f1944d8f8b7628f409f90adcf1d40eb6aa797e53"
+  local pinned_commit="1d85c692615a25fe2293bdd44b34c217d5d2bf04"
+  local repo_url="https://github.com/zsh-users/zsh-syntax-highlighting.git"
+  local pinned_ref="master"
 
-  if [ -d "$plugin_dir" ]; then
-    echo "zsh-syntax-highlighting plugin already installed"
-    return
+  if ! command -v git &> /dev/null; then
+    echo "git is required to install zsh-syntax-highlighting" >&2
+    return 1
   fi
 
-  echo "Installing zsh-syntax-highlighting plugin at pinned commit..."
-  mkdir -p "$(dirname "$plugin_dir")"
-  git init -q "$plugin_dir"
-  git -C "$plugin_dir" remote add origin https://github.com/zsh-users/zsh-syntax-highlighting.git
-  git -C "$plugin_dir" fetch --depth 1 origin "$pinned_commit"
-  git -C "$plugin_dir" checkout --detach -q FETCH_HEAD
+  if [ -d "$plugin_dir/.git" ]; then
+    local current_commit
+    current_commit="$(git -C "$plugin_dir" rev-parse HEAD 2>/dev/null || true)"
+    if [ "$current_commit" = "$pinned_commit" ]; then
+      echo "zsh-syntax-highlighting already pinned at expected commit"
+      return 0
+    fi
+    echo "Re-pinning existing zsh-syntax-highlighting checkout..."
+  elif [ -e "$plugin_dir" ]; then
+    echo "Replacing existing zsh-syntax-highlighting directory with pinned checkout..."
+  else
+    echo "Installing zsh-syntax-highlighting plugin at pinned commit..."
+  fi
+
+  mkdir -p "$(dirname "$plugin_dir")" || return 1
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d "$(dirname "$plugin_dir")/.zsh-syntax-highlighting.XXXXXX")" || return 1
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  git init -q "$tmp_dir" &&
+  git -C "$tmp_dir" remote add origin "$repo_url" &&
+  git -C "$tmp_dir" fetch --depth 1 origin "$pinned_ref" &&
+  git -C "$tmp_dir" checkout --detach -q FETCH_HEAD || return 1
+
+  if [ "$(git -C "$tmp_dir" rev-parse HEAD)" != "$pinned_commit" ]; then
+    echo "Expected zsh-syntax-highlighting commit $pinned_commit after fetch, got $(git -C "$tmp_dir" rev-parse HEAD)" >&2
+    return 1
+  fi
+
+  rm -rf "$plugin_dir"
+  mv "$tmp_dir" "$plugin_dir" || return 1
+  trap - RETURN
 }
 
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -75,7 +104,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 
   # Install Oh My Zsh plugins
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR"
+  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || exit 1
   
   # Install iTerm2 shell integration
   if [ ! -f ~/.iterm2_shell_integration.zsh ]; then
@@ -93,5 +122,5 @@ elif [[ "$(uname)" == "Linux" ]]; then
 
   # Install Oh My Zsh plugins
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR"
+  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || exit 1
 fi
