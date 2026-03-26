@@ -40,7 +40,8 @@ run_verified_script() {
     return 1
   fi
 
-  /bin/sh "$tmp_script" "$@"
+  chmod +x "$tmp_script"
+  "$tmp_script" "$@"
 }
 
 # Define a function to install Oh My Zsh
