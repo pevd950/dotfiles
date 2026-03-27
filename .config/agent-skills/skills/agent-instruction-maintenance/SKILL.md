@@ -16,12 +16,15 @@ description: "Review, update, and synchronize agent instructions and configs acr
 
 ## Step-by-step workflow
 1) Discover which ecosystems exist in the repo or user config.
-2) Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
-3) Validate minimal frontmatter for each file type (see references).
-4) Review content for clarity, scope, and actionability; remove ambiguity.
-5) Ensure intent parity across tools while avoiding contradictions.
-6) Keep instructions lean; move deep details into references.
-7) Propose updates with before/after snippets and rationale.
+2) Resolve instruction file locations from the current source of truth before opening them.
+- For named skills, prefer the path supplied by the current session's skill inventory.
+- If a remembered path is missing, re-resolve under `${CODEX_HOME:-$HOME/.codex}/skills`, `~/.config/agent-skills/skills`, or the relevant plugin cache instead of assuming the old location is still canonical.
+3) Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
+4) Validate minimal frontmatter for each file type (see references).
+5) Review content for clarity, scope, and actionability; remove ambiguity.
+6) Ensure intent parity across tools while avoiding contradictions.
+7) Keep instructions lean; move deep details into references.
+8) Propose updates with before/after snippets and rationale.
 
 ## Default prioritization
 - Prefer Codex-first guidance unless the user asks for tool-specific changes.
