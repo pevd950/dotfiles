@@ -55,14 +55,18 @@ Bind XcodeBuildMCP to the right project, scheme, DerivedData path, and simulator
 
 ## Troubleshooting
 
-- If a build or launch call times out, switch to `xcodebuildmcp-timeout-recovery`.
+- If a build or launch call times out, do one deliberate retry after checking whether package resolution, DerivedData warmup, or another long-running repo wrapper is still in flight. Do not keep hammering the same MCP call in a loop.
+- If the second MCP build/launch attempt also times out, treat XcodeBuildMCP as blocked for this turn. Fall back to the repo's documented host-side wrappers or validation commands when they exist, and carry the MCP timeout forward explicitly in the handoff instead of pretending validation is complete.
+- If the repo uses a simulator lease or checkout-scoped lock and another worktree currently owns it, do not bypass that workflow with a guessed booted simulator. Either wait for the lease if the requested MCP action is essential, or continue with repo-approved non-MCP validation that does not steal the lease.
+- If repo guidance includes helper commands that resolve simulator ID, scheme, or DerivedData path, re-run those helpers before resetting MCP defaults. Do not manually improvise replacement values while lease contention or worktree wiring is unresolved.
 - If the wrong app or wrong simulator is active, re-check repo guidance and reset defaults instead of continuing.
 - If the repo has no explicit simulator-selection guidance, then use `XcodeBuildMCP/list_sims` and choose a simulator deliberately; do not assume "Booted" means "correct".
 - If `XcodeBuildMCP/snapshot_ui` fails to return a hierarchy, assume the UI may be covered by a dialog, not fully rendered yet, or in a transient simulator state. Retry inspection once after the app settles, and use `XcodeBuildMCP/screenshot` as the next fallback.
-- If `XcodeBuildMCP/screenshot` also stalls or times out during that fallback, stop the loop and switch to `xcodebuildmcp-timeout-recovery`.
+- If `XcodeBuildMCP/screenshot` also stalls or times out during that fallback, stop the loop, report the MCP/tooling blocker clearly, and switch to the repo's non-MCP fallback path if one exists.
 
 ## Guardrails
 
 - Never assume a currently booted simulator is the correct target.
 - Never use generic `Debug` if the repo/workflow requires a scheme-specific configuration.
 - Prefer explicit session defaults over one-off tool arguments when multiple XcodeBuildMCP calls will follow.
+- Do not retry timed-out MCP build/launch calls more than once without new evidence that the environment changed.
