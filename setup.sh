@@ -44,6 +44,43 @@ run_verified_script() {
   "$interpreter" "$tmp_script" "$@"
 }
 
+brewfile_font_casks() {
+  local brewfile="$1"
+  grep -E '^[[:space:]]*cask "font-[^"]+"' "$brewfile" \
+    | sed -E 's/^[[:space:]]*cask "([^"]+)".*/\1/'
+}
+
+install_brewfile_dependencies() {
+  local brewfile="$1"
+  local tmp_brewfile
+  tmp_brewfile="$(mktemp)"
+  trap 'rm -f "$tmp_brewfile"' RETURN
+
+  # Install everything except font casks strictly. Fonts are handled
+  # separately because pre-existing local font files can make Homebrew abort.
+  grep -Ev '^[[:space:]]*cask "font-[^"]+"' "$brewfile" > "$tmp_brewfile"
+
+  HOMEBREW_BUNDLE_FILE="$tmp_brewfile" brew bundle
+
+  local font_cask
+  while IFS= read -r font_cask; do
+    [ -n "$font_cask" ] || continue
+
+    if brew list --cask "$font_cask" >/dev/null 2>&1; then
+      echo "$font_cask already installed"
+      continue
+    fi
+
+    echo "Installing optional font cask $font_cask..."
+    if ! brew install --cask "$font_cask"; then
+      echo "Warning: failed to install $font_cask; continuing bootstrap"
+    fi
+  done < <(brewfile_font_casks "$brewfile")
+
+  trap - RETURN
+  rm -f "$tmp_brewfile"
+}
+
 # Define a function to install Oh My Zsh
 install_oh_my_zsh() {
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
@@ -130,7 +167,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Install packages from Brewfile if it exists
   if [ -f "$HOME/.Brewfile" ]; then
     echo "Installing packages from ~/.Brewfile..."
-    brew bundle --global
+    install_brewfile_dependencies "$HOME/.Brewfile"
   else
     echo "No ~/.Brewfile found, skipping brew bundle"
   fi
@@ -138,20 +175,25 @@ if [[ "$(uname)" == "Darwin" ]]; then
   # Setup Node with nodenv after Brewfile installs it
   if command -v nodenv &> /dev/null; then
     echo "Setting up Node with nodenv..."
-    eval "$(nodenv init -)"
+    # Clean up a stale shim left behind by older nodenv runs before init/rehash.
+    if [ -f "$HOME/.nodenv/shims/.nodenv-shim" ]; then
+      rm -f "$HOME/.nodenv/shims/.nodenv-shim"
+    fi
 
-    if ! nodenv versions | grep -q "20.17.0"; then
+    # nodenv init emits a rehash command, which can fail on stale state.
+    # Initialize without letting that transient rehash abort bootstrap.
+    set +e
+    eval "$(nodenv init -)"
+    set -e
+
+    if ! nodenv prefix 20.17.0 >/dev/null 2>&1; then
       echo "Installing Node 20.17.0..."
-      nodenv install 20.17.0
+      nodenv install -s 20.17.0
     else
       echo "Node 20.17.0 already installed"
     fi
 
     nodenv global 20.17.0
-    # Clean up a stale shim left behind by older nodenv runs before rehashing.
-    if [ -f "$HOME/.nodenv/shims/.nodenv-shim" ]; then
-      rm -f "$HOME/.nodenv/shims/.nodenv-shim"
-    fi
     nodenv rehash
     echo "Node $(node -v) is now active"
   fi
