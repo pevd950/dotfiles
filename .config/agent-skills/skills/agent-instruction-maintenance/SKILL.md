@@ -20,11 +20,12 @@ description: "Review, update, and synchronize agent instructions and configs acr
 - For named skills, prefer the path supplied by the current session's skill inventory.
 - If a remembered path is missing, re-resolve under `${CODEX_HOME:-$HOME/.codex}/skills`, `~/.config/agent-skills/skills`, or the relevant plugin cache instead of assuming the old location is still canonical.
 3) Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
-4) Validate minimal frontmatter for each file type (see references).
-5) Review content for clarity, scope, and actionability; remove ambiguity.
-6) Ensure intent parity across tools while avoiding contradictions.
-7) Keep instructions lean; move deep details into references.
-8) Propose updates with before/after snippets and rationale.
+4) When auditing Codex session logs for instruction or skill friction, parse JSONL records structurally and focus on actual tool outputs such as `function_call_output`. Avoid raw `rg` over whole session files as a primary signal because prompts, embedded AGENTS.md text, and prior command outputs create false positives. If possible, separate the current maintenance run from the historical sessions being analyzed.
+5) Validate minimal frontmatter for each file type (see references).
+6) Review content for clarity, scope, and actionability; remove ambiguity.
+7) Ensure intent parity across tools while avoiding contradictions.
+8) Keep instructions lean; move deep details into references.
+9) Propose updates with before/after snippets and rationale.
 
 ## Default prioritization
 - Prefer Codex-first guidance unless the user asks for tool-specific changes.

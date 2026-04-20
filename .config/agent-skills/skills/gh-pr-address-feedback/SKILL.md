@@ -11,6 +11,7 @@ Fetch PR feedback and check status, evaluate whether each comment or failure is 
 ## Workflow
 
 ### 1) Confirm auth, connectivity, and PR context
+- If the `gh-connectivity-preflight` skill is available in the current session, use it before a gh-heavy sweep.
 - `gh auth status`
 - If auth fails or tokens are invalid, ask the user to re-auth with `gh auth login -h github.com` or fix `GITHUB_TOKEN` / `GH_TOKEN`.
 - `GITHUB_TOKEN` and `GH_TOKEN` override keychain auth. If they are invalid, unset them before assuming the keychain login is broken.
@@ -33,8 +34,10 @@ There are three review feedback sources you should treat as required:
   - `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate --jq '.[] | {id, user: .user.login, state, body}'`
 - Check status:
   - `gh pr checks <pr>`
+  - Treat exit code `8` from `gh pr checks` as a status signal that checks are pending or failing, not as a broken command by itself. Read the table before deciding whether follow-up is needed.
   - Prefer `gh pr checks <pr> --json name,state,conclusion,detailsUrl` when available.
   - If `conclusion` or `detailsUrl` are not supported by the installed `gh`, fall back to `--json name,state,link,bucket,workflow,startedAt,completedAt`.
+  - If `gh pr view --json ...` rejects a field, remove the unsupported field and retry with the smallest supported set instead of assuming the CLI schema matches a newer version.
 
 Important:
 - Do not treat `pulls/<pr>/reviews` as optional context. Some bot reviewers, especially `chatgpt-codex-connector[bot]`, may surface actionable findings only in the review body and not as replyable inline `pulls/comments` objects.
@@ -71,7 +74,9 @@ Validation checklist (pick the smallest that proves it):
 - For GitHub Actions runs, extract the run id from `detailsUrl` (or `link`) and fetch logs:
   - `gh run view <run-id> --log`
   - If logs are still pending, retry or fetch job logs via `gh api /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`
+- When `gh pr checks <pr>` only shows pending entries, switch to polling/reporting mode instead of treating the command exit as actionable failure.
 - For external checks such as Buildkite, report the details URL and treat deeper debugging as out of scope for this skill.
+- If merge endpoints report `Merge already in progress` or HTTP `405`, stop issuing merge commands and switch to status polling plus user-visible reporting.
 
 ### 6) Update the PR description only when needed
 Only update the PR body when it’s now inaccurate (scope/behavior changed, testing section out of date, notable risks changed).
@@ -122,6 +127,8 @@ gh api -X POST repos/{owner}/{repo}/pulls/<pr>/comments \
 - 404 when calling `/pulls/comments/<id>/replies`: use `/pulls/<pr>/comments` with `in_reply_to`.
 - 422 about missing `position`/`commit_id`: you used the wrong endpoint or didn’t pass `in_reply_to` (or used `-f` instead of `-F`).
 - PR body churn: don’t update the description unless it’s actually out of date.
+- Unsupported JSON fields vary by `gh` version. Trim the field list and retry instead of treating the CLI error as a repo problem.
+- `Merge already in progress` is not a signal to keep retrying merge commands. Treat it as remote state and poll.
 
 ## Output Expectations
 - Every addressed comment has a reply (fix/decision/follow-up) with evidence.
