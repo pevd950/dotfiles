@@ -98,15 +98,14 @@ cask "proxyman"
 cask "ghostty"
 cask "xcodes-app"
 cask "1password-cli"
+cask "codex"
 
 # Personal productivity (kakarot + broly)
 {% if yadm.hostname == "kakarot" %}
 cask "raycast"
-cask "codex"
 {% endif %}
 {% if yadm.hostname == "broly" %}
 cask "raycast"
-cask "codex"
 {% endif %}
 
 {% if yadm.hostname == "kakarot" %}
