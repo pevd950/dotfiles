@@ -1,0 +1,10 @@
+interface:
+  display_name: "Poke Notify"
+  short_description: "Send completion SMS."
+  icon_small: "./assets/poke-notify-icon.svg"
+  icon_large: "./assets/poke-notify-icon.png"
+  brand_color: "#DB2777"
+  default_prompt: "Use $poke-notify to send Pablo a concise SMS handoff when work is done, blocked, or ready for review."
+
+policy:
+  allow_implicit_invocation: true

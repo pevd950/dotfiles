@@ -1,0 +1,10 @@
+interface:
+  display_name: "Code Janitor"
+  short_description: "Clean up dead or messy code."
+  icon_small: "./assets/code-janitor-icon.svg"
+  icon_large: "./assets/code-janitor-icon.png"
+  brand_color: "#16A34A"
+  default_prompt: "Use $code-janitor to remove dead code, simplify logic, and reduce tech debt with focused, behavior-preserving cleanup."
+
+policy:
+  allow_implicit_invocation: true

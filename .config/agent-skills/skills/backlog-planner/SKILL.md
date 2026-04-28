@@ -19,10 +19,11 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 1) Confirm repo context with `gh repo view --json nameWithOwner -q .nameWithOwner` and verify `gh auth status`.
 2) Check for duplicates with `gh issue list --search "keywords" --state all --limit 20`; also search related PRs when implementation may already exist or be in flight.
 3) List labels with `gh label list --limit 200` and map to type, component, priority, and workflow labels that match the repo policy.
-4) List milestones with `gh api repos/{owner}/{repo}/milestones --jq '.[].title'` and select if relevant.
-5) Draft the issue body with clear Overview, Current State, Acceptance Criteria, and Technical Context.
-6) Create or update the issue with `gh issue create` / `gh issue edit` using `--label` and `--milestone`.
-7) If the work is an epic, decide on sub-issues and manage them with `scripts/gh-sub-issues.sh` when supported.
+4) Read the full issue, comments, current labels, related PRs, and project-board status before changing an existing issue.
+5) List milestones with `gh api repos/{owner}/{repo}/milestones --jq '.[].title'` and select if relevant.
+6) Draft or update the issue body with clear Overview, Current State, Acceptance Criteria, Technical Context, and Validation Plan.
+7) Create or update the issue with `gh issue create` / `gh issue edit` using `--label` and `--milestone`.
+8) If the work is an epic, decide on sub-issues and manage them with `scripts/gh-sub-issues.sh` when supported.
 
 ## Issue quality bar
 - Every issue should be self-contained enough that an agent can start work without private chat history.
@@ -32,13 +33,52 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 - Include a validation plan that matches the changed surface, such as unit tests, integration tests, local server checks, simulator validation, or manual API calls.
 - Keep scope realistic. Split work that spans multiple components, has unclear sequencing, or is larger than a focused PR.
 
+## GitHub as live artifact
+- Treat issues and PRs as durable working memory when they are the active artifact.
+- Preserve decisions, scope changes, blockers, validation expectations, and important evidence in the issue or PR instead of leaving them only in chat.
+- Convert new information into the right artifact action: update issue body, add issue comment, update PR body, add PR comment, create sub-issue, add dependency, or no-op.
+- Ask before bulk-creating many issues unless the user explicitly requested filing them.
+- Keep GitHub artifacts synchronized with actual repo state and validation evidence.
+
 ## Label workflow
-- Prefer one active workflow state at a time: `needs-grooming`, `agent-ready`, or `wip`.
-- Use `plan-me` only when the repo reserves it for an automation queue (for example, CodeRabbit planning). Do not treat it as equivalent to `agent-ready`.
-- Use `ai-needs-review` for AI-drafted or AI-rewritten issues that still need human review.
-- Treat `ai-created` and `ai-modified` as legacy transient provenance labels unless the repo explicitly requires them.
-- Do not use retired duplicates such as `reviewed` or `ai-ready`.
-- When moving an issue to a human-reviewed workflow state, remove stale AI/provenance labels instead of stacking them.
+- Use labels for issue classification and readiness, not execution state.
+- Prefer one active readiness label at a time: `ai-needs-review`, `needs-grooming`, or `agent-ready`.
+- Use `ai-needs-review` when an issue body was materially drafted or rewritten by AI and still needs human review.
+- Use `needs-grooming` after human review when the issue still needs scope, acceptance criteria, blockers, or validation detail before implementation.
+- Use `agent-ready` after human review when the issue is ready for an implementation agent.
+- Use `human-required` when the issue cannot or should not be completed end-to-end by an agent, such as secret provisioning, account setup, production credential changes, legal/business decisions, or manual external-system actions. Include the exact human action required.
+- Use `plan-me` only as an optional planning automation trigger. Do not treat it as a readiness state.
+- Use `!no-plan` only as an optional planning automation opt-out.
+- Do not add legacy, duplicate, or execution-state labels unless the repo explicitly defines them as current policy.
+- Closed issues should not keep readiness labels.
+
+## Project status workflow
+- Prefer project-board fields for execution status when a repo uses a board with a `Status` field.
+- A common status flow is: `Backlog` -> `Next` -> `Ready` -> `In progress` -> `In review` -> `Done`.
+- New issues usually start in `Backlog`.
+- Move near-term but blocked or not-yet-ready issues to `Next` when the user or project policy indicates they are a priority.
+- Move planned implementation work to `Ready` when the issue has `agent-ready`.
+- Move actively owned work to `In progress` by updating the project status, not by adding substitute labels.
+- Move issues with an open PR under review to `In review`.
+- Move merged or completed work to `Done`.
+- If project-board status tooling is unavailable, report the intended status change instead of inventing substitute labels.
+
+## Triage workflow
+- For a triage overview, group issues by useful action buckets: AI review needed, needs grooming, agent-ready, human-required, blocked/waiting, stale, and uncategorized.
+- Before changing state, read prior comments and triage notes so resolved questions are not re-asked.
+- For bug issues, attempt reproduction or identify the missing reproduction detail before marking them `agent-ready`.
+- When an issue is under-specified, leave durable triage notes that capture what is known, what remains unknown, and the specific question or artifact needed.
+
+## Agent-ready checklist
+Before applying `agent-ready`, verify:
+- Scope fits a focused PR or explicitly names the planned slices.
+- Acceptance criteria are specific and testable.
+- Known files, endpoints, screens, commands, logs, or error text are included when available.
+- Facts and hypotheses are separated.
+- Dependencies and blockers are modeled explicitly.
+- Validation plan is specific to the changed surface.
+- Related issues and PRs were checked.
+- Human decisions are resolved, marked out of scope, or represented with `human-required`.
 
 ## Sub-issues: when and how
 Use sub-issues when:

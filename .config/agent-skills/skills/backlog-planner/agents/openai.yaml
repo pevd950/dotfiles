@@ -1,0 +1,10 @@
+interface:
+  display_name: "Backlog Planner"
+  short_description: "Shape actionable GitHub issues."
+  icon_small: "./assets/backlog-planner-icon.svg"
+  icon_large: "./assets/backlog-planner-icon.png"
+  brand_color: "#2563EB"
+  default_prompt: "Use $backlog-planner to create or refine GitHub issues with clear scope, acceptance criteria, labels, dependencies, project status, and validation plans."
+
+policy:
+  allow_implicit_invocation: true

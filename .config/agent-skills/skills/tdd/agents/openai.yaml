@@ -1,0 +1,10 @@
+interface:
+  display_name: "TDD"
+  short_description: "Develop test-first."
+  icon_small: "./assets/tdd-icon.svg"
+  icon_large: "./assets/tdd-icon.png"
+  brand_color: "#BE123C"
+  default_prompt: "Use $tdd to drive changes through a red-green-refactor loop, regression tests, or characterization tests before risky refactors."
+
+policy:
+  allow_implicit_invocation: true

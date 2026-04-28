@@ -1,0 +1,10 @@
+interface:
+  display_name: "PR Feedback Fixer"
+  short_description: "Address PR review feedback."
+  icon_small: "./assets/gh-pr-address-feedback-icon.svg"
+  icon_large: "./assets/gh-pr-address-feedback-icon.png"
+  brand_color: "#334155"
+  default_prompt: "Use $gh-pr-address-feedback to inspect PR comments and checks, validate reviewer claims, make safe fixes, and respond with evidence."
+
+policy:
+  allow_implicit_invocation: true

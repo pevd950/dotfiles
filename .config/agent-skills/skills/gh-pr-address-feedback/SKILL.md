@@ -84,6 +84,8 @@ Validation checklist (pick the smallest that proves it):
 
 ### 6) Update the PR description only when needed
 Only update the PR body when it’s now inaccurate (scope/behavior changed, testing section out of date, notable risks changed).
+- Treat the PR as a live artifact while review work is active. Preserve meaningful scope changes, tradeoffs, follow-up decisions, validation updates, and new risks in the PR body or a PR comment instead of leaving them only in chat.
+- If review uncovers follow-up work outside the PR scope, open or point to an issue and link it in the PR response.
 
 Safe editing pattern (preserves auto-generated sections):
 - `gh pr view <pr> --json body -q .body > /tmp/pr-body.md`

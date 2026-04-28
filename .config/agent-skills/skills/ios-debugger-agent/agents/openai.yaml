@@ -1,0 +1,10 @@
+interface:
+  display_name: "iOS Debugger"
+  short_description: "Build, run, and inspect iOS."
+  icon_small: "./assets/ios-debugger-agent-icon.svg"
+  icon_large: "./assets/ios-debugger-agent-icon.png"
+  brand_color: "#0EA5E9"
+  default_prompt: "Use $ios-debugger-agent to build, run, launch, inspect, and debug the iOS app with the repo-approved simulator workflow."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Code Review"
+  short_description: "Review code for risks."
+  icon_small: "./assets/code-review-icon.svg"
+  icon_large: "./assets/code-review-icon.png"
+  brand_color: "#DC2626"
+  default_prompt: "Use $code-review to review code changes for correctness, security, architecture, tests, and regression risk."
+
+policy:
+  allow_implicit_invocation: true

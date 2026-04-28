@@ -1,0 +1,10 @@
+interface:
+  display_name: "Plan Grilling"
+  short_description: "Stress-test plans."
+  icon_small: "./assets/plan-grilling-icon.svg"
+  icon_large: "./assets/plan-grilling-icon.png"
+  brand_color: "#9333EA"
+  default_prompt: "Use $plan-grilling to challenge plans, decisions, issue scopes, and architecture proposals with evidence, tradeoffs, and sharp questions."
+
+policy:
+  allow_implicit_invocation: true

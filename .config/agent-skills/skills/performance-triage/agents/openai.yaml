@@ -1,0 +1,10 @@
+interface:
+  display_name: "Performance Triage"
+  short_description: "Measure and fix slow paths."
+  icon_small: "./assets/performance-triage-icon.svg"
+  icon_large: "./assets/performance-triage-icon.png"
+  brand_color: "#F59E0B"
+  default_prompt: "Use $performance-triage to baseline, localize, fix, and re-measure performance problems with concrete evidence."
+
+policy:
+  allow_implicit_invocation: true

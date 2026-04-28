@@ -1,0 +1,10 @@
+interface:
+  display_name: "Codebase Map"
+  short_description: "Orient around repo flows."
+  icon_small: "./assets/codebase-map-icon.svg"
+  icon_large: "./assets/codebase-map-icon.png"
+  brand_color: "#0891B2"
+  default_prompt: "Use $codebase-map to trace a codebase area, identify entrypoints, data flow, tests, docs, likely edit seams, and validation commands before implementation."
+
+policy:
+  allow_implicit_invocation: true

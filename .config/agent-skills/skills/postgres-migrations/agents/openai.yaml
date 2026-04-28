@@ -1,0 +1,10 @@
+interface:
+  display_name: "Postgres Migrations"
+  short_description: "Plan safe DB migrations."
+  icon_small: "./assets/postgres-migrations-icon.svg"
+  icon_large: "./assets/postgres-migrations-icon.png"
+  brand_color: "#2563EB"
+  default_prompt: "Use $postgres-migrations to plan, write, review, and validate PostgreSQL migrations with rollback and deployment safety in mind."
+
+policy:
+  allow_implicit_invocation: true

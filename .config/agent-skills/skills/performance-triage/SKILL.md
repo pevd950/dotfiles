@@ -16,6 +16,7 @@ description: Diagnose and improve performance with evidence. Use for slow reques
 
 ## Default stance
 - Measure before optimizing. If no baseline exists, create the smallest reliable measurement before changing code.
+- Treat the measurement loop as a product: make it faster, sharper, and more deterministic before relying on it.
 - Optimize one bottleneck at a time, then re-measure the same scenario.
 - Prefer simple code or data-shape fixes before caching, queues, or new infrastructure.
 - Preserve correctness. Run relevant functional tests after performance changes.
@@ -55,6 +56,15 @@ Collect at least one concrete signal:
 
 If the task lacks measurements, pause implementation long enough to add or run the smallest useful measurement.
 
+Then improve the loop when practical:
+- make it faster by narrowing setup or input size while preserving the symptom
+- make it sharper by asserting on the specific slow path or resource signal
+- make it more deterministic by pinning time, seed, data, build mode, environment, or dependency versions
+- increase sample count when the signal is noisy
+- keep before/after measurements comparable
+
+For intermittent regressions, the goal is enough reproduction rate or statistical confidence to debug. A higher-rate flaky loop is useful; a one-off anecdote is not.
+
 ### 3. Localize the bottleneck
 Identify the primary suspect and evidence:
 - unnecessary or repeated work
@@ -70,6 +80,10 @@ Identify the primary suspect and evidence:
 - infrastructure/resource throttling
 
 Do not treat code style as root cause unless it explains the measured cost.
+
+When a regression window exists, consider bisection across commits, data shape, dependency version, configuration, model/provider routing, or infrastructure changes before making speculative code edits.
+
+For performance regressions, prefer timing, profiling, traces, query plans, or resource metrics over log-only diagnosis. Logs are useful when they provide durations, counts, IDs, or boundary timing that distinguish hypotheses.
 
 ### 4. Choose the fix strategy
 Prefer fixes in this order:

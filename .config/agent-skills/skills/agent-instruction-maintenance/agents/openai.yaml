@@ -1,0 +1,10 @@
+interface:
+  display_name: "Agent Instructions"
+  short_description: "Maintain agent prompts."
+  icon_small: "./assets/agent-instruction-maintenance-icon.svg"
+  icon_large: "./assets/agent-instruction-maintenance-icon.png"
+  brand_color: "#64748B"
+  default_prompt: "Use $agent-instruction-maintenance to audit, update, and synchronize agent instructions, prompts, skills, or chatmodes across tools."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,10 @@
+interface:
+  display_name: "Architecture Scout"
+  short_description: "Map and improve boundaries."
+  icon_small: "./assets/architecture-scout-icon.svg"
+  icon_large: "./assets/architecture-scout-icon.png"
+  brand_color: "#7C3AED"
+  default_prompt: "Use $architecture-scout to map the current architecture, identify boundary issues, and propose small, validated PR slices."
+
+policy:
+  allow_implicit_invocation: true

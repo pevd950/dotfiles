@@ -1,0 +1,10 @@
+interface:
+  display_name: "Debug Triage"
+  short_description: "Reproduce and fix failures."
+  icon_small: "./assets/debug-triage-icon.svg"
+  icon_large: "./assets/debug-triage-icon.png"
+  brand_color: "#EA580C"
+  default_prompt: "Use $debug-triage to reproduce failures, build a sharp feedback loop, validate hypotheses, and apply the smallest safe fix."
+
+policy:
+  allow_implicit_invocation: true
