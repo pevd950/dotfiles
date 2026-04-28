@@ -26,6 +26,16 @@ description: "Review code changes for correctness, security, tests, and architec
 9) Write actionable feedback with file references and minimal fix guidance.
 10) Summarize remaining risks and verification steps.
 
+## Architecture Review Lens
+- Adapt to the repository's documented architecture. Do not impose a generic pattern when local guidance intentionally differs.
+- Check layering: entrypoints/adapters should stay thin; business rules should live in the owning domain/service layer; persistence, transport, UI, and provider integrations should not absorb product policy by accident.
+- Check dependency direction: core logic should not depend on outer transport, storage, UI, or vendor details unless the repo explicitly chooses that tradeoff.
+- Check boundary quality: abstractions should reduce caller knowledge, isolate volatile dependencies, normalize errors, enforce policy, or create a stable test seam.
+- Flag shallow modules when they only rename calls, pass parameters through, or add indirection without hiding complexity. Prefer deep modules with small public APIs that encapsulate meaningful behavior.
+- Treat interfaces as valuable at real boundaries, for tests, or for multiple implementations. Avoid speculative interfaces that add churn without reducing coupling.
+- Review error, logging, and context propagation consistency at boundaries. Errors should be actionable at the source; logs should aid diagnosis without leaking sensitive data.
+- Review testability: the architecture should allow behavior to be tested at the right layer without excessive mocks, hidden global state, or brittle setup.
+
 ## Expected outputs / formatting
 - Findings ordered by severity with file paths.
 - Short rationale and concrete fix suggestions for each issue.

@@ -9,6 +9,7 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 - Turns ideas into actionable backlog items with clear scope and criteria.
 - Uses the gh CLI to create/update issues with labels and milestones.
 - Decomposes large efforts into smaller, sequenced tasks using sub-issues when supported.
+- Optimizes issues for handoff to human reviewers and coding agents by making context, dependencies, and validation expectations explicit.
 
 ## When to use it
 - Trigger phrases: "backlog", "issue", "ticket", "epic", "roadmap".
@@ -16,12 +17,20 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 
 ## Step-by-step workflow
 1) Confirm repo context with `gh repo view --json nameWithOwner -q .nameWithOwner` and verify `gh auth status`.
-2) Check for duplicates with `gh issue list --search "keywords" --state all --limit 20`.
+2) Check for duplicates with `gh issue list --search "keywords" --state all --limit 20`; also search related PRs when implementation may already exist or be in flight.
 3) List labels with `gh label list --limit 200` and map to type, component, priority, and workflow labels that match the repo policy.
 4) List milestones with `gh api repos/{owner}/{repo}/milestones --jq '.[].title'` and select if relevant.
 5) Draft the issue body with clear Overview, Current State, Acceptance Criteria, and Technical Context.
 6) Create or update the issue with `gh issue create` / `gh issue edit` using `--label` and `--milestone`.
 7) If the work is an epic, decide on sub-issues and manage them with `scripts/gh-sub-issues.sh` when supported.
+
+## Issue quality bar
+- Every issue should be self-contained enough that an agent can start work without private chat history.
+- Include concrete file paths, functions, endpoints, screens, commands, logs, or error text when they are known.
+- Separate facts from hypotheses. Do not present suspected root causes as confirmed without evidence.
+- Include dependencies and blockers explicitly, including related issues or PRs.
+- Include a validation plan that matches the changed surface, such as unit tests, integration tests, local server checks, simulator validation, or manual API calls.
+- Keep scope realistic. Split work that spans multiple components, has unclear sequencing, or is larger than a focused PR.
 
 ## Label workflow
 - Prefer one active workflow state at a time: `needs-grooming`, `agent-ready`, or `wip`.
@@ -46,7 +55,8 @@ Workflow:
 1) Create the parent epic issue with a clear scope and target milestone.
 2) Identify existing related issues; only create new sub-issues when needed.
 3) Use `scripts/gh-sub-issues.sh add <parent> <child...>` to attach sub-issues.
-4) If sub-issues are not supported, add a task checklist in the epic and link related issues.
+4) Verify the relationship with `scripts/gh-sub-issues.sh list <parent>` before reporting that sub-issues were added.
+5) If sub-issues are not supported, add a task checklist in the epic and link related issues.
 
 ## Scripts
 - `scripts/gh-sub-issues.sh list <parent> [--repo OWNER/REPO] [--limit N]`
@@ -54,10 +64,35 @@ Workflow:
 - `scripts/gh-sub-issues.sh remove <parent> <child...> [--repo OWNER/REPO]`
 - If the script reports that sub-issues are not available, use a checklist and issue links instead.
 
+## Blocking relationships
+For GitHub issue dependencies, always model the relationship as:
+
+`TARGET issue is blocked by BLOCKER issue.`
+
+If the request is phrased as "A blocks B", convert it to:
+
+`B is blocked by A.`
+
+How to set a blocker:
+1) Look up the blocking issue's numeric REST `id` from the issue payload.
+2) Read the target issue's existing `blocked_by` list using the issue dependency API endpoint.
+3) If the blocker is already present, do not add a duplicate.
+4) Add the blocking issue as a blocker on the target issue using the target issue's `blocked_by` dependency endpoint.
+5) Verify by reading the target issue's `blocked_by` list again after the change.
+
+How to remove a blocker:
+1) Look up the same blocking issue numeric REST `id`.
+2) Use the delete form of the target issue's `blocked_by` dependency endpoint.
+3) Verify by reading the target issue's `blocked_by` list after the change.
+
+Do not rely on `gh issue view` for dependency data. Use the issue dependency API endpoints directly.
+
 ## Expected outputs / formatting
 - Issue template with Overview, Current State, Acceptance Criteria, Technical Context.
 - Selected labels and milestone (if available).
 - Sub-issue plan or checklist with clear titles and ordering.
+- Duplicate/related-work search summary, including any relevant existing issues or PRs.
+- Validation plan and dependency/blocker notes when relevant.
 
 ## Example prompts
 - "Draft a backlog issue for adding export support."
