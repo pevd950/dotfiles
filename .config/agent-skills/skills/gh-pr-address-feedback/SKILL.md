@@ -35,9 +35,11 @@ There are three review feedback sources you should treat as required:
 - Check status:
   - `gh pr checks <pr>`
   - Treat exit code `8` from `gh pr checks` as a status signal that checks are pending or failing, not as a broken command by itself. Read the table before deciding whether follow-up is needed.
+  - When polling, prefer one `gh pr checks <pr> --watch=false` call per interval instead of embedding long sleep/retry ladders into one shell payload.
   - Prefer `gh pr checks <pr> --json name,state,conclusion,detailsUrl` when available.
   - If `conclusion` or `detailsUrl` are not supported by the installed `gh`, fall back to `--json name,state,link,bucket,workflow,startedAt,completedAt`.
   - If `gh pr view --json ...` rejects a field, remove the unsupported field and retry with the smallest supported set instead of assuming the CLI schema matches a newer version.
+  - If `gh pr checks <pr>` reports `no checks reported on the '<branch>' branch` immediately after a push, treat it as transient remote state first and retry after a short delay before deeper debugging.
 
 Important:
 - Do not treat `pulls/<pr>/reviews` as optional context. Some bot reviewers, especially `chatgpt-codex-connector[bot]`, may surface actionable findings only in the review body and not as replyable inline `pulls/comments` objects.
@@ -75,6 +77,8 @@ Validation checklist (pick the smallest that proves it):
   - `gh run view <run-id> --log`
   - If logs are still pending, retry or fetch job logs via `gh api /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`
 - When `gh pr checks <pr>` only shows pending entries, switch to polling/reporting mode instead of treating the command exit as actionable failure.
+- Use bounded polling. A practical default is one immediate check, then short waits such as 30s, 60s, and 120s. After that, report the remaining pending checks and their URLs instead of looping indefinitely in the same turn.
+- If only self-hosted or external checks remain pending and there is no new failure signal, stop polling and summarize the waiting state.
 - For external checks such as Buildkite, report the details URL and treat deeper debugging as out of scope for this skill.
 - If merge endpoints report `Merge already in progress` or HTTP `405`, stop issuing merge commands and switch to status polling plus user-visible reporting.
 
@@ -129,6 +133,7 @@ gh api -X POST repos/{owner}/{repo}/pulls/<pr>/comments \
 - PR body churn: don’t update the description unless it’s actually out of date.
 - Unsupported JSON fields vary by `gh` version. Trim the field list and retry instead of treating the CLI error as a repo problem.
 - `Merge already in progress` is not a signal to keep retrying merge commands. Treat it as remote state and poll.
+- Repeated exit `8` from `gh pr checks` with the same pending rows is not forward progress. Stop after bounded polling and report the remaining blockers.
 
 ## Output Expectations
 - Every addressed comment has a reply (fix/decision/follow-up) with evidence.
