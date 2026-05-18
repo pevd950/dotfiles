@@ -3,9 +3,6 @@ set -euo pipefail
 
 echo "=== Starting yadm bootstrap ==="
 
-# Detect OS
-os=$(uname -s)
-
 # Run yadm alternates (only needed for yadm)
 echo "Setting up yadm alternates..."
 yadm alt

@@ -23,6 +23,35 @@ yadm pull
 yadm bootstrap  # Re-run to apply any new setup changes
 ```
 
+## Development Workflow
+
+Use a normal clone for non-trivial edits, then apply reviewed changes back to
+the live yadm checkout after merge. This keeps `$HOME` closer to a deployed
+worktree instead of the place where every experiment happens.
+
+```bash
+mkdir -p ~/Developer
+git clone https://github.com/pevd950/dotfiles.git ~/Developer/dotfiles
+cd ~/Developer/dotfiles
+git switch -c topic/my-change
+
+# edit, validate, commit, push, and open a PR
+./scripts/check.sh
+gh pr create --fill
+```
+
+After the PR merges:
+
+```bash
+cd ~
+yadm pull --ff-only
+yadm alt
+yadm bootstrap
+```
+
+For tiny emergency fixes, yadm can still be used directly in `$HOME`, but prefer
+branches and PRs for bootstrap, shell startup, agent-skill, and package changes.
+
 ## 📁 Structure
 
 ```
@@ -67,7 +96,6 @@ Shared environment bootstrap used by yadm bootstrap and Codespaces:
 - Starship prompt
 - Homebrew installation (if needed) and `brew bundle --global`
 - Development tools via Brewfile plus Node version setup with nodenv
-- iTerm2 shell integration
 
 ### `.config/yadm/bootstrap`
 Full yadm bootstrap:
@@ -87,11 +115,14 @@ Both scripts are designed to be safe to re-run.
 ## 🧪 Testing
 
 ```bash
-# Test bootstrap after changes
-yadm bootstrap
+# Fast local validation for shell/bootstrap changes
+./scripts/check.sh
 
 # Force regenerate alternates
 yadm alt --force
+
+# Apply bootstrap changes to the current machine only after review/merge
+yadm bootstrap
 ```
 
 ## 🆘 Common Issues
