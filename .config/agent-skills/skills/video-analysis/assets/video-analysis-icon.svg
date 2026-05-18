@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Video analysis icon">
+  <defs>
+    <linearGradient id="bg" x1="48" y1="32" x2="208" y2="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="84" y1="78" x2="172" y2="166" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#BFDBFE"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="44" y="60" width="168" height="120" rx="20" fill="#0F172A" opacity="0.92"/>
+  <path d="M212 101l28-20v78l-28-20z" fill="#0F172A" opacity="0.92"/>
+  <path d="M72 88h112M72 152h112M88 60v120M128 60v120M168 60v120" stroke="#60A5FA" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+  <circle cx="128" cy="120" r="38" fill="url(#lens)"/>
+  <circle cx="128" cy="120" r="18" fill="#2563EB"/>
+  <path d="M86 205h84" stroke="#F8FAFC" stroke-width="14" stroke-linecap="round"/>
+  <path d="M176 205h1" stroke="#F8FAFC" stroke-width="14" stroke-linecap="round" opacity="0.65"/>
+  <path d="M66 205h1" stroke="#F8FAFC" stroke-width="14" stroke-linecap="round" opacity="0.65"/>
+</svg>
