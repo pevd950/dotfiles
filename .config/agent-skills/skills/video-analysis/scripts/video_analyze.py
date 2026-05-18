@@ -129,6 +129,7 @@ def probe(video_path: Path) -> dict:
     ], capture=True)
     data = json.loads(result.stdout)
     video_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), {})
+    audio_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), {})
     duration = float(video_stream.get("duration") or data.get("format", {}).get("duration") or 0)
     return {
         "path": str(video_path),
@@ -137,6 +138,15 @@ def probe(video_path: Path) -> dict:
         "height": int(video_stream.get("height") or 0),
         "codec": video_stream.get("codec_name"),
         "format": data.get("format", {}).get("format_name"),
+        "audio": {
+            "present": bool(audio_stream),
+            "codec": audio_stream.get("codec_name"),
+            "sample_rate": int(audio_stream.get("sample_rate") or 0) if audio_stream else 0,
+            "channels": int(audio_stream.get("channels") or 0) if audio_stream else 0,
+            "channel_layout": audio_stream.get("channel_layout"),
+            "duration_seconds": float(audio_stream.get("duration") or 0) if audio_stream else 0,
+            "bit_rate": int(audio_stream.get("bit_rate") or 0) if audio_stream and str(audio_stream.get("bit_rate") or "").isdigit() else 0,
+        },
     }
 
 
@@ -234,6 +244,34 @@ def make_contact_sheets(frames_dir: Path, sheets_dir: Path, frame_count: int) ->
         ])
         sheet_paths.append(str(sheet_path))
     return sheet_paths
+
+
+def extract_audio(video_path: Path, audio_dir: Path, *, start: float, end: float, has_audio: bool) -> str | None:
+    if not has_audio:
+        return None
+    require_binary("ffmpeg")
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    output = audio_dir / "audio.m4a"
+    duration = max(0.001, end - start)
+    run([
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        str(video_path),
+        "-t",
+        f"{duration:.3f}",
+        "-vn",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        str(output),
+    ])
+    return str(output)
 
 
 def request_json(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, data: bytes | None = None) -> dict:
@@ -372,6 +410,7 @@ def write_outputs(
     effective_fps: float,
     frames: list[FrameInfo],
     sheets: list[str],
+    audio_path: str | None,
     gemini: dict | None,
 ) -> None:
     timeline = {
@@ -388,6 +427,10 @@ def write_outputs(
             "items": [frame.__dict__ for frame in frames],
         },
         "contact_sheets": sheets,
+        "audio": {
+            "path": audio_path,
+            "metadata": metadata.get("audio", {}),
+        },
         "gemini": {
             "model": gemini.get("model") if gemini else None,
             "text": gemini.get("text") if gemini else None,
@@ -407,6 +450,7 @@ def write_outputs(
         f"- Frames: {len(frames)} at {effective_fps:.3f} fps (requested {requested_fps:.3f})",
         f"- Frame directory: `{out_dir / 'frames'}`",
         f"- Contact sheets: {len(sheets)}",
+        f"- Audio: `{audio_path}`" if audio_path else "- Audio: none",
         "",
     ]
     if mode in {"ui-bug", "visual-regression"}:
@@ -430,6 +474,17 @@ def write_outputs(
         lines.extend(["## Gemini Analysis", "", "Gemini returned no text.", ""])
     lines.extend(["## Contact Sheets", ""])
     lines.extend([f"- `{sheet}`" for sheet in sheets] or ["- none"])
+    lines.extend(["", "## Audio", ""])
+    if audio_path:
+        audio = metadata.get("audio", {})
+        lines.extend([
+            f"- Path: `{audio_path}`",
+            f"- Codec: {audio.get('codec') or 'unknown'}",
+            f"- Channels: {audio.get('channels') or 'unknown'}",
+            f"- Sample rate: {audio.get('sample_rate') or 'unknown'} Hz",
+        ])
+    else:
+        lines.append("- none")
     lines.extend(["", "## Frame Index", ""])
     lines.extend([f"- `{frame.path}` ({frame.timestamp})" for frame in frames[:200]])
     if len(frames) > 200:
@@ -449,6 +504,7 @@ def main() -> int:
     parser.add_argument("--resolution", type=int, default=None, help="Extracted frame width")
     parser.add_argument("--out-dir", default=None, help="Output directory")
     parser.add_argument("--no-gemini", action="store_true", help="Skip Gemini even if a key is available")
+    parser.add_argument("--no-audio-extract", action="store_true", help="Skip local audio extraction")
     parser.add_argument("--gemini-model", default=DEFAULT_GEMINI_MODEL, help=f"Gemini model for video analysis (default: {DEFAULT_GEMINI_MODEL})")
     parser.add_argument("--gemini-api-key-env", default="GEMINI_API_KEY,GOOGLE_API_KEY", help="Comma-separated env var names to check")
     args = parser.parse_args()
@@ -489,6 +545,16 @@ def main() -> int:
         )
         sheets = make_contact_sheets(out_dir / "frames", out_dir / "contact_sheets", len(frames))
 
+    audio_path = None
+    if not args.no_audio_extract:
+        audio_path = extract_audio(
+            video_path,
+            out_dir / "audio",
+            start=start,
+            end=end,
+            has_audio=bool(metadata.get("audio", {}).get("present")),
+        )
+
     gemini = None
     if args.mode != "frame-only" and not args.no_gemini:
         api_key = None
@@ -522,6 +588,7 @@ def main() -> int:
         effective_fps=effective_fps,
         frames=frames,
         sheets=sheets,
+        audio_path=audio_path,
         gemini=gemini,
     )
     print(out_dir)

@@ -8,6 +8,7 @@ description: "Analyze local or URL videos with Gemini video understanding plus t
 ## What this skill does
 - Uses Gemini video understanding for whole-video summaries and timestamp hints.
 - Extracts local timestamped frames and contact sheets with `ffmpeg` for inspectable evidence.
+- Extracts the selected audio range to `audio/audio.m4a` when the source has an audio stream.
 - Supports local files and public/downloadable URLs via `yt-dlp`.
 - Biases `ui-bug` mode toward dense frame extraction so brief animation glitches, flicker, layout jumps, and transient UI states can be inspected.
 
@@ -73,10 +74,12 @@ The script prints the output directory and writes:
 - `timeline.json` - metadata, frame timestamps, contact sheets, and Gemini text.
 - `frames/frame_00001_t00-00-000.jpg` - timestamped local frames.
 - `contact_sheets/sheet_001.jpg` - tiled frame overview for quick inspection.
+- `audio/audio.m4a` - selected audio range when present.
 
 ## Notes
 - `GEMINI_API_KEY` is preferred; `GOOGLE_API_KEY` is accepted as a fallback.
 - The default Gemini model is `gemini-2.5-flash`; pass `--gemini-model gemini-2.5-pro` when deeper whole-video reasoning is worth the extra latency/cost.
 - If the key is not visible in the shell, source the user's local shell exports before running the script.
+- Pass `--no-audio-extract` to skip local audio artifact generation.
 - For subtle UI issues, do not rely on Gemini alone. Use local high-FPS frames or contact sheets as evidence.
 - For long videos, run Gemini on the whole file first, then rerun focused local extraction around suspicious timestamps.
