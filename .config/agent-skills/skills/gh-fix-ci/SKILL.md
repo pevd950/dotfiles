@@ -29,6 +29,12 @@ Prereq: authenticate with GitHub CLI once, then confirm with `gh auth status`. R
   - `command -v "$PYTHON_BIN" >/dev/null || PYTHON_BIN=python`
 - `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "<number-or-url>"`
 - Add `--json` if you want machine-friendly output for summarization.
+- When running the helper through Codex `exec_command`, give it a generous first wait.
+  - Prefer `yield_time_ms` around `10000` and a real `timeout_ms` because log and artifact fetches often take several seconds before producing output.
+  - Empty intermediate output while the process is still running is normal; do not treat that as a stuck helper unless it exceeds the command timeout.
+- Treat exit code `1` from the helper as "failing checks were found", not as a script crash.
+  - Use the JSON or text payload as evidence first.
+  - Only treat the helper itself as broken when the output is malformed or the traceback points to the script/runtime.
 
 ## Workflow
 
