@@ -50,7 +50,7 @@ yadm bootstrap
 ```
 
 For tiny emergency fixes, yadm can still be used directly in `$HOME`, but prefer
-branches and PRs for bootstrap, shell startup, agent-skill, and package changes.
+branches and PRs for bootstrap, shell startup, agent-skills, and package changes.
 
 ## 📁 Structure
 

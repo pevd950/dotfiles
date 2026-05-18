@@ -20,5 +20,11 @@ zsh_files=(
 )
 
 shellcheck "${bash_files[@]}"
-bash -n "${bash_files[@]}"
-zsh -n "${zsh_files[@]}"
+
+for file in "${bash_files[@]}"; do
+  bash -n "$file"
+done
+
+for file in "${zsh_files[@]}"; do
+  zsh -n "$file"
+done
