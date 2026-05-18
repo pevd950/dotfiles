@@ -141,10 +141,6 @@ if [ "$OS" = "macos" ]; then
    if command -v bit >/dev/null 2>&1; then
       complete -o nospace -C "$(command -v bit)" bit
    fi
-   # iTerm2 integration
-   if [[ -f "$HOME/.iterm2_shell_integration.zsh" ]]; then
-      source "$HOME/.iterm2_shell_integration.zsh"
-   fi
    # NVM - commented out in favor of nodenv
    # export NVM_DIR="$HOME/.nvm"
    # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm

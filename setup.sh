@@ -206,14 +206,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
   ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || exit 1
   
-  # Install iTerm2 shell integration
-  if [ ! -f ~/.iterm2_shell_integration.zsh ]; then
-    echo "Installing iTerm2 shell integration..."
-    curl -L https://iterm2.com/shell_integration/zsh \
-      -o ~/.iterm2_shell_integration.zsh
-  else
-    echo "iTerm2 shell integration already installed"
-  fi
 elif [[ "$(uname)" == "Linux" ]]; then
   # TODO: This should be shared
   # Install tools
