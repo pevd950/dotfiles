@@ -15,6 +15,10 @@ typeset -U path PATH
 # Oh-my-zsh path
 export ZSH="$HOME/.oh-my-zsh"
 
+if [[ -d "$HOME/.local/bin" ]]; then
+   path=("$HOME/.local/bin" $path)
+fi
+
 if [[ "$(uname)" == "Darwin" ]]; then
    # macOS-specific configurations
    OS="macos"
