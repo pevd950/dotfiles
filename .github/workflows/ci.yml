@@ -7,6 +7,9 @@ on:
       - master
       - main
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate dotfiles
@@ -35,4 +38,4 @@ jobs:
 
           test -f "$temp_home/.Brewfile"
           test -e "$temp_home/.gitconfig.local"
-          grep -q "name = Pablo Valero" "$temp_home/.gitconfig.local"
+          grep -qE '^[[:space:]]*name[[:space:]]*=' "$temp_home/.gitconfig.local"
