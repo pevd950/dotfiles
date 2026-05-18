@@ -34,7 +34,7 @@ There are three review feedback sources you should treat as required:
   - `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate --jq '.[] | {id, user: .user.login, state, body}'`
 - Check status:
   - `gh pr checks <pr>`
-  - Treat exit code `8` from `gh pr checks` as a status signal that checks are pending or failing, not as a broken command by itself. Read the table before deciding whether follow-up is needed.
+  - Treat non-zero exits from `gh pr checks` as status signals when the command prints a checks table. Current `gh` versions may return `1` for failed checks and `8` for pending/failing checks; read the table before deciding whether follow-up is needed.
   - When polling, prefer one `gh pr checks <pr> --watch=false` call per interval instead of embedding long sleep/retry ladders into one shell payload.
   - Prefer `gh pr checks <pr> --json name,state,conclusion,detailsUrl` when available.
   - If `conclusion` or `detailsUrl` are not supported by the installed `gh`, fall back to `--json name,state,link,bucket,workflow,startedAt,completedAt`.
@@ -136,6 +136,7 @@ gh api -X POST repos/{owner}/{repo}/pulls/<pr>/comments \
 - Unsupported JSON fields vary by `gh` version. Trim the field list and retry instead of treating the CLI error as a repo problem.
 - `Merge already in progress` is not a signal to keep retrying merge commands. Treat it as remote state and poll.
 - Repeated exit `8` from `gh pr checks` with the same pending rows is not forward progress. Stop after bounded polling and report the remaining blockers.
+- A non-zero `gh pr checks` exit with a populated table is not, by itself, a CLI failure. Classify the rows first: failed rows usually require log inspection; pending rows usually require bounded polling or reporting.
 
 ## Output Expectations
 - Every addressed comment has a reply (fix/decision/follow-up) with evidence.
