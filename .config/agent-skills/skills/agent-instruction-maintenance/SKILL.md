@@ -15,6 +15,7 @@ description: "Review, update, and synchronize agent instructions and configs acr
 - Use after creating or editing instructions, or when standards change.
 
 ## Step-by-step workflow
+0) If the prompt includes automation metadata such as `Automation:`, `Automation ID:`, `Automation memory:`, or `Last run:`, load and follow `automation-run-hygiene` before scanning or editing. This prevents named maintenance-skill work from skipping automation memory normalization and inbox handoff rules.
 1) Discover which ecosystems exist in the repo or user config.
 2) Resolve instruction file locations from the current source of truth before opening them.
 - For named skills, prefer the path supplied by the current session's skill inventory.
