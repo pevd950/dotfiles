@@ -1,0 +1,8 @@
+Frontend Design skill content is from Anthropic's Claude Code repository:
+https://github.com/anthropics/claude-code/blob/main/plugins/frontend-design/skills/frontend-design/SKILL.md
+
+License terms from the upstream repository:
+https://github.com/anthropics/claude-code/blob/main/LICENSE.md
+
+(C) Anthropic PBC. All rights reserved. Use is subject to Anthropic's Commercial Terms of Service:
+https://www.anthropic.com/legal/commercial-terms
