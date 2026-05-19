@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Frontend Design">
+  <defs>
+    <linearGradient id="bg" x1="82" y1="56" x2="430" y2="456" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FB7185"/>
+      <stop offset="0.48" stop-color="#E11D48"/>
+      <stop offset="1" stop-color="#7F1D1D"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="150" cy="104" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-14%" y="-12%" width="128%" height="132%">
+      <feDropShadow dx="0" dy="20" stdDeviation="20" flood-color="#020617" flood-opacity="0.26"/>
+    </filter>
+  </defs>
+  <rect x="54" y="42" width="404" height="428" rx="112" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="54" y="42" width="404" height="428" rx="112" fill="url(#glow)"/>
+  <path d="M149 334L214 178L273 334L339 178" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M139 378H373" fill="none" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="372" cy="132" r="42" fill="#FFFFFF" fill-opacity="0.18"/>
+</svg>

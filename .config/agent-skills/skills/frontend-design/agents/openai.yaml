@@ -1,6 +1,9 @@
 interface:
   display_name: "Frontend Design"
   short_description: "Create polished frontend interfaces."
+  icon_small: "./assets/frontend-design-icon.svg"
+  icon_large: "./assets/frontend-design-icon.png"
+  brand_color: "#E11D48"
   default_prompt: "Use $frontend-design to create a distinctive, production-grade frontend interface with a clear aesthetic direction and working code."
 
 policy:
