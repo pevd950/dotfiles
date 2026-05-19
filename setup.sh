@@ -155,7 +155,17 @@ install_zsh_syntax_highlighting() {
   trap - RETURN
 }
 
-if [[ "$(uname)" == "Darwin" ]]; then
+detect_platform() {
+  uname
+}
+
+setup_packages() {
+  local platform="$1"
+
+  if [[ "$platform" != "Darwin" ]]; then
+    return 0
+  fi
+
   # Install Homebrew if not present
   if ! command -v brew &> /dev/null; then
     echo "Installing Homebrew..."
@@ -170,6 +180,14 @@ if [[ "$(uname)" == "Darwin" ]]; then
     install_brewfile_dependencies "$HOME/.Brewfile"
   else
     echo "No ~/.Brewfile found, skipping brew bundle"
+  fi
+}
+
+setup_runtimes() {
+  local platform="$1"
+
+  if [[ "$platform" != "Darwin" ]]; then
+    return 0
   fi
 
   # Setup Node with nodenv after Brewfile installs it
@@ -197,22 +215,35 @@ if [[ "$(uname)" == "Darwin" ]]; then
     nodenv rehash
     echo "Node $(node -v) is now active"
   fi
+}
 
-  # Install Oh My Zsh and other tools
-  install_oh_my_zsh
-  install_starship
+setup_shell() {
+  local platform="$1"
+
+  if [[ "$platform" != "Darwin" && "$platform" != "Linux" ]]; then
+    return 0
+  fi
+
+  if [[ "$platform" == "Linux" ]]; then
+    install_starship
+    install_oh_my_zsh
+  else
+    install_oh_my_zsh
+    install_starship
+  fi
 
   # Install Oh My Zsh plugins
-  ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || exit 1
-  
-elif [[ "$(uname)" == "Linux" ]]; then
-  # TODO: This should be shared
-  # Install tools
-  install_starship
-  install_oh_my_zsh
+}
 
-  # Install Oh My Zsh plugins
-  ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
-  install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || exit 1
-fi
+main() {
+  local platform
+  platform="$(detect_platform)"
+
+  setup_packages "$platform"
+  setup_runtimes "$platform"
+  setup_shell "$platform"
+}
+
+main "$@"
