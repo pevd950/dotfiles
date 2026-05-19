@@ -1,4 +1,4 @@
 interface:
   display_name: "Matter CLI"
-  short_description: "Work with Pablo’s Matter reading library from the local CLI."
-  default_prompt: "Use Matter CLI to inspect my reading library, update tags, or create app-opening Matter links."
+  short_description: "Work with a Matter reading library from the local CLI."
+  default_prompt: "Use Matter CLI to inspect a reading library, update tags, or create app-opening Matter links."
