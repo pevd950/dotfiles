@@ -1,5 +1,12 @@
+# Homebrew: prefer Apple Silicon Homebrew even if path_helper or inherited PATH added /usr/local first.
+path=(${path:#/opt/homebrew/bin})
+path=(${path:#/opt/homebrew/sbin})
+[[ -d "/opt/homebrew/bin" ]] && path=("/opt/homebrew/bin" $path)
+[[ -d "/opt/homebrew/sbin" ]] && path=("/opt/homebrew/sbin" $path)
+
 # Flutter
-export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$HOME/.rbenv/bin:$HOME/flutter/bin:$PATH"
+[[ -d "$HOME/.rbenv/bin" ]] && path=("$HOME/.rbenv/bin" $path)
+[[ -d "$HOME/flutter/bin" ]] && path=("$HOME/flutter/bin" $path)
 path=(${path:#${USER}/flutter/bin})
 
 # Android
