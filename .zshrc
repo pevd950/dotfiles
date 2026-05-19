@@ -159,3 +159,6 @@ fi
 if [[ -e "$HOME/.shellfishrc" ]]; then
    source "$HOME/.shellfishrc"
 fi
+
+# Matter CLI
+[[ -d "$HOME/.matter/bin" ]] && path=("$HOME/.matter/bin" $path)
