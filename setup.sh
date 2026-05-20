@@ -241,6 +241,14 @@ main() {
   local platform
   platform="$(detect_platform)"
 
+  case "$platform" in
+    Darwin|Linux) ;;
+    *)
+      echo "Unsupported platform: $platform" >&2
+      return 1
+      ;;
+  esac
+
   setup_packages "$platform"
   setup_runtimes "$platform"
   setup_shell "$platform"

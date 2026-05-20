@@ -31,6 +31,7 @@ setup_agent_skills() {
   local codex_dir="$codex_home/skills"
   local claude_dir="$HOME/.claude/skills"
   local copilot_dir="$HOME/.copilot/skills"
+  local skill_path name target_dir target link_dest
 
   mkdir -p "$codex_dir" "$claude_dir" "$copilot_dir"
 
