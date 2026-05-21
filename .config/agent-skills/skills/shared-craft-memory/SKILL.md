@@ -23,6 +23,7 @@ If shared memory conflicts with a live source or local project instructions, tru
 - Prefer a Craft deeplink provided by the user in the current conversation.
 - Otherwise use `CRAFT_SHARED_MEMORY_URL` when it is set.
 - If neither is available, search Craft for an exact title such as `AGENTS MEMORY` only when the user explicitly asks for shared memory work.
+- On a new host, the user or agent may set `CRAFT_SHARED_MEMORY_URL` in that host's local ignored shell exports file so the memory document can be found without hard-coding the link into tracked dotfiles.
 - Do not hard-code private Craft block IDs, personal names, addresses, or host-specific paths into reusable skill files.
 
 ## Read Protocol
@@ -44,7 +45,7 @@ Use the Craft MCP, not ad hoc export files.
 
 ## Update Protocol
 
-Update shared memory only when the user asks or when the task explicitly includes memory maintenance.
+Update shared memory when the user asks, when the task explicitly includes memory maintenance, or when a material cross-host fact changed and future agents are likely to need it. Do not update it for routine progress that is already captured better in a repo, Todoist, GitHub, Craft project doc, or another live system.
 
 - Store one fact per bullet.
 - Prefer compact dated entries.
@@ -53,6 +54,7 @@ Update shared memory only when the user asks or when the task explicitly include
 - Move stale or completed items out of active sections after live verification.
 - Never store secrets, tokens, passwords, private keys, full medical details, payment details, or unnecessary personal identifiers.
 - Use canonical links to point to source systems instead of copying long source content.
+- When updating opportunistically, keep the write small and mention it in the final handoff.
 
 ## Recommended Structure
 
