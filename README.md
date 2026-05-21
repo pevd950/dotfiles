@@ -16,6 +16,52 @@ yadm clone https://github.com/pevd950/dotfiles.git
 yadm bootstrap
 ```
 
+For operational infrastructure hosts, do not start with `yadm clone` and
+`yadm bootstrap`; use the staged Debian/Linux infrastructure path below.
+
+### Debian/Linux Infrastructure Hosts
+
+Operational Linux hosts should start with review and validation, not immediate
+dotfile application. Debian hosts use `apt` packages; Homebrew-on-Linux is not a
+dependency for this repo.
+
+Minimal rollout prerequisites are `zsh` and `yadm`. Full local validation also
+needs `shellcheck`; the broader recommended package set below matches the shell
+features this repo enables on Debian.
+
+Recommended staged path:
+
+```bash
+# 1. Review in a normal clone first. Do not use yadm yet.
+mkdir -p ~/Developer
+git clone https://github.com/pevd950/dotfiles.git ~/Developer/dotfiles
+cd ~/Developer/dotfiles
+./scripts/check.sh
+
+# 2. Later, install prerequisites with apt after review.
+sudo apt-get update
+sudo apt-get install -y zsh yadm stow fzf fd-find bat direnv shellcheck
+
+# 3. Back up existing shell and git config before yadm owns anything.
+mkdir -p ~/.dotfiles-backup
+cp -a ~/.bashrc ~/.profile ~/.gitconfig ~/.dotfiles-backup/ 2>/dev/null || true
+
+# 4. Clone with yadm only after conflicts are reviewed.
+yadm clone --no-bootstrap https://github.com/pevd950/dotfiles.git
+yadm status
+yadm alt
+
+# 5. Test zsh before making it the login shell.
+zsh -lic 'echo zsh startup ok'
+```
+
+Keep bash as the login shell until zsh startup is proven safe in interactive and
+remote sessions. Only consider `chsh` after confirming a rollback path.
+
+Do not run `yadm bootstrap` on infrastructure hosts until Linux support and
+host-specific conflicts have been reviewed. Bootstrap may create directories,
+install shell tooling when explicitly opted in, and link shared agent skills.
+
 ### Sync Existing Machine
 
 ```bash
@@ -94,8 +140,12 @@ This repo auto-configures Codespaces. GitHub runs `setup.sh` automatically (not 
 Shared environment bootstrap used by yadm bootstrap and Codespaces:
 - Oh My Zsh + plugins
 - Starship prompt
-- Homebrew installation (if needed) and `brew bundle --global`
-- Development tools via Brewfile plus Node version setup with nodenv
+- macOS: Homebrew installation (if needed) and `brew bundle --global`
+- Debian/Linux: prints apt package guidance by default and only installs apt
+  packages when `DOTFILES_INSTALL_LINUX_PACKAGES=1` is set
+- Debian/Linux: skips network shell installers by default; set
+  `DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1` only after reviewing host impact
+- macOS development tools via Brewfile plus Node version setup with nodenv
 
 ### `.config/yadm/bootstrap`
 Full yadm bootstrap:

@@ -1,5 +1,6 @@
 # Xcode
-openx() {
+if [[ "$(uname)" == "Darwin" ]]; then
+  openx() {
 	        local selected
 	        local -a workspaces projects
 
@@ -31,7 +32,8 @@ openx() {
 	        else
 	                echo "No Xcode project or workspace found"
 	        fi
-}
+  }
+fi
 
 # yadm function to auto-add Claude files
 yadm-claude() {
@@ -69,8 +71,10 @@ yadm-claude() {
 }
 
 # turn hidden files on/off in Finder
-function hiddenOn() { defaults write com.apple.Finder AppleShowAllFiles YES; }
-function hiddenOff() { defaults write com.apple.Finder AppleShowAllFiles NO; }
+if [[ "$(uname)" == "Darwin" ]]; then
+        function hiddenOn() { defaults write com.apple.Finder AppleShowAllFiles YES; }
+        function hiddenOff() { defaults write com.apple.Finder AppleShowAllFiles NO; }
+fi
 
 # myIP address
 function myip() {
@@ -78,24 +82,35 @@ function myip() {
 	        local addr
 	        local found=0
 
-	        for iface in ${(z)$(ifconfig -l)}; do
-	                addr=$(ipconfig getifaddr "$iface" 2>/dev/null) || continue
-	                printf "%-10s %s\n" "$iface" "$addr"
-	                found=1
-	        done
+	        if [[ "$(uname)" == "Darwin" ]]; then
+	                for iface in ${(z)$(ifconfig -l)}; do
+	                        addr=$(ipconfig getifaddr "$iface" 2>/dev/null) || continue
+	                        printf "%-10s %s\n" "$iface" "$addr"
+	                        found=1
+	                done
+	        elif command -v ip >/dev/null 2>&1; then
+	                while read -r _ iface _ addr _; do
+	                        printf "%-10s %s\n" "${iface%:}" "${addr%/*}"
+	                        found=1
+	                done < <(ip -o -4 addr show scope global)
+	        fi
 
 	        (( found )) || echo "No active connection"
 }
 
 # Show file in quick look
-function quick-look() {
-        (($# > 0)) && qlmanage -p $* &>/dev/null &
-}
+if [[ "$(uname)" == "Darwin" ]]; then
+        function quick-look() {
+                (($# > 0)) && qlmanage -p $* &>/dev/null &
+        }
+fi
 
 # Open man page in preview app
-preman() {
-        mandoc -T pdf "$(/usr/bin/man -w $@)" | open -fa Preview
-}
+if [[ "$(uname)" == "Darwin" ]]; then
+        preman() {
+                mandoc -T pdf "$(/usr/bin/man -w $@)" | open -fa Preview
+        }
+fi
 # Function to handle Git command suggestions
 copilot_git_suggest() {
         gh copilot suggest -t git "$@"
@@ -128,6 +143,12 @@ codex() {
 }
 
 # Fun
-flip() { echo -n "（╯°□°）╯ ┻━┻" |tee /dev/tty| pbcopy -selection clipboard; }
+flip() {
+        if command -v pbcopy >/dev/null 2>&1; then
+                echo -n "（╯°□°）╯ ┻━┻" | tee /dev/tty | pbcopy
+        else
+                echo -n "（╯°□°）╯ ┻━┻"
+        fi
+}
 
 # shrug() { echo -n "¯\_(ツ)_/¯" |tee /dev/tty| pbcopy -selection clipboard; }

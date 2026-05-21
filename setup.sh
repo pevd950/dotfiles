@@ -159,8 +159,83 @@ detect_platform() {
   uname
 }
 
+detect_linux_id() {
+  if [ -r /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo "${ID:-linux}"
+  else
+    echo "linux"
+  fi
+}
+
+debian_packages() {
+  cat <<'EOF'
+zsh
+yadm
+stow
+fzf
+fd-find
+bat
+direnv
+shellcheck
+EOF
+}
+
+linux_package_guidance() {
+  local linux_id="$1"
+
+  case "$linux_id" in
+    debian|ubuntu)
+      echo "Linux host detected: $linux_id"
+      echo "Debian/Ubuntu hosts should use apt packages, not Homebrew-on-Linux."
+      echo "Suggested prerequisites:"
+      echo "  sudo apt-get update"
+      echo "  sudo apt-get install -y $(debian_packages | tr '\n' ' ')"
+      echo
+      echo "No Linux packages were installed. Set DOTFILES_INSTALL_LINUX_PACKAGES=1 to opt in."
+      ;;
+    *)
+      echo "Linux host detected: $linux_id"
+      echo "No package installation was attempted. Install zsh, yadm, stow, fzf, fd, bat, and direnv with the host package manager."
+      ;;
+  esac
+}
+
+install_debian_packages() {
+  if ! command -v apt-get &> /dev/null; then
+    echo "apt-get is required for Debian package installation" >&2
+    return 1
+  fi
+  if ! command -v sudo &> /dev/null; then
+    echo "sudo is required for Debian package installation" >&2
+    return 1
+  fi
+
+  sudo apt-get update
+  # shellcheck disable=SC2046
+  sudo apt-get install -y $(debian_packages)
+}
+
 setup_packages() {
   local platform="$1"
+
+  if [[ "$platform" == "Linux" ]]; then
+    local linux_id
+    linux_id="$(detect_linux_id)"
+    linux_package_guidance "$linux_id"
+
+    if [[ "${DOTFILES_INSTALL_LINUX_PACKAGES:-0}" == "1" ]]; then
+      case "$linux_id" in
+        debian|ubuntu) install_debian_packages ;;
+        *)
+          echo "Automatic package installation is only implemented for Debian/Ubuntu" >&2
+          return 1
+          ;;
+      esac
+    fi
+    return 0
+  fi
 
   if [[ "$platform" != "Darwin" ]]; then
     return 0
@@ -225,6 +300,11 @@ setup_shell() {
   fi
 
   if [[ "$platform" == "Linux" ]]; then
+    echo "Skipping network shell installers on Linux by default."
+    echo "Install zsh/yadm with the system package manager first, review conflicts, then opt in with DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1 if desired."
+    if [[ "${DOTFILES_INSTALL_LINUX_SHELL_TOOLS:-0}" != "1" ]]; then
+      return 0
+    fi
     install_starship
     install_oh_my_zsh
   else
