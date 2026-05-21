@@ -33,13 +33,12 @@ Use the Craft MCP, not ad hoc export files.
 1. Resolve the Craft link before reading blocks.
 2. Read only the sections relevant to the task.
 3. For general orientation, read:
-   - how to use this doc
-   - source priority
-   - host registry
-   - project registry
-   - active cross-host context
-   - open loops
-   - latest decision log entries
+   - Start Here
+   - Latest Changes
+   - Active Cross-Host Context
+   - Open Loops
+   - Inbox / Host Messages collection items addressed to the current host or `Any`
+   - relevant index subpages: Host Registry, Project Registry, Agent Handoffs, Integration Inventory, and Decision Log
 4. For a project-specific request, read that project's registry entry and then verify against the project repo, project Craft docs, Todoist project, and other live systems as needed.
 5. State when an answer is based on shared memory and has not been live-verified.
 
@@ -49,39 +48,59 @@ Update shared memory when the user asks, when the task explicitly includes memor
 
 - Store one fact per bullet.
 - Prefer compact dated entries.
+- Keep the root page dashboard-like and human-scannable. Do not add large tables or long logs to the root.
 - Add correction notes instead of silently rewriting history when a prior fact was wrong.
 - Keep volatile items in active context or open loops with a review date.
 - Move stale or completed items out of active sections after live verification.
 - Never store secrets, tokens, passwords, private keys, full medical details, payment details, or unnecessary personal identifiers.
 - Use canonical links to point to source systems instead of copying long source content.
 - When updating opportunistically, keep the write small and mention it in the final handoff.
+- Use the Inbox / Host Messages collection for host-to-host coordination, not ordinary project tasks.
+- Mark a host message `Seen` only after reading it and `Done` only after acting or verifying it no longer needs action.
 
 ## Recommended Structure
 
-If the memory document needs restructuring, prefer these top-level areas:
+Use a compact dashboard root with nested pages for detail:
 
-- How To Use This Doc: short behavior rules for all agents.
-- Source Priority: explicit authority order for live systems, repo instructions, local memory, and shared memory.
-- Host Registry: each host's role, limitations, and local-only caveats.
-- Project Registry: canonical links for repos, Craft folders/docs, Todoist projects, and source-of-truth notes.
-- Active Cross-Host Context: current items any agent may need, each with a review date.
+- Start Here: short behavior rules, source priority, and safety reminders.
+- Latest Changes: the most recent 3-5 dated changes, newest first.
+- Active Cross-Host Context: current items any agent may need, kept short.
 - Open Loops: unresolved work with owner, next action, due/review date, and source link.
-- Decision Log: durable decisions with date, rationale, confidence, and revisit trigger.
+- Index: page cards for detail pages.
+
+Use these detail pages:
+
+- Inbox / Host Messages: a Craft collection for cross-host messages.
+- Host Registry: host roles, limitations, auth/tool caveats, and verification notes.
+- Project Registry: canonical links for repos, Craft folders/docs, Todoist projects, and source-of-truth notes.
 - Agent Handoffs: timestamped notes from one host/agent to another.
 - Integration Inventory: what is configured, where to verify it, and known failure modes; never include secret values.
+- Decision Log: durable decisions with date, rationale, confidence, and revisit trigger.
+
+Use collections only for workflow state. The Inbox / Host Messages collection is appropriate because rows have recipient, sender, status, area, review date, and optional link. Registries and inventories should stay as reference pages with compact tables or bullets unless they become workflow queues.
+
+Inbox / Host Messages collection schema:
+
+- Message: item title / short action or notice.
+- To: multi-select host target, including `Any` when host-independent.
+- From: single-select sender host, `User`, or `Any`.
+- Status: `Open`, `Seen`, `Done`, or `Stale`.
+- Area: short text such as `Dotfiles / shared memory rollout`.
+- Review Date: date for reassessment.
+- Link: optional canonical source URL.
 
 ## Agent Handoff Shape
 
 Use this shape for cross-host handoffs:
 
 ```text
-- Date:
-- Agent/host:
-- Area:
-- What changed:
-- Verified:
-- Remaining action:
-- Links:
+Date:
+Agent/host:
+Area:
+What changed:
+Verified:
+Remaining action:
+Links:
 ```
 
 Keep handoffs short enough to scan on a phone. Link to the canonical source instead of duplicating full logs.
