@@ -26,21 +26,37 @@ If shared memory conflicts with a live source or local project instructions, tru
 - On a new host, the user or agent may set `CRAFT_SHARED_MEMORY_URL` in that host's local ignored shell exports file so the memory document can be found without hard-coding the link into tracked dotfiles.
 - Do not hard-code private Craft block IDs, personal names, addresses, or host-specific paths into reusable skill files.
 
+## Host Identity
+
+Before reading host-targeted messages or writing shared memory, determine the current host identity:
+
+1. Prefer `AGENT_HOST_ALIAS` when it is set in a host-local ignored shell exports file.
+2. Otherwise run `hostname -s` and use that short hostname.
+3. Match the value against the Host Registry. If the hostname is unknown, use the raw value and add a short Host Registry or handoff note so future agents can map it.
+
+Use the resolved host identity consistently:
+
+- In Agent Handoffs, write `Agent/host: Codex on <Host>`.
+- In Inbox / Host Messages, use the host name in `From` and/or `To`.
+- When checking messages, read items addressed to the current host and `Any`.
+- Do not infer host identity from prior conversation memory if a live shell check is available.
+
 ## Read Protocol
 
 Use the Craft MCP, not ad hoc export files.
 
-1. Resolve the Craft link before reading blocks.
-2. Read only the sections relevant to the task.
-3. For general orientation, read:
+1. Resolve the current host identity.
+2. Resolve the Craft link before reading blocks.
+3. Read only the sections relevant to the task.
+4. For general orientation, read:
    - Start Here
    - Latest Changes
    - Active Cross-Host Context
    - Open Loops
    - Inbox / Host Messages collection items addressed to the current host or `Any`
    - relevant index subpages: Host Registry, Project Registry, Agent Handoffs, Integration Inventory, and Decision Log
-4. For a project-specific request, read that project's registry entry and then verify against the project repo, project Craft docs, Todoist project, and other live systems as needed.
-5. State when an answer is based on shared memory and has not been live-verified.
+5. For a project-specific request, read that project's registry entry and then verify against the project repo, project Craft docs, Todoist project, and other live systems as needed.
+6. State when an answer is based on shared memory and has not been live-verified.
 
 ## Update Protocol
 
