@@ -2,7 +2,7 @@
 
 Keep global Codex instructions repo-agnostic and free of project-specific workflow.
 
-Use this file for cross-repo personal operations guidance that should apply to assistant work launched from `/Users/pablovalero/Projects`.
+Use this file for cross-repo personal operations guidance that should apply to assistant work launched from the project directories alongside this file.
 
 When a repository under this folder provides its own `AGENTS.md` or nested `AGENTS.md` files, treat those as the source of truth for repo-specific workflow, tooling, validation, GitHub process, and coding conventions.
 
