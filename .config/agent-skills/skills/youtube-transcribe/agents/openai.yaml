@@ -1,0 +1,4 @@
+interface:
+  display_name: "YouTube Transcribe"
+  short_description: "Download YouTube videos and create local Whisper transcripts."
+  default_prompt: "Use YouTube Transcribe to download a YouTube URL, transcribe it, and save the artifacts to the configured output folder."

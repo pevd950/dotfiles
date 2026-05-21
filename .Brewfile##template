@@ -74,6 +74,8 @@ brew "kustomize"
 brew "swift-format"
 brew "xcbeautify"
 brew "yamlfmt"
+brew "ffmpeg"
+brew "whisper-cpp"
 brew "yt-dlp"
 brew "zellij"
 
