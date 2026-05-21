@@ -53,13 +53,19 @@ sudo apt-get install -y zsh yadm stow fzf fd-find bat direnv
 sudo apt-get install -y shellcheck
 ./scripts/check.sh
 
-# 3. Back up existing shell and git config before yadm owns anything.
+# 3. Back up existing files before yadm owns anything.
 mkdir -p ~/.dotfiles-backup
 cp -a ~/.bashrc ~/.profile ~/.gitconfig ~/.dotfiles-backup/ 2>/dev/null || true
+# Review and back up any existing paths yadm may manage, especially ~/.config/*,
+# ~/.zshrc_custom, ~/.codex, ~/.claude, and authenticated CLI config.
 
-# 4. Clone with yadm only after conflicts are reviewed.
+# 4. Clone with yadm only after the likely managed paths are reviewed.
 yadm clone --no-bootstrap https://github.com/pevd950/dotfiles.git
 yadm status
+# Resolve or intentionally leave conflicts before generating alternates.
+# Existing authenticated CLI config under ~/.config should stay unmanaged unless
+# it is deliberately migrated into public-safe tracked files.
+yadm diff
 yadm alt
 
 # 5. Test zsh before making it the login shell.
