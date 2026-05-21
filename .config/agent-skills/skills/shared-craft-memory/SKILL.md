@@ -72,6 +72,8 @@ Update shared memory when the user asks, when the task explicitly includes memor
 - Use canonical links to point to source systems instead of copying long source content.
 - When updating opportunistically, keep the write small and mention it in the final handoff.
 - Use the Inbox / Host Messages collection for host-to-host coordination, not ordinary project tasks.
+- For actionable work that each host must complete independently, create one Inbox / Host Messages item per host. Do not use one multi-recipient row because one host marking it `Done` would incorrectly complete it for every recipient.
+- Use multi-recipient `To` values only for FYI/broadcast messages where shared status is acceptable.
 - Mark a host message `Seen` only after reading it and `Done` only after acting or verifying it no longer needs action.
 
 ## Recommended Structure
@@ -94,6 +96,11 @@ Use these detail pages:
 - Decision Log: durable decisions with date, rationale, confidence, and revisit trigger.
 
 Use collections only for workflow state. The Inbox / Host Messages collection is appropriate because rows have recipient, sender, status, area, review date, and optional link. Registries and inventories should stay as reference pages with compact tables or bullets unless they become workflow queues.
+
+For per-host tasks, create separate rows:
+
+- Good: `Kakarot: pull dotfiles...` with `To = Kakarot`, `Broly: pull dotfiles...` with `To = Broly`.
+- Avoid: one `To = Kakarot, Broly, Tapion` row for work each host must complete independently.
 
 Inbox / Host Messages collection schema:
 
