@@ -19,65 +19,17 @@ yadm clone https://github.com/pevd950/dotfiles.git
 yadm bootstrap
 ```
 
-Operational infrastructure hosts should not start with `yadm clone` and
-`yadm bootstrap`; use the staged Debian/Linux infrastructure path below instead.
+### Linux
 
-### Debian/Linux Infrastructure Hosts
-
-Operational Linux hosts should start with review and validation, not immediate
-dotfile application. Debian hosts use `apt` packages; Homebrew-on-Linux is not a
-dependency for this repo.
-
-Minimal rollout prerequisites are `zsh` and `yadm`. The broader runtime package
-set below matches the shell features this repo enables on Debian. Full local
-validation also needs `shellcheck`.
-
-Recommended staged path:
+Linux hosts use their system package manager; Homebrew is only used on macOS.
 
 ```bash
-# 1. Review in a normal clone first. Do not use yadm yet.
-mkdir -p ~/Developer
-git clone https://github.com/pevd950/dotfiles.git ~/Developer/dotfiles
-cd ~/Developer/dotfiles
-
-# Run validation now only if shellcheck and zsh are already available.
-if command -v shellcheck >/dev/null 2>&1 && command -v zsh >/dev/null 2>&1; then
-  ./scripts/check.sh
-fi
-
-# 2. Later, install runtime/adoption prerequisites with apt after review.
-sudo apt-get update
-sudo apt-get install -y zsh yadm stow fzf fd-find bat direnv
-
-# Optional: install validation tooling before running the full local check.
-sudo apt-get install -y shellcheck
-./scripts/check.sh
-
-# 3. Back up existing files before yadm owns anything.
-mkdir -p ~/.dotfiles-backup
-cp -a ~/.bashrc ~/.profile ~/.gitconfig ~/.dotfiles-backup/ 2>/dev/null || true
-# Review and back up any existing paths yadm may manage, especially ~/.config/*,
-# ~/.zshrc_custom, ~/.codex, ~/.claude, and authenticated CLI config.
-
-# 4. Clone with yadm only after the likely managed paths are reviewed.
+sudo apt install yadm zsh
 yadm clone --no-bootstrap https://github.com/pevd950/dotfiles.git
-yadm status
-# Resolve or intentionally leave conflicts before generating alternates.
-# Existing authenticated CLI config under ~/.config should stay unmanaged unless
-# it is deliberately migrated into public-safe tracked files.
-yadm diff
-yadm alt
-
-# 5. Test zsh before making it the login shell.
-zsh -lic 'echo zsh startup ok'
 ```
 
-Keep bash as the login shell until zsh startup is proven safe in interactive and
-remote sessions. Only consider `chsh` after confirming a rollback path.
-
-Do not run `yadm bootstrap` on infrastructure hosts until Linux support and
-host-specific conflicts have been reviewed. Bootstrap may create directories,
-install shell tooling when explicitly opted in, and link shared agent skills.
+Review conflicts and bootstrap behavior on the target host before running
+`yadm bootstrap` or changing the login shell.
 
 ### Sync Existing Machine
 
