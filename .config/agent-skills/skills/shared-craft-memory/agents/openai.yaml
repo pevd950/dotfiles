@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shared Craft Memory"
+  short_description: "Use a Craft doc as supplemental shared memory across agents and hosts."
+  default_prompt: "Use shared Craft memory to orient on cross-host context, reconcile open loops, or write a concise agent handoff."

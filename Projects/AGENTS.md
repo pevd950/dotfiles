@@ -32,3 +32,6 @@ Avoid duplicating repository instructions here. Keep this file focused on person
 - State data gaps explicitly when a connected source is unavailable or unauthenticated.
 - Keep handoffs short, phone-readable, and link-rich when possible.
 - Use `AI_INBOX_DIR` as the shared artifact root for generated files the user should be able to inspect outside the current host, such as transcripts, debug evidence, test artifacts, exports, and other files that do not belong in a repo. Tool-specific output variables may point to subfolders under it.
+- For cross-host assistant context, use the `shared-craft-memory` skill when available. Read it for project-adjacent personal operations, host coordination, active cross-host loops, or agent handoffs that may matter outside the current machine.
+- Keep shared Craft memory current when a material cross-host fact changes and future agents are likely to need it. Do not use it as a general activity log; live systems, project docs, and repos remain authoritative.
+- On hosts that need shared Craft memory, set `CRAFT_SHARED_MEMORY_URL` in a local ignored shell exports file such as `~/.zshrc_custom/exports-local.zsh`. Do not hard-code the private Craft link in tracked dotfiles.
