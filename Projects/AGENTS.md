@@ -31,3 +31,4 @@ Avoid duplicating repository instructions here. Keep this file focused on person
 - Prefer live reads from source systems before creating tasks, notes, or summaries.
 - State data gaps explicitly when a connected source is unavailable or unauthenticated.
 - Keep handoffs short, phone-readable, and link-rich when possible.
+- Use `AI_INBOX_DIR` as the shared artifact root for generated files the user should be able to inspect outside the current host, such as transcripts, debug evidence, test artifacts, exports, and other files that do not belong in a repo. Tool-specific output variables may point to subfolders under it.
