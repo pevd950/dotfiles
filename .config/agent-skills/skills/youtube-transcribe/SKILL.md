@@ -1,6 +1,6 @@
 ---
 name: youtube-transcribe
-description: Download a YouTube video with yt-dlp, extract audio with ffmpeg, transcribe it with whisper.cpp, and save the media, transcript, subtitles, and metadata into a user-configured output folder such as iCloud Drive. Use when the user gives a YouTube URL and wants a local video/transcript archive.
+description: Download a YouTube video with yt-dlp, extract audio with ffmpeg, transcribe it with whisper.cpp, and save the media, transcript, subtitles, and metadata into a user-configured output folder such as a synced drive. Use when the user gives a YouTube URL and wants a local video/transcript archive.
 ---
 
 # YouTube Transcribe

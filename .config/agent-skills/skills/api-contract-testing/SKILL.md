@@ -47,7 +47,7 @@ Choose the narrowest useful set, then expand only where contract risk justifies 
 ### 4. Validate automatically
 - Run the most focused test package first.
 - Then run the broader repo target that matches the changed surface.
-- Prefer documented Make targets from the repository root. In Plato AI, likely candidates are `make go-test`, `make go-integration`, `make api-test-fast`, and any endpoint-specific integration commands documented in `AGENTS.md`, `tests/AGENTS.md`, or the Makefile.
+- Prefer documented Make targets from the repository root, including endpoint-specific integration commands documented in `AGENTS.md`, test-specific guidance, or the Makefile.
 
 ### 5. Validate against a local server
 - Start the backend with the repo-supported local workflow, usually `make dev` for the full stack or the documented host-only server target when dependencies are already available.
