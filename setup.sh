@@ -169,7 +169,7 @@ detect_linux_id() {
   fi
 }
 
-debian_packages() {
+debian_runtime_packages() {
   cat <<'EOF'
 zsh
 yadm
@@ -178,6 +178,11 @@ fzf
 fd-find
 bat
 direnv
+EOF
+}
+
+debian_validation_packages() {
+  cat <<'EOF'
 shellcheck
 EOF
 }
@@ -189,9 +194,11 @@ linux_package_guidance() {
     debian|ubuntu)
       echo "Linux host detected: $linux_id"
       echo "Debian/Ubuntu hosts should use apt packages, not Homebrew-on-Linux."
-      echo "Suggested prerequisites:"
+      echo "Suggested runtime/adoption prerequisites:"
       echo "  sudo apt-get update"
-      echo "  sudo apt-get install -y $(debian_packages | tr '\n' ' ')"
+      echo "  sudo apt-get install -y $(debian_runtime_packages | tr '\n' ' ')"
+      echo "Suggested validation tooling:"
+      echo "  sudo apt-get install -y $(debian_validation_packages | tr '\n' ' ')"
       echo
       echo "No Linux packages were installed. Set DOTFILES_INSTALL_LINUX_PACKAGES=1 to opt in."
       ;;
@@ -214,7 +221,7 @@ install_debian_packages() {
 
   sudo apt-get update
   # shellcheck disable=SC2046
-  sudo apt-get install -y $(debian_packages)
+  sudo apt-get install -y $(debian_runtime_packages)
 }
 
 setup_packages() {

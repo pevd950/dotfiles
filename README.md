@@ -6,6 +6,9 @@ Personal dotfiles managed with [yadm](https://yadm.io).
 
 ### New Machine
 
+This path is for normal interactive machines where applying dotfiles immediately
+is acceptable.
+
 ```bash
 # Install yadm
 brew install yadm  # macOS
@@ -16,8 +19,8 @@ yadm clone https://github.com/pevd950/dotfiles.git
 yadm bootstrap
 ```
 
-For operational infrastructure hosts, do not start with `yadm clone` and
-`yadm bootstrap`; use the staged Debian/Linux infrastructure path below.
+Operational infrastructure hosts should not start with `yadm clone` and
+`yadm bootstrap`; use the staged Debian/Linux infrastructure path below instead.
 
 ### Debian/Linux Infrastructure Hosts
 
@@ -25,9 +28,9 @@ Operational Linux hosts should start with review and validation, not immediate
 dotfile application. Debian hosts use `apt` packages; Homebrew-on-Linux is not a
 dependency for this repo.
 
-Minimal rollout prerequisites are `zsh` and `yadm`. Full local validation also
-needs `shellcheck`; the broader recommended package set below matches the shell
-features this repo enables on Debian.
+Minimal rollout prerequisites are `zsh` and `yadm`. The broader runtime package
+set below matches the shell features this repo enables on Debian. Full local
+validation also needs `shellcheck`.
 
 Recommended staged path:
 
@@ -36,11 +39,19 @@ Recommended staged path:
 mkdir -p ~/Developer
 git clone https://github.com/pevd950/dotfiles.git ~/Developer/dotfiles
 cd ~/Developer/dotfiles
-./scripts/check.sh
 
-# 2. Later, install prerequisites with apt after review.
+# Run validation now only if shellcheck and zsh are already available.
+if command -v shellcheck >/dev/null 2>&1 && command -v zsh >/dev/null 2>&1; then
+  ./scripts/check.sh
+fi
+
+# 2. Later, install runtime/adoption prerequisites with apt after review.
 sudo apt-get update
-sudo apt-get install -y zsh yadm stow fzf fd-find bat direnv shellcheck
+sudo apt-get install -y zsh yadm stow fzf fd-find bat direnv
+
+# Optional: install validation tooling before running the full local check.
+sudo apt-get install -y shellcheck
+./scripts/check.sh
 
 # 3. Back up existing shell and git config before yadm owns anything.
 mkdir -p ~/.dotfiles-backup
