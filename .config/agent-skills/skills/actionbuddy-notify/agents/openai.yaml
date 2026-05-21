@@ -1,0 +1,3 @@
+name: actionbuddy-notify
+description: Send the configured user a local notification through the ActionBuddy-backed macOS shortcut.
+entrypoint: SKILL.md
