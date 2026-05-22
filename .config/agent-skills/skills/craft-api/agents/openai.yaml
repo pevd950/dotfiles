@@ -1,0 +1,3 @@
+display_name: Craft API
+short_description: Use Craft over HTTP when MCP is unavailable.
+default_prompt: Use the Craft API skill to read or update Craft through the configured API connection, with readback verification.
