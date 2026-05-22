@@ -6,19 +6,21 @@ import urllib.error
 import urllib.request
 
 ENDPOINT = "https://api.raindrop.io/rest/v2/ai/mcp"
-PROTOCOL_VERSION = "2024-11-05"
+PROTOCOL_VERSION = "2025-11-25"
 
 
 class RaindropMcpClient:
     def __init__(self):
-        self.token = os.environ.get("RAINDROP_ACCESS_TOKEN")
-        if not self.token:
+        token = os.environ.get("RAINDROP_ACCESS_TOKEN")
+        if not token or not token.strip():
             raise SystemExit(
                 "RAINDROP_ACCESS_TOKEN is not set. Source the host's local shell exports "
                 "or set RAINDROP_ACCESS_TOKEN in the environment."
             )
+        self.token = token.strip()
         self.next_id = 1
         self.session_id = None
+        self.protocol_version = PROTOCOL_VERSION
 
     def request(self, method, params=None, expect_response=True):
         payload = {
@@ -36,7 +38,7 @@ class RaindropMcpClient:
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
-            "MCP-Protocol-Version": PROTOCOL_VERSION,
+            "MCP-Protocol-Version": self.protocol_version,
         }
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
@@ -81,6 +83,8 @@ class RaindropMcpClient:
                 "clientInfo": {"name": "codex-raindrop-helper", "version": "1"},
             },
         )
+        if isinstance(result, dict) and isinstance(result.get("protocolVersion"), str):
+            self.protocol_version = result["protocolVersion"]
         self.request("notifications/initialized", expect_response=False)
         return result
 
@@ -91,14 +95,20 @@ def decode_response(raw):
     except json.JSONDecodeError:
         pass
 
-    data_lines = []
+    event_payloads = []
+    event_data_lines = []
     for line in raw.splitlines():
         if line.startswith("data:"):
             data = line[5:].strip()
             if data and data != "[DONE]":
-                data_lines.append(data)
+                event_data_lines.append(data)
+        elif not line and event_data_lines:
+            event_payloads.append("\n".join(event_data_lines))
+            event_data_lines = []
+    if event_data_lines:
+        event_payloads.append("\n".join(event_data_lines))
 
-    for data in reversed(data_lines):
+    for data in reversed(event_payloads):
         try:
             return json.loads(data)
         except json.JSONDecodeError:
