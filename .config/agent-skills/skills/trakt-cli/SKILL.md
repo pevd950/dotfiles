@@ -8,6 +8,7 @@ description: Work with Trakt.tv through the local trakt-cli. Use when Codex need
 ## Core Rules
 
 - Use the local CLI directly. Prefer `trakt-cli` from `PATH`.
+- These examples target the `trakt-cli` command surface that exposes `configure`, `auth`, `me`, `movies`, `shows`, `recommendations`, and `sync` in `trakt-cli --help`. If a host has a different Trakt CLI package with only commands such as `search`, `history`, `watchlist`, `calendar`, and `progress`, treat it as an unsupported variant for this skill and inspect its help before proceeding.
 - Prove access with a live read before claiming Trakt works:
 
 ```bash
@@ -34,6 +35,8 @@ Use a descriptive app name such as `<host> Codex` or `Local Agent CLI`. For a lo
 ```text
 urn:ietf:wg:oauth:2.0:oob
 ```
+
+This is the out-of-band PIN-style OAuth flow used by the CLI; after `trakt-cli auth`, follow the printed browser/PIN instructions.
 
 Then configure and authenticate:
 
