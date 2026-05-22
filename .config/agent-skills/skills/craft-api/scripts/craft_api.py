@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -16,6 +17,7 @@ def main() -> int:
     parser.add_argument("--json-file", help="File containing JSON request body")
     parser.add_argument("--accept", default="application/json")
     parser.add_argument("--auth", choices=["bearer", "x-craft-api-key"], default="bearer")
+    parser.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
     args = parser.parse_args()
 
     base_url = os.environ.get("CRAFT_API_BASE_URL", "").rstrip("/")
@@ -42,10 +44,22 @@ def main() -> int:
         print("Use --json or --json-file, not both", file=sys.stderr)
         return 2
     if args.json_body:
-        body = json.dumps(json.loads(args.json_body)).encode("utf-8")
+        try:
+            body = json.dumps(json.loads(args.json_body)).encode("utf-8")
+        except json.JSONDecodeError as error:
+            print(f"Invalid JSON for --json: {error}", file=sys.stderr)
+            return 2
     elif args.json_file:
-        with open(args.json_file, "rb") as handle:
-            body = handle.read()
+        try:
+            with open(args.json_file, "rb") as handle:
+                body = handle.read()
+            json.loads(body)
+        except OSError as error:
+            print(f"Cannot read --json-file: {error}", file=sys.stderr)
+            return 2
+        except json.JSONDecodeError as error:
+            print(f"Invalid JSON in --json-file: {error}", file=sys.stderr)
+            return 2
 
     headers = {
         "Accept": args.accept,
@@ -60,15 +74,22 @@ def main() -> int:
 
     request = urllib.request.Request(url, data=body, headers=headers, method=args.method)
     try:
-        with urllib.request.urlopen(request) as response:
-            sys.stdout.buffer.write(response.read())
-            if not sys.stdout.isatty():
+        with urllib.request.urlopen(request, timeout=args.timeout) as response:
+            payload = response.read()
+            sys.stdout.buffer.write(payload)
+            if sys.stdout.isatty() and not payload.endswith(b"\n"):
                 sys.stdout.write("\n")
     except urllib.error.HTTPError as error:
         sys.stderr.write(f"Craft API returned HTTP {error.code}\n")
         detail = error.read().decode("utf-8", errors="replace")
         if detail:
             sys.stderr.write(detail[:2000] + "\n")
+        return 1
+    except urllib.error.URLError as error:
+        sys.stderr.write(f"Craft API request failed: {error.reason}\n")
+        return 1
+    except TimeoutError:
+        sys.stderr.write(f"Craft API request timed out after {args.timeout:g}s\n")
         return 1
 
     return 0
