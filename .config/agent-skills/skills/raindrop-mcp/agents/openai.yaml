@@ -1,0 +1,4 @@
+interface:
+  display_name: "Raindrop MCP"
+  short_description: "Work with Raindrop.io bookmarks through the official MCP endpoint."
+  default_prompt: "Use Raindrop MCP to verify access, search bookmarks, inspect tags/collections/highlights, or fetch bookmark content."
