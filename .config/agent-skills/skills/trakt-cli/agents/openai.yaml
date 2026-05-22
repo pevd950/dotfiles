@@ -1,0 +1,4 @@
+interface:
+  display_name: "Trakt CLI"
+  short_description: "Work with Trakt.tv data from the local CLI."
+  default_prompt: "Use Trakt CLI to inspect movies, shows, watchlists, calendars, recommendations, ratings, history, or playback."
