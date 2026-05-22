@@ -22,7 +22,7 @@ class RaindropMcpClient:
         self.session_id = None
         self.protocol_version = PROTOCOL_VERSION
 
-    def request(self, method, params=None, expect_response=True):
+    def request(self, method, params=None, expect_response=True, retry_session_expired=True):
         payload = {
             "jsonrpc": "2.0",
             "method": method,
@@ -57,6 +57,20 @@ class RaindropMcpClient:
                 if session_id:
                     self.session_id = session_id
         except urllib.error.HTTPError as exc:
+            if (
+                exc.code == 404
+                and self.session_id
+                and retry_session_expired
+                and method not in {"initialize", "notifications/initialized"}
+            ):
+                self.session_id = None
+                self.initialize()
+                return self.request(
+                    method,
+                    params,
+                    expect_response=expect_response,
+                    retry_session_expired=False,
+                )
             detail = exc.read().decode("utf-8", errors="replace")
             raise SystemExit(f"HTTP {exc.code}: {detail}") from exc
         except urllib.error.URLError as exc:
@@ -108,11 +122,16 @@ def decode_response(raw):
     if event_data_lines:
         event_payloads.append("\n".join(event_data_lines))
 
-    for data in reversed(event_payloads):
+    parsed_payloads = []
+    for data in event_payloads:
         try:
-            return json.loads(data)
+            parsed_payloads.append(json.loads(data))
         except json.JSONDecodeError:
             continue
+    if len(parsed_payloads) == 1:
+        return parsed_payloads[0]
+    if parsed_payloads:
+        return parsed_payloads
 
     raise SystemExit("Response was not valid JSON or JSON-bearing server-sent events.")
 
