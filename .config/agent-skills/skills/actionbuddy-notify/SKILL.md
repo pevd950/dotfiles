@@ -13,8 +13,9 @@ description: "Send the configured user a concise local notification through the 
 ## Requirements
 - The macOS shortcut must be named `Send Notification`.
 - The shortcut must contain ActionBuddy's `Send Notification` action.
-- The helper updates that shortcut just-in-time with the message body, runs it, then returns the shortcut to a neutral ready message.
-- The helper may need to run outside the sandbox because it touches `~/Library/Shortcuts/Shortcuts.sqlite`, quits Shortcuts to refresh cache, and invokes `shortcuts run`.
+- ActionBuddy's notification body must be wired to `Shortcut Input`.
+- The helper writes the message to a temporary text file and runs the shortcut with `shortcuts run "Send Notification" --input-path <file>`.
+- The helper reads `~/Library/Shortcuts/Shortcuts.sqlite` only to validate that the shortcut exists and is wired to `Shortcut Input`; it must not patch the notification body with the message text.
 
 ## Workflow
 1. Write a concise, phone-readable handoff.
@@ -35,7 +36,7 @@ description: "Send the configured user a concise local notification through the 
 - If no action is needed, say so explicitly.
 
 ## Notes
-- ActionBuddy's shortcut action currently hangs when its body is connected to dynamic Shortcut Input or Clipboard variables through the CLI runner.
-- The reliable path is to patch the shortcut body as a literal string before running the shortcut.
+- Do not rewrite the installed shortcut with the outgoing notification text.
+- If the helper reports that the ActionBuddy body is literal text, repair the shortcut so the body uses `Shortcut Input`, then rerun validation.
 - Readonly database and Shortcuts helper errors usually mean the notification was not delivered; treat them as delivery blockers unless a permitted retry succeeds.
-- Do not include secrets in notification text; the message is briefly stored in the local Shortcuts database while being sent.
+- Do not include secrets in notification text; the message is briefly written to a local temporary file while being sent.
