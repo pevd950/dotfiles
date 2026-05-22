@@ -79,6 +79,8 @@ class RaindropMcpClient:
         if not expect_response:
             return None
 
+        if not raw.strip() and self.session_id:
+            raw = self.read_stream_response()
         data = select_response(decode_response(raw), request_id)
         if "error" in data:
             raise SystemExit(json.dumps(data["error"], indent=2, sort_keys=True))
@@ -101,6 +103,23 @@ class RaindropMcpClient:
             self.protocol_version = result["protocolVersion"]
         self.request("notifications/initialized", expect_response=False)
         return result
+
+    def read_stream_response(self):
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "text/event-stream, application/json",
+            "MCP-Protocol-Version": self.protocol_version,
+            "Mcp-Session-Id": self.session_id,
+        }
+        req = urllib.request.Request(ENDPOINT, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise SystemExit(f"HTTP {exc.code} while reading MCP stream: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise SystemExit(f"MCP stream read failed: {exc.reason}") from exc
 
 
 def decode_response(raw):
@@ -136,16 +155,22 @@ def decode_response(raw):
     raise SystemExit("Response was not valid JSON or JSON-bearing server-sent events.")
 
 
-def select_response(data, request_id):
+def iter_response_objects(data):
     if isinstance(data, dict):
-        if data.get("id") != request_id:
-            raise SystemExit("Response did not match the active JSON-RPC request id.")
-        return data
-    if not isinstance(data, list):
+        yield data
+    elif isinstance(data, list):
+        for item in data:
+            yield from iter_response_objects(item)
+
+
+def select_response(data, request_id):
+    if not isinstance(data, (dict, list)):
         raise SystemExit("Response was not a JSON-RPC object or batch.")
-    for item in data:
-        if isinstance(item, dict) and item.get("id") == request_id:
+    for item in iter_response_objects(data):
+        if item.get("id") == request_id:
             return item
+    if isinstance(data, dict):
+        raise SystemExit("Response did not match the active JSON-RPC request id.")
     raise SystemExit("Batched response did not contain the active JSON-RPC request id.")
 
 
