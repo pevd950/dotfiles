@@ -1,0 +1,7 @@
+interface:
+  display_name: "Dotfiles Manager"
+  short_description: "Safely manage yadm dotfiles."
+  default_prompt: "Use $dotfiles-manager to safely inspect, edit, commit, push, or sync yadm-managed dotfiles with exact-path operations and no broad home-directory scans."
+
+policy:
+  allow_implicit_invocation: true
