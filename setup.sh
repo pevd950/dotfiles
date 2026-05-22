@@ -28,9 +28,11 @@ run_verified_script() {
 
   local tmp_script
   tmp_script="$(mktemp)"
-  trap 'rm -f "$tmp_script"' RETURN
 
-  curl -fsSL "$url" -o "$tmp_script"
+  if ! curl -fsSL "$url" -o "$tmp_script"; then
+    rm -f "$tmp_script"
+    return 1
+  fi
 
   local actual_sha256
   actual_sha256="$(sha256_file "$tmp_script")"
@@ -38,10 +40,17 @@ run_verified_script() {
     echo "Checksum verification failed for $url" >&2
     echo "Expected: $expected_sha256" >&2
     echo "Actual:   $actual_sha256" >&2
+    rm -f "$tmp_script"
     return 1
   fi
 
+  local status
+  set +e
   "$interpreter" "$tmp_script" "$@"
+  status=$?
+  set -e
+  rm -f "$tmp_script"
+  return "$status"
 }
 
 brewfile_font_casks() {
