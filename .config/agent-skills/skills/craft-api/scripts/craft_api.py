@@ -10,6 +10,9 @@ import urllib.parse
 import urllib.request
 
 
+MAX_TIMEOUT_SECONDS = 300.0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Call the Craft API using local env auth.")
     parser.add_argument("method", choices=["GET", "POST", "PUT", "DELETE"])
@@ -21,8 +24,8 @@ def main() -> int:
     parser.add_argument("--auth", choices=["bearer", "x-craft-api-key"], default="bearer")
     parser.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
     args = parser.parse_args()
-    if not math.isfinite(args.timeout) or args.timeout <= 0:
-        print("--timeout must be a positive finite number", file=sys.stderr)
+    if not math.isfinite(args.timeout) or args.timeout <= 0 or args.timeout > MAX_TIMEOUT_SECONDS:
+        print(f"--timeout must be a positive finite number <= {MAX_TIMEOUT_SECONDS:g}", file=sys.stderr)
         return 2
 
     base_url = os.environ.get("CRAFT_API_BASE_URL", "").rstrip("/")
@@ -65,8 +68,8 @@ def main() -> int:
     elif args.json_file:
         try:
             with open(args.json_file, "rb") as handle:
-                body = handle.read()
-            json.loads(body)
+                raw_body = handle.read()
+            body = json.dumps(json.loads(raw_body)).encode("utf-8")
         except OSError as error:
             print(f"Cannot read --json-file: {error}", file=sys.stderr)
             return 2
