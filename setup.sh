@@ -313,11 +313,12 @@ setup_shell() {
   fi
 
   if [[ "$platform" == "Linux" ]]; then
-    echo "Skipping network shell installers on Linux by default."
-    echo "Install zsh/yadm with the system package manager first, review conflicts, then opt in with DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1 if desired."
     if [[ "${DOTFILES_INSTALL_LINUX_SHELL_TOOLS:-0}" != "1" ]]; then
+      echo "Skipping network shell installers on Linux by default."
+      echo "Install zsh/yadm with the system package manager first, review conflicts, then opt in with DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1 if desired."
       return 0
     fi
+    echo "Installing Linux shell tools requested by DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1."
     install_starship
     install_oh_my_zsh
   else

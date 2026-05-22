@@ -1,8 +1,6 @@
 typeset -U path PATH
 
-# Debian hosts commonly use ~/.local/bin for user-scoped CLIs installed
-# outside apt. Keep it available without assuming Homebrew-on-Linux.
-[[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
+# Keep traditional user-local bin scripts available without assuming Homebrew-on-Linux.
 [[ -d "$HOME/bin" ]] && path=("$HOME/bin" $path)
 
 # Debian package names do not always match the upstream command names.
