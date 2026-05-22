@@ -341,7 +341,7 @@ setup_shell() {
   fi
 
   # Install Oh My Zsh plugins
-  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.zshrc_custom}/plugins/zsh-syntax-highlighting"
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || return 1
 }
 
