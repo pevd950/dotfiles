@@ -14,6 +14,7 @@ typeset -U path PATH
 # Paths and environment variables
 # Oh-my-zsh path
 export ZSH="$HOME/.oh-my-zsh"
+ZSH_CUSTOM="$HOME/.zshrc_custom"
 
 if [[ -d "$HOME/.local/bin" ]]; then
    path=("$HOME/.local/bin" $path)
@@ -22,11 +23,13 @@ fi
 if [[ "$(uname)" == "Darwin" ]]; then
    # macOS-specific configurations
    OS="macos"
-   source ~/.zshrc_custom/macos-exports
+   [[ -r "$ZSH_CUSTOM/macos-exports" ]] && source "$ZSH_CUSTOM/macos-exports"
 elif [[ "$(uname)" == "Linux" ]] && [ -e "/etc/debian_version" ]; then
    # Debian-based Linux configurations
    OS="debian"
-   source ~/.zshrc_custom/debian-exports
+   [[ -r "$ZSH_CUSTOM/debian-exports" ]] && source "$ZSH_CUSTOM/debian-exports"
+else
+   OS="unknown"
 fi
 
 # go module auth / proxy setup
@@ -49,23 +52,33 @@ ZSH_THEME=""
 plugins=(
    aliases
    colored-man-pages
-   copyfile
-   copypath
    docker
-   docker-compose
    encode64
    gh
    git
    golang
    per-directory-history
    history
-   kubectl
-   macos
    terraform
    web-search
    zsh-syntax-highlighting
-   1password
 )
+
+if command -v docker-compose >/dev/null 2>&1; then
+   plugins+=(docker-compose)
+elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+   plugins+=(docker-compose)
+fi
+
+if [[ "$OS" == "macos" ]]; then
+   plugins+=(
+      copyfile
+      copypath
+      kubectl
+      macos
+      1password
+   )
+fi
 #Disabled plugins
 # git-prompt
 # git-open
@@ -89,8 +102,11 @@ if [[ -n $SSH_CONNECTION ]]; then
 fi
 
 # Custom configurations
-ZSH_CUSTOM=~/.zshrc_custom
-source $ZSH/oh-my-zsh.sh
+if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
+   source "$ZSH/oh-my-zsh.sh"
+else
+   echo "Oh My Zsh not found at $ZSH; skipping plugin loading."
+fi
 
 # Source alias-local.zsh if it exists
 if [ -f "${ZSH_CUSTOM}/alias-local.zsh" ]; then
@@ -108,7 +124,7 @@ if [[ -d "${ZSH_CUSTOM}/bin" ]]; then
 fi
 
 # Init starship prompt when the terminal supports it.
-if [[ "${TERM:-}" != "dumb" ]]; then
+if [[ "${TERM:-}" != "dumb" ]] && command -v starship >/dev/null 2>&1; then
    eval "$(starship init zsh)"
 fi
 # Init shadowenv

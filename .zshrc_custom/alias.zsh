@@ -1,5 +1,6 @@
-#macOS
-alias o="open ."
+if [[ "$(uname)" == "Darwin" ]]; then
+  alias o="open ."
+fi
 
 # Search through your command history and print the top 10 commands
 alias history-stat="history 0 | awk '{print \$2}' | sort | uniq -c | sort -n -r | head"
@@ -18,7 +19,9 @@ alias gpush="git push"
 alias gm="git merge"
 alias gcb="git checkout -b"
 alias gclone="git clone"
-alias gt="gittower ."
+if command -v gittower >/dev/null 2>&1; then
+  alias gt="gittower ."
+fi
 alias gcr="git rebase --continue"
 
 # Docker
@@ -41,37 +44,56 @@ alias ypush="yadm push"
 alias yadd="yadm add"
 
 # Editor
-alias zshrc="code ~/.zshrc"
+if command -v code >/dev/null 2>&1; then
+  alias zshrc="code ~/.zshrc"
+  alias mystarship='code ~/.config/starship.toml'
+  alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
+  alias myfunctions='code "$ZSH_CUSTOM"/functions.zsh'
+  alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
+  alias myzshrc='code "$ZSH_CUSTOM"'
+  alias vsc='code .'
+  alias coden='code --new-window'
+fi
 alias nvzshrc='nvim ~/.zshrc'
 alias nvaliases='nvim "$ZSH_CUSTOM"/alias.zsh'
 alias nvstarship='nvim ~/.config/starship.toml'
-alias mystarship='code ~/.config/starship.toml'
-alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
-alias myfunctions='code "$ZSH_CUSTOM"/functions.zsh'
-alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
-alias myzshrc='code "$ZSH_CUSTOM"'
 
 # Command Overrides
-alias bcat='bat --paging=never'
-alias dir='exa --icons -s=Name'
+if command -v bat >/dev/null 2>&1; then
+  alias bcat='bat --paging=never'
+elif command -v batcat >/dev/null 2>&1; then
+  alias bcat='batcat --paging=never'
+fi
+if command -v eza >/dev/null 2>&1; then
+  alias dir='eza --icons -s=Name'
+elif command -v exa >/dev/null 2>&1; then
+  alias dir='exa --icons -s=Name'
+fi
 alias nv='nvim'
-alias ql='quick-look'
-alias pman='preman'
+if [[ "$(uname)" == "Darwin" ]]; then
+  alias ql='quick-look'
+  alias pman='preman'
+fi
 
 # Apps
 
 # MacUpdater
-alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'
-
-# VSCode
-alias vsc='code .'
-alias coden='code --new-window'
+if [[ "$(uname)" == "Darwin" && -x "/Applications/MacUpdater.app/Contents/Resources/macupdater_client" ]]; then
+  alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'
+fi
 
 # Copilot CLI
-alias wts='copilot_what-the-shell'
-alias '??'='copilot_shell_suggest'
-alias "git?"='copilot_git_suggest'
-alias 'gh?'='copilot_gh_suggest'
+if command -v gh >/dev/null 2>&1 \
+  && gh extension list 2>/dev/null | grep -Eq '^gh[[:space:]]+copilot([[:space:]]|$)'; then
+  alias wts='copilot_what-the-shell'
+  alias '??'='copilot_shell_suggest'
+  alias "git?"='copilot_git_suggest'
+  alias 'gh?'='copilot_gh_suggest'
+fi
 
 # Fun
-alias shrug="echo '¯\_(ツ)_/¯' | pbcopy"
+if command -v pbcopy >/dev/null 2>&1; then
+  alias shrug="echo '¯\_(ツ)_/¯' | pbcopy"
+else
+  alias shrug="echo '¯\_(ツ)_/¯'"
+fi

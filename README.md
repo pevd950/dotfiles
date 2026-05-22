@@ -6,6 +6,9 @@ Personal dotfiles managed with [yadm](https://yadm.io).
 
 ### New Machine
 
+This path is for normal interactive machines where applying dotfiles immediately
+is acceptable.
+
 ```bash
 # Install yadm
 brew install yadm  # macOS
@@ -15,6 +18,18 @@ sudo apt install yadm  # Ubuntu/Debian
 yadm clone https://github.com/pevd950/dotfiles.git
 yadm bootstrap
 ```
+
+### Linux
+
+Linux hosts use their system package manager; Homebrew is only used on macOS.
+
+```bash
+sudo apt install yadm zsh
+yadm clone --no-bootstrap https://github.com/pevd950/dotfiles.git
+```
+
+Review conflicts and bootstrap behavior on the target host before running
+`yadm bootstrap` or changing the login shell.
 
 ### Sync Existing Machine
 
@@ -94,8 +109,12 @@ This repo auto-configures Codespaces. GitHub runs `setup.sh` automatically (not 
 Shared environment bootstrap used by yadm bootstrap and Codespaces:
 - Oh My Zsh + plugins
 - Starship prompt
-- Homebrew installation (if needed) and `brew bundle --global`
-- Development tools via Brewfile plus Node version setup with nodenv
+- macOS: Homebrew installation (if needed) and `brew bundle --global`
+- Debian/Linux: prints apt package guidance by default and only installs apt
+  packages when `DOTFILES_INSTALL_LINUX_PACKAGES=1` is set
+- Debian/Linux: skips network shell installers by default; set
+  `DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1` only after reviewing host impact
+- macOS development tools via Brewfile plus Node version setup with nodenv
 
 ### `.config/yadm/bootstrap`
 Full yadm bootstrap:
