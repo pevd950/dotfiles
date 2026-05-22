@@ -37,7 +37,8 @@ def main() -> int:
     query = urllib.parse.urlencode(query_pairs, doseq=True)
     url = f"{base_url}{path}"
     if query:
-        url = f"{url}?{query}"
+        separator = "&" if urllib.parse.urlsplit(url).query else "?"
+        url = f"{url}{separator}{query}"
 
     body = None
     if args.json_body and args.json_file:
@@ -86,6 +87,9 @@ def main() -> int:
             sys.stderr.write(detail[:2000] + "\n")
         return 1
     except urllib.error.URLError as error:
+        if isinstance(error.reason, TimeoutError):
+            sys.stderr.write(f"Craft API request timed out after {args.timeout:g}s\n")
+            return 1
         sys.stderr.write(f"Craft API request failed: {error.reason}\n")
         return 1
     except TimeoutError:
