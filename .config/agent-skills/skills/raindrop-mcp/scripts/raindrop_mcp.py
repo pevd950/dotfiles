@@ -9,6 +9,10 @@ ENDPOINT = "https://api.raindrop.io/rest/v2/ai/mcp"
 PROTOCOL_VERSION = "2025-11-25"
 
 
+class SessionExpired(Exception):
+    pass
+
+
 class RaindropMcpClient:
     def __init__(self):
         token = os.environ.get("RAINDROP_ACCESS_TOKEN")
@@ -20,6 +24,7 @@ class RaindropMcpClient:
         self.token = token.strip()
         self.next_id = 1
         self.session_id = None
+        self.last_event_id = None
         self.protocol_version = PROTOCOL_VERSION
 
     def request(self, method, params=None, expect_response=True, retry_session_expired=True):
@@ -52,10 +57,10 @@ class RaindropMcpClient:
 
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
                 session_id = resp.headers.get("Mcp-Session-Id")
                 if session_id:
                     self.session_id = session_id
+                response = self.read_response(resp, request_id)
         except urllib.error.HTTPError as exc:
             if (
                 exc.code == 404
@@ -79,9 +84,27 @@ class RaindropMcpClient:
         if not expect_response:
             return None
 
-        if not raw.strip() and self.session_id:
-            raw = self.read_stream_response()
-        data = select_response(decode_response(raw), request_id)
+        try:
+            data = select_response(decode_response(response), request_id)
+        except SystemExit as exc:
+            if self.session_id:
+                try:
+                    response = self.read_stream_response(request_id)
+                except SessionExpired:
+                    if retry_session_expired and method not in {"initialize", "notifications/initialized"}:
+                        self.session_id = None
+                        self.last_event_id = None
+                        self.initialize()
+                        return self.request(
+                            method,
+                            params,
+                            expect_response=expect_response,
+                            retry_session_expired=False,
+                        )
+                    raise exc
+                data = select_response(decode_response(response), request_id)
+            else:
+                raise exc
         if "error" in data:
             raise SystemExit(json.dumps(data["error"], indent=2, sort_keys=True))
         result = data.get("result", data)
@@ -104,18 +127,28 @@ class RaindropMcpClient:
         self.request("notifications/initialized", expect_response=False)
         return result
 
-    def read_stream_response(self):
+    def read_response(self, resp, request_id):
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/event-stream" in content_type:
+            return read_sse_events(resp, request_id, self)
+        return resp.read().decode("utf-8", errors="replace")
+
+    def read_stream_response(self, request_id):
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "text/event-stream, application/json",
             "MCP-Protocol-Version": self.protocol_version,
             "Mcp-Session-Id": self.session_id,
         }
+        if self.last_event_id:
+            headers["Last-Event-ID"] = self.last_event_id
         req = urllib.request.Request(ENDPOINT, headers=headers, method="GET")
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
-                return resp.read().decode("utf-8", errors="replace")
+                return self.read_response(resp, request_id)
         except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise SessionExpired from exc
             detail = exc.read().decode("utf-8", errors="replace")
             raise SystemExit(f"HTTP {exc.code} while reading MCP stream: {detail}") from exc
         except urllib.error.URLError as exc:
@@ -123,6 +156,8 @@ class RaindropMcpClient:
 
 
 def decode_response(raw):
+    if isinstance(raw, (dict, list)):
+        return raw
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -130,15 +165,20 @@ def decode_response(raw):
 
     event_payloads = []
     event_data_lines = []
+    event_id = None
     for line in raw.splitlines():
         if line.startswith("data:"):
-            data = line[5:].strip()
-            if data and data != "[DONE]":
+            data = strip_sse_field_value(line[5:])
+            if data != "[DONE]":
                 event_data_lines.append(data)
-        elif not line and event_data_lines:
-            event_payloads.append("\n".join(event_data_lines))
+        elif line.startswith("id:"):
+            event_id = strip_sse_field_value(line[3:])
+        elif not line:
+            if event_id is not None or event_data_lines:
+                event_payloads.append("\n".join(event_data_lines))
             event_data_lines = []
-    if event_data_lines:
+            event_id = None
+    if event_id is not None or event_data_lines:
         event_payloads.append("\n".join(event_data_lines))
 
     parsed_payloads = []
@@ -153,6 +193,58 @@ def decode_response(raw):
         return parsed_payloads
 
     raise SystemExit("Response was not valid JSON or JSON-bearing server-sent events.")
+
+
+def strip_sse_field_value(value):
+    if value.startswith(" "):
+        return value[1:]
+    return value
+
+
+def read_sse_events(resp, request_id, client):
+    parsed_payloads = []
+    event_data_lines = []
+    event_id = None
+    for raw_line in resp:
+        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+        if line.startswith("id:"):
+            event_id = strip_sse_field_value(line[3:])
+            if event_id:
+                client.last_event_id = event_id
+        elif line.startswith("data:"):
+            data = strip_sse_field_value(line[5:])
+            if data != "[DONE]":
+                event_data_lines.append(data)
+        elif line == "":
+            parsed = parse_sse_event(event_data_lines)
+            if parsed is not None:
+                parsed_payloads.append(parsed)
+                try:
+                    return select_response(parsed, request_id)
+                except SystemExit:
+                    pass
+            event_data_lines = []
+            event_id = None
+    parsed = parse_sse_event(event_data_lines)
+    if parsed is not None:
+        parsed_payloads.append(parsed)
+        try:
+            return select_response(parsed, request_id)
+        except SystemExit:
+            pass
+    return parsed_payloads
+
+
+def parse_sse_event(event_data_lines):
+    if not event_data_lines:
+        return None
+    payload = "\n".join(event_data_lines)
+    if not payload:
+        return None
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return None
 
 
 def iter_response_objects(data):
