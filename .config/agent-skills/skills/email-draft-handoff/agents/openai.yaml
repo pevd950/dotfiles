@@ -1,0 +1,4 @@
+name: email-draft-handoff
+description: Create tappable prefilled email draft links with plain-text fallback.
+entrypoint: SKILL.md
+
