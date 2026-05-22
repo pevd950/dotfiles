@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 
 ENDPOINT = "https://api.raindrop.io/rest/v2/ai/mcp"
+PROTOCOL_VERSION = "2024-11-05"
 
 
 class RaindropMcpClient:
@@ -19,19 +20,23 @@ class RaindropMcpClient:
         self.next_id = 1
         self.session_id = None
 
-    def request(self, method, params=None):
+    def request(self, method, params=None, expect_response=True):
         payload = {
             "jsonrpc": "2.0",
-            "id": self.next_id,
             "method": method,
             "params": params or {},
         }
-        self.next_id += 1
+        request_id = None
+        if expect_response:
+            request_id = self.next_id
+            payload["id"] = request_id
+            self.next_id += 1
 
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
+            "MCP-Protocol-Version": PROTOCOL_VERSION,
         }
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
@@ -55,21 +60,29 @@ class RaindropMcpClient:
         except urllib.error.URLError as exc:
             raise SystemExit(f"Request failed: {exc.reason}") from exc
 
-        data = decode_response(raw)
+        if not expect_response:
+            return None
+
+        data = select_response(decode_response(raw), request_id)
         if "error" in data:
             raise SystemExit(json.dumps(data["error"], indent=2, sort_keys=True))
         result = data.get("result", data)
-        return unwrap_content_text(result)
+        result = unwrap_content_text(result)
+        if isinstance(result, dict) and result.get("isError") is True:
+            raise SystemExit(json.dumps(result, indent=2, sort_keys=True))
+        return result
 
     def initialize(self):
-        return self.request(
+        result = self.request(
             "initialize",
             {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {},
                 "clientInfo": {"name": "codex-raindrop-helper", "version": "1"},
             },
         )
+        self.request("notifications/initialized", expect_response=False)
+        return result
 
 
 def decode_response(raw):
@@ -81,7 +94,7 @@ def decode_response(raw):
     data_lines = []
     for line in raw.splitlines():
         if line.startswith("data:"):
-            data = line.removeprefix("data:").strip()
+            data = line[5:].strip()
             if data and data != "[DONE]":
                 data_lines.append(data)
 
@@ -92,6 +105,20 @@ def decode_response(raw):
             continue
 
     raise SystemExit("Response was not valid JSON or JSON-bearing server-sent events.")
+
+
+def select_response(data, request_id):
+    if isinstance(data, dict):
+        return data
+    if not isinstance(data, list):
+        raise SystemExit("Response was not a JSON-RPC object or batch.")
+    for item in data:
+        if isinstance(item, dict) and item.get("id") == request_id:
+            return item
+    for item in data:
+        if isinstance(item, dict) and ("result" in item or "error" in item):
+            return item
+    raise SystemExit("Batched response did not contain a usable JSON-RPC response.")
 
 
 def unwrap_content_text(result):
