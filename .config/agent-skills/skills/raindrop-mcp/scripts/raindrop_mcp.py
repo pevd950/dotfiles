@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -25,7 +26,13 @@ class RaindropMcpClient:
         self.next_id = 1
         self.session_id = None
         self.last_event_id = None
+        self.retry_delay_ms = None
         self.protocol_version = PROTOCOL_VERSION
+
+    def reset_session(self):
+        self.session_id = None
+        self.last_event_id = None
+        self.retry_delay_ms = None
 
     def request(self, method, params=None, expect_response=True, retry_session_expired=True):
         payload = {
@@ -66,10 +73,12 @@ class RaindropMcpClient:
                 exc.code == 404
                 and self.session_id
                 and retry_session_expired
-                and method not in {"initialize", "notifications/initialized"}
+                and method != "initialize"
             ):
-                self.session_id = None
-                self.initialize()
+                self.reset_session()
+                self.initialize(retry_session_expired=False)
+                if method == "notifications/initialized":
+                    return None
                 return self.request(
                     method,
                     params,
@@ -91,10 +100,9 @@ class RaindropMcpClient:
                 try:
                     response = self.read_stream_response(request_id)
                 except SessionExpired:
-                    if retry_session_expired and method not in {"initialize", "notifications/initialized"}:
-                        self.session_id = None
-                        self.last_event_id = None
-                        self.initialize()
+                    if retry_session_expired and method != "initialize":
+                        self.reset_session()
+                        self.initialize(retry_session_expired=False)
                         return self.request(
                             method,
                             params,
@@ -113,7 +121,7 @@ class RaindropMcpClient:
             raise SystemExit(json.dumps(result, indent=2, sort_keys=True))
         return result
 
-    def initialize(self):
+    def initialize(self, retry_session_expired=True):
         result = self.request(
             "initialize",
             {
@@ -121,10 +129,15 @@ class RaindropMcpClient:
                 "capabilities": {},
                 "clientInfo": {"name": "codex-raindrop-helper", "version": "1"},
             },
+            retry_session_expired=retry_session_expired,
         )
         if isinstance(result, dict) and isinstance(result.get("protocolVersion"), str):
             self.protocol_version = result["protocolVersion"]
-        self.request("notifications/initialized", expect_response=False)
+        self.request(
+            "notifications/initialized",
+            expect_response=False,
+            retry_session_expired=retry_session_expired,
+        )
         return result
 
     def read_response(self, resp, request_id):
@@ -134,6 +147,8 @@ class RaindropMcpClient:
         return resp.read().decode("utf-8", errors="replace")
 
     def read_stream_response(self, request_id):
+        if self.retry_delay_ms is not None:
+            time.sleep(self.retry_delay_ms / 1000)
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Accept": "text/event-stream, application/json",
@@ -215,6 +230,10 @@ def read_sse_events(resp, request_id, client):
             data = strip_sse_field_value(line[5:])
             if data != "[DONE]":
                 event_data_lines.append(data)
+        elif line.startswith("retry:"):
+            retry = strip_sse_field_value(line[6:])
+            if retry.isdigit():
+                client.retry_delay_ms = int(retry)
         elif line == "":
             parsed = parse_sse_event(event_data_lines)
             if parsed is not None:
