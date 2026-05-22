@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import math
 import sys
 import urllib.error
 import urllib.parse
@@ -19,11 +20,18 @@ def main() -> int:
     parser.add_argument("--auth", choices=["bearer", "x-craft-api-key"], default="bearer")
     parser.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
     args = parser.parse_args()
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        print("--timeout must be a positive finite number", file=sys.stderr)
+        return 2
 
     base_url = os.environ.get("CRAFT_API_BASE_URL", "").rstrip("/")
     api_key = os.environ.get("CRAFT_API_KEY", "")
     if not base_url or not api_key:
         print("CRAFT_API_BASE_URL and CRAFT_API_KEY must be set", file=sys.stderr)
+        return 2
+    parsed_base_url = urllib.parse.urlsplit(base_url)
+    if parsed_base_url.scheme not in {"http", "https"} or not parsed_base_url.netloc:
+        print("CRAFT_API_BASE_URL must be an absolute http(s) URL", file=sys.stderr)
         return 2
 
     path = args.path if args.path.startswith("/") else f"/{args.path}"
@@ -57,6 +65,9 @@ def main() -> int:
             json.loads(body)
         except OSError as error:
             print(f"Cannot read --json-file: {error}", file=sys.stderr)
+            return 2
+        except UnicodeDecodeError as error:
+            print(f"Invalid UTF-8 in --json-file: {error}", file=sys.stderr)
             return 2
         except json.JSONDecodeError as error:
             print(f"Invalid JSON in --json-file: {error}", file=sys.stderr)
