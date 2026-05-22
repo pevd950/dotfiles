@@ -99,7 +99,7 @@ class RaindropMcpClient:
             if self.session_id:
                 try:
                     response = self.read_stream_response(request_id)
-                except SessionExpired:
+                except SessionExpired as stream_exc:
                     if retry_session_expired and method != "initialize":
                         self.reset_session()
                         self.initialize(retry_session_expired=False)
@@ -109,7 +109,10 @@ class RaindropMcpClient:
                             expect_response=expect_response,
                             retry_session_expired=False,
                         )
-                    raise exc
+                    raise SystemExit(
+                        f"MCP session expired while reading fallback stream for {method}; "
+                        "the request could not be retried."
+                    ) from stream_exc
                 data = select_response(decode_response(response), request_id)
             else:
                 raise exc
