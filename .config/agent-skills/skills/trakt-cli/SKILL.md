@@ -8,7 +8,7 @@ description: Work with Trakt.tv through the local trakt-cli. Use when Codex need
 ## Core Rules
 
 - Use the local CLI directly. Prefer `trakt-cli` from `PATH`.
-- These examples target the `trakt-cli` command surface that exposes `configure`, `auth`, `me`, `movies`, `shows`, `recommendations`, and `sync` in `trakt-cli --help`. If a host has a different Trakt CLI package with only commands such as `search`, `history`, `watchlist`, `calendar`, and `progress`, treat it as an unsupported variant for this skill and inspect its help before proceeding.
+- These examples target the `trakt-cli` command surface that exposes `configure`, `auth`, `me`, `movies`, `shows`, `recommendations`, `calendars`, and `sync` in `trakt-cli --help`. If a host has a different Trakt CLI package with commands such as `search`, `history`, `watchlist`, `calendar`, and `progress`, treat it as a different supported command surface: inspect its help and translate the workflow instead of applying these examples verbatim.
 - Prove access with a live read before claiming Trakt works:
 
 ```bash
@@ -61,8 +61,8 @@ Browse:
 ```bash
 trakt-cli movies trending --json
 trakt-cli shows trending --json
-trakt-cli calendars shows --json
-trakt-cli calendars premieres --json
+trakt-cli calendars my-shows --json
+trakt-cli calendars all-new-shows --json
 ```
 
 Personal data:

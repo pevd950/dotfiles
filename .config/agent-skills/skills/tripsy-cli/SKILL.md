@@ -45,7 +45,7 @@ Trip details:
 "$TRIPSY_BIN" hostings list --trip <trip-id> --json
 "$TRIPSY_BIN" transportations list --trip <trip-id> --json
 "$TRIPSY_BIN" expenses list --trip <trip-id> --json
-"$TRIPSY_BIN" collaborators --trip <trip-id> --json
+"$TRIPSY_BIN" collaborators list --trip <trip-id> --json
 ```
 
 Agent command catalog:
