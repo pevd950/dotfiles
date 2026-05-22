@@ -1,0 +1,18 @@
+[credential]
+	helper = osxkeychain
+
+[diff]
+	tool = Kaleidoscope
+[difftool]
+	prompt = false
+[difftool "Kaleidoscope"]
+	cmd = ksdiff --partial-changeset --relative-path "$MERGED" -- "$LOCAL" "$REMOTE"
+
+[core]
+	pager = delta
+[interactive]
+	diffFilter = delta --color-only
+[delta]
+	navigate = true
+	light = false
+	line-numbers = true
