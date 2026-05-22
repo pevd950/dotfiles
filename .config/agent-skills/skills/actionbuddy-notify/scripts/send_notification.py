@@ -8,58 +8,12 @@ import plistlib
 import sqlite3
 import subprocess
 import sys
-import time
+import tempfile
 from pathlib import Path
 
 
 SHORTCUT_NAME = "Send Notification"
 DB_PATH = Path.home() / "Library" / "Shortcuts" / "Shortcuts.sqlite"
-READY_MESSAGE = "ActionBuddy notification relay ready."
-MAC_EPOCH_OFFSET = 978307200
-
-
-def mac_time() -> float:
-    return time.time() - MAC_EPOCH_OFFSET
-
-
-def build_actions(message: str) -> bytes:
-    send_uuid = "E4708B92-5AB2-498F-ADCF-2C3878AA8D7B"
-    output_uuid = "D4D835D6-8350-4B1D-80F4-093D80AAA4F7"
-    actions = [
-        {
-            "WFWorkflowActionIdentifier": "codes.rambo.ActionBuddy.SendNotification",
-            "WFWorkflowActionParameters": {
-                "AppIntentDescriptor": {
-                    "AppIntentIdentifier": "SendNotification",
-                    "BundleIdentifier": "codes.rambo.ActionBuddy",
-                    "Name": "ActionBuddy",
-                    "TeamIdentifier": "8C7439RJLG",
-                },
-                "body": message,
-                "UUID": send_uuid,
-            },
-        },
-        {
-            "WFWorkflowActionIdentifier": "is.workflow.actions.output",
-            "WFWorkflowActionParameters": {
-                "UUID": output_uuid,
-                "WFOutput": {
-                    "Value": {
-                        "attachmentsByRange": {
-                            "{0, 1}": {
-                                "OutputName": "Send Notification",
-                                "OutputUUID": send_uuid,
-                                "Type": "ActionOutput",
-                            }
-                        },
-                        "string": "\ufffc",
-                    },
-                    "WFSerializationType": "WFTextTokenString",
-                },
-            },
-        },
-    ]
-    return plistlib.dumps(actions, fmt=plistlib.FMT_BINARY)
 
 
 def connect_db() -> sqlite3.Connection:
@@ -68,41 +22,19 @@ def connect_db() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH)
 
 
-def find_shortcut(conn: sqlite3.Connection) -> tuple[int, int]:
+def find_shortcut(conn: sqlite3.Connection) -> int:
     row = conn.execute(
-        "select Z_PK, ZACTIONS from ZSHORTCUT where ZNAME = ?",
+        "select Z_PK from ZSHORTCUT where ZNAME = ?",
         (SHORTCUT_NAME,),
     ).fetchone()
     if not row:
         raise RuntimeError(f"Shortcut not found: {SHORTCUT_NAME}")
-    return int(row[0]), int(row[1])
-
-
-def patch_shortcut(message: str) -> None:
-    with connect_db() as conn:
-        shortcut_pk, actions_pk = find_shortcut(conn)
-        data = build_actions(message)
-        conn.execute(
-            "update ZSHORTCUTACTIONS set ZDATA = ? where Z_PK = ?",
-            (data, actions_pk),
-        )
-        conn.execute(
-            """
-            update ZSHORTCUT
-            set ZACTIONCOUNT = 2,
-                ZHASSHORTCUTINPUTVARIABLES = 0,
-                ZACTIONSDESCRIPTION = ?,
-                ZMODIFICATIONDATE = ?
-            where Z_PK = ?
-            """,
-            ("Send Notification and Stop and Output", mac_time(), shortcut_pk),
-        )
-        conn.commit()
+    return int(row[0])
 
 
 def validate_shortcut() -> None:
     with connect_db() as conn:
-        shortcut_pk, _ = find_shortcut(conn)
+        shortcut_pk = find_shortcut(conn)
         data_row = conn.execute(
             "select ZDATA from ZSHORTCUTACTIONS where ZSHORTCUT = ?",
             (shortcut_pk,),
@@ -116,6 +48,20 @@ def validate_shortcut() -> None:
     )
     if not has_actionbuddy:
         raise RuntimeError("Send Notification shortcut does not contain ActionBuddy Send Notification action")
+    body = next(
+        action.get("WFWorkflowActionParameters", {}).get("body")
+        for action in actions
+        if action.get("WFWorkflowActionIdentifier") == "codes.rambo.ActionBuddy.SendNotification"
+    )
+    if not isinstance(body, dict):
+        raise RuntimeError("ActionBuddy body is literal text; it must use Shortcut Input")
+    value = body.get("Value", {})
+    attachments = value.get("attachmentsByRange", {})
+    if not any(
+        isinstance(attachment, dict) and attachment.get("Type") == "ExtensionInput"
+        for attachment in attachments.values()
+    ):
+        raise RuntimeError("ActionBuddy body is not wired to Shortcut Input")
 
 
 def quit_shortcuts() -> None:
@@ -127,15 +73,21 @@ def quit_shortcuts() -> None:
     )
 
 
-def run_shortcut(timeout: int) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["shortcuts", "run", SHORTCUT_NAME],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout,
-        check=False,
-    )
+def run_shortcut(message: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as input_file:
+        input_file.write(message)
+        input_path = Path(input_file.name)
+    try:
+        return subprocess.run(
+            ["shortcuts", "run", SHORTCUT_NAME, "--input-path", str(input_path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    finally:
+        input_path.unlink(missing_ok=True)
 
 
 def check_message(message: str) -> None:
@@ -161,10 +113,8 @@ def main() -> int:
             print(f"OK: {SHORTCUT_NAME} is available; message length={len(args.message)}")
             return 0
 
-        patch_shortcut(args.message)
         quit_shortcuts()
-        result = run_shortcut(args.timeout)
-        patch_shortcut(READY_MESSAGE)
+        result = run_shortcut(args.message, args.timeout)
 
         if result.returncode != 0:
             stderr = result.stderr.strip() or "no stderr"
@@ -174,7 +124,6 @@ def main() -> int:
         print(f"OK: {output}")
         return 0
     except subprocess.TimeoutExpired:
-        patch_shortcut(READY_MESSAGE)
         print(f"ERROR: Shortcut timed out after {args.timeout}s", file=sys.stderr)
         return 1
     except Exception as exc:

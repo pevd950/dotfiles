@@ -8,3 +8,5 @@ typeset -U path PATH
 [[ -d "$HOME/.zshrc_custom/bin" ]] && path=("$HOME/.zshrc_custom/bin" $path)
 
 export PATH
+
+[[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"
