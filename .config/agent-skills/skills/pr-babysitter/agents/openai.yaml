@@ -1,0 +1,7 @@
+interface:
+  display_name: "PR Babysitter"
+  short_description: "Monitor a PR through CI and bot review."
+  default_prompt: "Use $pr-babysitter to monitor this PR through CI and bot review, address validated bot feedback with evidence, avoid replying to human reviewers unless approved, and ping me when it is ready for final review."
+
+policy:
+  allow_implicit_invocation: true

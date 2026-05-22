@@ -1,0 +1,215 @@
+---
+name: pr-babysitter
+description: Monitor and shepherd an open GitHub pull request through CI and bot review loops until it is ready for human final review. Use when the user asks to babysit, monitor, watch, keep an eye on, or continue a PR review loop; when they expect CodeRabbit/Claude/Cursor/Copilot/Codex feedback to be handled; or when a PR should be kept moving with automations while checks and reviews run. This skill is for sustained PR readiness, not one-shot feedback fixes.
+---
+
+# PR Babysitter
+
+## Objective
+
+Keep a PR moving until it reaches the user-defined readiness bar, usually:
+
+- PR is not draft, unless the user explicitly wants it left draft.
+- Required CI/checks are green or intentionally skipped.
+- CodeRabbit is green/approved, or latest CodeRabbit status is explicitly non-actionable.
+- Claude/review-with-tracking is clean.
+- Cursor/Copilot/Codex bot comments, top-level review bodies, and unresolved threads have no live actionable findings.
+- Every addressed bot finding has a reply with commit SHA and validation evidence.
+- Human reviewers are surfaced to the user, not answered automatically.
+
+Do not merge unless the user explicitly asks for merge in the active prompt.
+
+## Relationship To PR Feedback Skill
+
+Use this skill for the long-running loop. Use `gh-pr-address-feedback` inside the loop when there are concrete comments or failing GitHub Actions checks to triage.
+
+Division of responsibility:
+
+- `pr-babysitter`: monitor, poll, decide when to keep waiting, set/update automations, enforce readiness criteria, avoid responding to humans.
+- `gh-pr-address-feedback`: validate each bot claim, inspect logs, make scoped fixes, commit/push, reply with evidence, resolve threads.
+
+## Startup Checklist
+
+1. Confirm GitHub context:
+   - `gh auth status`
+   - `gh repo view --json nameWithOwner -q .nameWithOwner`
+   - `gh pr view <pr> --json number,url,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,reviewDecision`
+2. Confirm local branch safety before edits:
+   - `git status --short`
+   - Stop and ask if unrelated uncommitted changes are present.
+   - Work only on the PR head branch unless the user asked for a read-only monitor.
+3. Gather the complete review corpus every loop:
+   - Inline diff comments:
+     `gh api repos/{owner}/{repo}/pulls/<pr>/comments --paginate`
+   - Top-level PR comments:
+     `gh api repos/{owner}/{repo}/issues/<pr>/comments --paginate`
+   - Review submissions and bodies:
+     `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate`
+   - Review threads:
+     `gh api graphql -f query='query { repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<pr>) { reviewThreads(first:100) { nodes { id isResolved comments(first:30) { nodes { databaseId author { login } body path line createdAt } } } } } } }'`
+   - Checks:
+     `gh pr checks <pr> --json name,state,bucket,link,workflow,startedAt,completedAt`
+
+Always inspect review bodies, not only inline comments. Bots often put actionable findings in review summaries or top-level comments.
+
+## Reviewer Policy
+
+### Bot Reviewers
+
+Treat these as generally actionable after validation:
+
+- `coderabbitai[bot]`
+- `claude[bot]` and `review-with-tracking`
+- `cursor[bot]` / Cursor Bugbot
+- `copilot-pull-request-reviewer[bot]`
+- `chatgpt-codex-connector[bot]`
+- other repo-approved automation accounts named by the user
+
+For bot feedback:
+
+1. Validate the claim against current PR head.
+2. Skip stale or incorrect claims with a brief evidence-backed reply.
+3. Fix only scoped, still-valid issues.
+4. Run the smallest meaningful validation.
+5. Commit and push.
+6. Reply inline when possible, or top-level if the finding exists only in a review body.
+7. Resolve the GitHub review thread after the fix/reply is pushed.
+8. Restart monitoring on the new SHA.
+
+### Human Reviewers
+
+Do not automatically reply to, resolve, dismiss, or argue with human-authored review comments unless the user explicitly asks for the exact response to be posted.
+
+When a human reviewer comments:
+
+- Surface the comment, author, link, and your recommendation.
+- If code changes are clearly requested and within scope, ask before changing unless the user already gave broad permission to address human feedback.
+- If the user approves a response, prefix it with `[codex]` unless they instruct otherwise.
+- Never mark a human thread resolved on the user's behalf unless explicitly instructed.
+
+The authenticated user may appear as `pevd950`; treat those comments as user-authored. If the comment is clearly your own prior evidence reply, do not answer it again.
+
+## Monitoring Loop
+
+1. Snapshot PR state.
+2. If the PR is merged or closed, report terminal state and stop.
+3. If the PR is draft and the user asked to mark ready after green checks, mark ready only after current CI and bot review criteria are clean.
+4. Process review feedback before CI reruns:
+   - unresolved actionable bot threads
+   - new bot inline comments
+   - top-level bot comments
+   - review bodies from bots
+   - human reviewer comments as user handoff items
+5. For each actionable bot finding, use `gh-pr-address-feedback` behavior:
+   - verify
+   - patch minimally
+   - validate locally
+   - commit/push
+   - reply with SHA and tests
+   - resolve thread
+   - continue monitoring
+6. If checks fail, inspect logs before editing:
+   - `gh run view <run-id> --json name,workflowName,conclusion,status,url,event,headBranch,headSha`
+   - `gh run view <run-id> --log-failed`
+   - use job log endpoints when a specific job fails before the full run finishes
+7. Classify failures:
+   - Fix branch-related compile/test/lint/docs failures in touched scope.
+   - Retry likely flaky or infra failures only when appropriate.
+   - Do not change code for unrelated outages, runner failures, external service failures, or stale main failures.
+8. After every push, return to step 1 on the new SHA. A push is not a completion event.
+9. When the PR reaches the readiness bar, report it to the user with the PR link, latest SHA, checks/review summary, and local validation evidence. Do not merge unless explicitly asked.
+
+## Automations
+
+If checks/reviews will take longer than the current turn, create or update a Codex heartbeat automation instead of losing the loop.
+
+Use `codex_app.automation_update` when available:
+
+- `kind`: `heartbeat`
+- `destination`: `thread` for the current thread, but never assume this succeeded
+- schedule: usually every 10-15 minutes while review bots and CI are expected to post
+- prompt should include:
+  - repo and PR number
+  - branch name and latest pushed SHA
+  - current known checks/reviews state
+  - exact readiness criteria
+  - instruction to fix only PR-scoped bot/actionable CI issues
+  - instruction not to merge unless the user explicitly asked
+  - instruction not to reply to human reviewers without approval
+  - local validation already run
+
+Prefer updating an existing monitor for the same PR over creating a duplicate.
+
+After creating or updating a heartbeat, verify the saved automation record before ending the turn:
+
+```bash
+AUTOMATION_DIR="${CODEX_HOME:-$HOME/.codex}/automations/<automation-id>"
+sed -n '1,120p' "$AUTOMATION_DIR/automation.toml"
+```
+
+The heartbeat is correctly attached only if `target_thread_id` is a real thread id, not the literal string `"thread"`, and the prompt/name match the PR being monitored. If `target_thread_id = "thread"` or the UI does not show the intended conversation as the destination, tell the user the automation target needs manual correction in the app before relying on it. Do not claim the PR is being monitored by automation until this verification passes.
+
+If you need a paused heartbeat, verify `status` too. Some heartbeat creates may ignore a requested paused status; if the saved record is active when it should be paused, immediately pause/update it or delete the test automation.
+
+If network, GitHub, or laptop sleep interrupts a heartbeat, treat it as transient and retry on the next heartbeat. Do not mark the PR blocked solely because connectivity is temporarily unavailable.
+
+## Comment And Reply Standards
+
+Every addressed bot comment needs evidence:
+
+- `Addressed in <sha>: <what changed>. Tests: <commands>.`
+- `No code change in <sha>: <why stale/incorrect>. Evidence: <file/test/check>.`
+- `Follow-up: <issue link> (out of scope for this PR).`
+
+Use inline replies for inline comments:
+
+```bash
+gh api -X POST repos/{owner}/{repo}/pulls/<pr>/comments \
+  -F in_reply_to=<comment_id> \
+  -F body='Addressed in <sha>: <summary>. Tests: <command>.'
+```
+
+Resolve bot review threads after replying:
+
+```bash
+gh api graphql \
+  -f query='mutation($thread:ID!){ resolveReviewThread(input:{threadId:$thread}) { thread { id isResolved } } }' \
+  -f thread='<thread-id>'
+```
+
+For review-body-only findings, post one top-level PR comment with the review author, issue summary, SHA, and validation evidence.
+
+## Readiness Bar
+
+Before telling the user the PR is ready for final review, verify:
+
+- `isDraft` is false, unless the user asked to leave it draft.
+- Latest head SHA matches the checks/reviews being summarized.
+- `gh pr checks` has no failed required checks and no relevant pending checks.
+- Review threads have no unresolved actionable bot comments.
+- Latest bot review bodies/top-level comments have no live actionable findings.
+- CodeRabbit is approved/green or latest skip is clearly non-actionable and previous approval remains applicable.
+- Claude/review-with-tracking is clean.
+- Cursor Bugbot, Copilot, and Codex have no unresolved actionable findings.
+- Working tree is clean after push.
+
+If any item is ambiguous, keep monitoring or ask the user. Do not overstate readiness.
+
+## Output Style
+
+- Keep progress updates concise and only report state changes, new failures, new review findings, fixes pushed, or readiness.
+- During long pending periods, avoid noisy per-poll updates.
+- When ready, ping with the PR link and a short evidence summary.
+- If blocked, state exactly what is blocking, what was tried, and what user decision or external system is needed.
+
+## Stop Conditions
+
+Stop only when:
+
+- PR is merged/closed.
+- User explicitly says stop or pause.
+- A human reviewer needs a response/decision.
+- CI/review is blocked by a non-transient issue outside the PR scope.
+- The PR reaches the user-defined readiness bar and the user asked only to get it ready for final review.
+
+Otherwise, keep monitoring or hand the loop to a heartbeat automation.
