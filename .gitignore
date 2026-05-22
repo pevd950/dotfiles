@@ -1,2 +1,5 @@
 /Library/Application Support/Code/User/*
 .gitconfig.auth
+.codex/skills/*
+.claude/skills/*
+.copilot/skills/*
