@@ -24,7 +24,9 @@ description: "Send the configured user a concise local notification through the 
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 5. Send only after validation succeeds:
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
-6. Report the redacted result back to the user.
+6. If delivery fails with a readonly database, Operation not permitted, or Shortcuts access error in a sandboxed session, retry the same validated message with the session's approved local-automation escalation mechanism when policy permits.
+7. If delivery still fails, stop and report a concise redacted blocker instead of probing Shortcuts databases, processes, clipboard state, or app internals unless the user explicitly asked to debug the relay.
+8. Report the redacted result back to the user.
 
 ## Message Shape
 - Prefer one compact paragraph.
@@ -35,4 +37,5 @@ description: "Send the configured user a concise local notification through the 
 ## Notes
 - ActionBuddy's shortcut action currently hangs when its body is connected to dynamic Shortcut Input or Clipboard variables through the CLI runner.
 - The reliable path is to patch the shortcut body as a literal string before running the shortcut.
+- Readonly database and Shortcuts helper errors usually mean the notification was not delivered; treat them as delivery blockers unless a permitted retry succeeds.
 - Do not include secrets in notification text; the message is briefly stored in the local Shortcuts database while being sent.
