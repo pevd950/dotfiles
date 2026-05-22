@@ -84,7 +84,7 @@ install_brewfile_dependencies() {
 # Define a function to install Oh My Zsh
 install_oh_my_zsh() {
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    run_verified_script /bin/sh "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256"
+    RUNZSH=no CHSH=no KEEP_ZSHRC=yes run_verified_script /bin/sh "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256"
   fi
 }
 
