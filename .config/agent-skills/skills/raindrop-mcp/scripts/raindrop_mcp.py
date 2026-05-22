@@ -138,16 +138,15 @@ def decode_response(raw):
 
 def select_response(data, request_id):
     if isinstance(data, dict):
+        if data.get("id") != request_id:
+            raise SystemExit("Response did not match the active JSON-RPC request id.")
         return data
     if not isinstance(data, list):
         raise SystemExit("Response was not a JSON-RPC object or batch.")
     for item in data:
         if isinstance(item, dict) and item.get("id") == request_id:
             return item
-    for item in data:
-        if isinstance(item, dict) and ("result" in item or "error" in item):
-            return item
-    raise SystemExit("Batched response did not contain a usable JSON-RPC response.")
+    raise SystemExit("Batched response did not contain the active JSON-RPC request id.")
 
 
 def unwrap_content_text(result):
