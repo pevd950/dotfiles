@@ -91,7 +91,12 @@ install_oh_my_zsh() {
 # Define a function to install Starship
 install_starship() {
   if ! command -v starship &> /dev/null; then
-    run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
+    if [[ "$(detect_platform)" == "Linux" ]]; then
+      mkdir -p "$HOME/.local/bin"
+      run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y -b "$HOME/.local/bin"
+    else
+      run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
+    fi
   fi
 }
 
