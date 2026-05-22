@@ -23,7 +23,7 @@ The home directory is live operational state, not a scratch repository. Work wit
 - Before committing shell, app, SSH, GPG, token, credential, or auth-related config, inspect the exact diff for secrets.
 - If yadm reports `index.lock`, check for live `yadm` or `git` processes before removing or retrying:
   - `ps -axo pid,ppid,stat,command | rg 'yadm|\\.local/share/yadm|git'`
-  - `ls -l ~/.local/share/yadm/repo.git/index.lock`
+  - `YADM_REPO="$(yadm introspect repo)" && ls -l "$YADM_REPO/index.lock"`
 
 ## Choose The Right Workspace
 
@@ -34,7 +34,13 @@ Use the live `$HOME` yadm checkout only for small, targeted edits such as:
 - committing a known exact config file
 - syncing an already-reviewed dotfiles change
 
-Use `/Users/pablovalero/Developer/dotfiles` for larger work such as:
+Use the developer clone for larger work. Resolve it with:
+
+```bash
+DOTFILES_DEV_DIR="${DOTFILES_DEV_DIR:-$HOME/Developer/dotfiles}"
+```
+
+Prefer that clone for:
 
 - bootstrap or install workflow changes
 - CI/check scripts
@@ -70,7 +76,11 @@ After a developer-clone PR merges, sync the live checkout with non-interactive c
 
 ## Skill Changes
 
-For personal skills, treat `/Users/pablovalero/.config/agent-skills/skills` as the canonical root unless the user names another root.
+For personal skills, treat this as the canonical root unless the user names another root:
+
+```bash
+SKILL_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/agent-skills/skills"
+```
 
 Create only essential skill files:
 
