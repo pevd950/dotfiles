@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import http.client
 import json
 import os
 import math
@@ -28,6 +29,9 @@ def main() -> int:
     api_key = os.environ.get("CRAFT_API_KEY", "")
     if not base_url or not api_key:
         print("CRAFT_API_BASE_URL and CRAFT_API_KEY must be set", file=sys.stderr)
+        return 2
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in api_key):
+        print("CRAFT_API_KEY contains invalid control characters", file=sys.stderr)
         return 2
     parsed_base_url = urllib.parse.urlsplit(base_url)
     if parsed_base_url.scheme not in {"http", "https"} or not parsed_base_url.netloc:
@@ -106,6 +110,9 @@ def main() -> int:
     except TimeoutError:
         sys.stderr.write(f"Craft API request timed out after {args.timeout:g}s\n")
         return 1
+    except (ValueError, http.client.InvalidURL) as error:
+        sys.stderr.write(f"Craft API request is invalid: {error}\n")
+        return 2
 
     return 0
 
