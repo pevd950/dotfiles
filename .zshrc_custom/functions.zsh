@@ -101,14 +101,14 @@ function myip() {
 # Show file in quick look
 if [[ "$(uname)" == "Darwin" ]]; then
         function quick-look() {
-                (($# > 0)) && qlmanage -p $* &>/dev/null &
+                (($# > 0)) && qlmanage -p "$@" &>/dev/null &
         }
 fi
 
 # Open man page in preview app
 if [[ "$(uname)" == "Darwin" ]]; then
         preman() {
-                mandoc -T pdf "$(/usr/bin/man -w $@)" | open -fa Preview
+                mandoc -T pdf "$(/usr/bin/man -w "$@")" | open -fa Preview
         }
 fi
 # Function to handle Git command suggestions

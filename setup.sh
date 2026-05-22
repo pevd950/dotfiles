@@ -199,8 +199,6 @@ linux_package_guidance() {
       echo "  sudo apt-get install -y $(debian_runtime_packages | tr '\n' ' ')"
       echo "Suggested validation tooling:"
       echo "  sudo apt-get install -y $(debian_validation_packages | tr '\n' ' ')"
-      echo
-      echo "No Linux packages were installed. Set DOTFILES_INSTALL_LINUX_PACKAGES=1 to opt in."
       ;;
     *)
       echo "Linux host detected: $linux_id"
@@ -214,14 +212,19 @@ install_debian_packages() {
     echo "apt-get is required for Debian package installation" >&2
     return 1
   fi
-  if ! command -v sudo &> /dev/null; then
-    echo "sudo is required for Debian package installation" >&2
-    return 1
+
+  local -a apt_cmd=()
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    if ! command -v sudo &> /dev/null; then
+      echo "sudo is required for Debian package installation when not running as root" >&2
+      return 1
+    fi
+    apt_cmd=(sudo)
   fi
 
-  sudo apt-get update
+  "${apt_cmd[@]}" apt-get update
   # shellcheck disable=SC2046
-  sudo apt-get install -y $(debian_runtime_packages)
+  "${apt_cmd[@]}" apt-get install -y $(debian_runtime_packages)
 }
 
 setup_packages() {
@@ -240,6 +243,9 @@ setup_packages() {
           return 1
           ;;
       esac
+    else
+      echo
+      echo "No Linux packages were installed. Set DOTFILES_INSTALL_LINUX_PACKAGES=1 to opt in."
     fi
     return 0
   fi

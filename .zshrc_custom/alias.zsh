@@ -83,7 +83,8 @@ if [[ "$(uname)" == "Darwin" && -x "/Applications/MacUpdater.app/Contents/Resour
 fi
 
 # Copilot CLI
-if gh extension list 2>/dev/null | grep -q '^copilot[[:space:]]'; then
+if command -v gh >/dev/null 2>&1 \
+  && gh extension list 2>/dev/null | grep -Eq '^gh[[:space:]]+copilot([[:space:]]|$)'; then
   alias wts='copilot_what-the-shell'
   alias '??'='copilot_shell_suggest'
   alias "git?"='copilot_git_suggest'
