@@ -1,0 +1,7 @@
+interface:
+  display_name: Craft API
+  short_description: Use Craft over HTTP when MCP is unavailable.
+  default_prompt: Use $craft-api to read or update Craft through the configured API connection, with readback verification.
+
+policy:
+  allow_implicit_invocation: true
