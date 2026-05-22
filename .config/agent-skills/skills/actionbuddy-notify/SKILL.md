@@ -24,7 +24,8 @@ description: "Send the configured user a concise local notification through the 
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 5. Send only after validation succeeds:
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
-6. Report the redacted result back to the user.
+6. If delivery fails with a read-only database, Operation not permitted, or Shortcuts access error in a sandboxed session, retry the same validated message with the session's approved filesystem or GUI escalation mechanism when policy permits.
+7. Report the redacted result back to the user.
 
 ## Message Shape
 - Prefer one compact paragraph.

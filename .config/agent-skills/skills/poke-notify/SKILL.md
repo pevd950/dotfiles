@@ -19,6 +19,7 @@ description: "Send the configured user a concise handoff message through Poke's 
 - Never print, store, commit, log, or echo the resolved secret value.
 - The payload must include a non-empty `message` field.
 - Include direct URLs when they exist and are useful, such as PRs, issues, CI runs, docs, designs, or other hosted review artifacts.
+- The helper makes an outbound HTTPS request and may need network permission in restricted sandboxes.
 
 ## Workflow
 1. Confirm the message text is appropriate, concise, and contains the useful handoff context.
@@ -36,7 +37,8 @@ description: "Send the configured user a concise handoff message through Poke's 
    - `scripts/send_notification.py --check --message "For the user from Codex: work on the notification skill is ready for review. Context: updated the skill so agents include handoff details and click-ready PR or issue links. Links: PR https://github.com/org/repo/pull/123 | Issue https://github.com/org/repo/issues/456. Next step: review the wording and merge if it looks right. No action needed from you beyond relaying this message."`
 8. Send only after the check passes:
    - `scripts/send_notification.py --send --message "For the user from Codex: work on the notification skill is ready for review. Context: updated the skill so agents include handoff details and click-ready PR or issue links. Links: PR https://github.com/org/repo/pull/123 | Issue https://github.com/org/repo/issues/456. Next step: review the wording and merge if it looks right. No action needed from you beyond relaying this message."`
-9. Report only the redacted result back to the user.
+9. If delivery fails with a DNS, timeout, or network-access error in a sandboxed session, retry the same validated message with the session's approved network-escalation mechanism when policy permits.
+10. Report only the redacted result back to the user.
 
 ## Message content rules
 - Prefer one compact paragraph over multiple short fragments.
