@@ -50,11 +50,15 @@ trakt-cli auth
 Search and inspect:
 
 ```bash
-trakt-cli search text movie "The Matrix" --json
-trakt-cli search text show "Severance" --json
+trakt-cli search text "The Matrix" movie --json
+trakt-cli search text "Severance" show --json
 trakt-cli movies get "the-matrix-1999" --extended full --json
 trakt-cli shows get "severance" --extended full --json
 ```
+
+Note: `trakt-cli 0.1.0` prints `search text <TYPE> <QUERY>` in help, but the
+working argument order is `search text <QUERY> <TYPE>`. Verify with a harmless
+known title before relying on the generated help text.
 
 Browse:
 
