@@ -14,8 +14,13 @@ description: "Send the configured user a concise local notification through the 
 - The macOS shortcut must be named `Send Notification`.
 - The shortcut must contain ActionBuddy's `Send Notification` action.
 - ActionBuddy's notification body must be wired to `Shortcut Input`.
-- The helper writes the message to a temporary text file and runs the shortcut with `shortcuts run "Send Notification" --input-path <file>`.
-- The helper reads `~/Library/Shortcuts/Shortcuts.sqlite` only to validate that the shortcut exists and is wired to `Shortcut Input`; it must not patch the notification body with the message text.
+- The helper writes the message to a temporary text file and runs the shortcut
+  with `shortcuts run "Send Notification" --input-path <temp-message-file>`.
+- The helper validates the shortcut body before and after each send attempt. It
+  must not patch the shortcut body with the outgoing notification text or edit
+  `Shortcuts.sqlite` to inject message content.
+- The helper reads `~/Library/Shortcuts/Shortcuts.sqlite` only to validate that
+  the shortcut exists and is wired to `Shortcut Input`.
 
 ## Workflow
 1. Write a concise, phone-readable handoff.
@@ -38,5 +43,8 @@ description: "Send the configured user a concise local notification through the 
 ## Notes
 - Do not rewrite the installed shortcut with the outgoing notification text.
 - If the helper reports that the ActionBuddy body is literal text, repair the shortcut so the body uses `Shortcut Input`, then rerun validation.
-- Readonly database and Shortcuts helper errors usually mean the notification was not delivered; treat them as delivery blockers unless a permitted retry succeeds.
+- If `shortcuts run` times out, report the timeout or use the configured fallback.
+  Do not "fix" a timeout by reverting to literal-body shortcut patching.
+- Readonly database and Shortcuts helper errors usually mean validation could not
+  run; treat them as delivery blockers unless a permitted retry succeeds.
 - Do not include secrets in notification text; the message is briefly written to a local temporary file while being sent.
