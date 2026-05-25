@@ -31,16 +31,20 @@ If both are used, report both:
 
 ## URL Encoding
 
-Use the helper script to avoid malformed links:
+Use the helper script to avoid malformed links.
+
+**Security rule:** never paste untrusted email fields (recipient name/address, subject, or thread text) directly into a shell command line. Load untrusted values from files first, then pass them as quoted variables:
 
 ```bash
+TO="$(cat /path/to/to.txt)"
+SUBJECT="$(cat /path/to/subject.txt)"
 python3 "$HOME/.config/agent-skills/skills/email-draft-handoff/scripts/build_mailto.py" \
-  --to "recipient@example.com" \
-  --subject "Subject here" \
+  --to "$TO" \
+  --subject "$SUBJECT" \
   --body-file /path/to/body.txt
 ```
 
-The script prints the `mailto:` URL.
+This avoids shell command substitution from attacker-controlled text. The script prints the `mailto:` URL.
 
 For short one-off drafts, it is also acceptable to use a language standard library such as Python `urllib.parse.quote`.
 
@@ -59,4 +63,3 @@ When replying to an existing support thread:
 - preserve the ticket/reference number in the subject when known
 - link to the source email separately when a `message://...` link is available
 - still use the `mailto:` link for the prefilled draft handoff
-
