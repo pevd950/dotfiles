@@ -64,9 +64,7 @@ plugins=(
    zsh-syntax-highlighting
 )
 
-if command -v docker-compose >/dev/null 2>&1; then
-   plugins+=(docker-compose)
-elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+if command -v docker-compose >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
    plugins+=(docker-compose)
 fi
 
