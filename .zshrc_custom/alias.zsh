@@ -83,18 +83,10 @@ if [[ "$(uname)" == "Darwin" && -x "/Applications/MacUpdater.app/Contents/Resour
 fi
 
 # Copilot CLI (lazy wrappers avoid running gh during shell startup)
-if command -v copilot_what-the-shell >/dev/null 2>&1; then
-  alias wts='copilot_what-the-shell'
-fi
-if command -v copilot_shell_suggest >/dev/null 2>&1; then
-  alias '??'='copilot_shell_suggest'
-fi
-if command -v copilot_git_suggest >/dev/null 2>&1; then
-  alias "git?"='copilot_git_suggest'
-fi
-if command -v copilot_gh_suggest >/dev/null 2>&1; then
-  alias 'gh?'='copilot_gh_suggest'
-fi
+alias wts='copilot_what-the-shell'
+alias '??'='copilot_shell_suggest'
+alias "git?"='copilot_git_suggest'
+alias 'gh?'='copilot_gh_suggest'
 
 # Fun
 if command -v pbcopy >/dev/null 2>&1; then

@@ -64,9 +64,23 @@ plugins=(
    zsh-syntax-highlighting
 )
 
-if command -v docker-compose >/dev/null 2>&1; then
+has_docker_compose_cli_plugin() {
+   local plugin
+   for plugin in \
+      "$HOME/.docker/cli-plugins/docker-compose" \
+      "/usr/local/lib/docker/cli-plugins/docker-compose" \
+      "/usr/local/libexec/docker/cli-plugins/docker-compose" \
+      "/usr/lib/docker/cli-plugins/docker-compose" \
+      "/usr/libexec/docker/cli-plugins/docker-compose"; do
+      [[ -x "$plugin" ]] && return 0
+   done
+   return 1
+}
+
+if command -v docker-compose >/dev/null 2>&1 || has_docker_compose_cli_plugin; then
    plugins+=(docker-compose)
 fi
+unfunction has_docker_compose_cli_plugin
 
 if [[ "$OS" == "macos" ]]; then
    plugins+=(

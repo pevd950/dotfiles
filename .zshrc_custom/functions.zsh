@@ -111,18 +111,34 @@ if [[ "$(uname)" == "Darwin" ]]; then
                 mandoc -T pdf "$(/usr/bin/man -w "$@")" | open -fa Preview
         }
 fi
+_gh_copilot_suggest() {
+        if ! command -v gh >/dev/null 2>&1; then
+                print -u2 "gh is required for Copilot suggestions."
+                return 127
+        fi
+        if ! gh copilot --help >/dev/null 2>&1; then
+                print -u2 "GitHub CLI Copilot is unavailable. Install it with: gh extension install github/gh-copilot"
+                return 127
+        fi
+        gh copilot suggest "$@"
+}
+
+copilot_what-the-shell() {
+        _gh_copilot_suggest -t shell "$@"
+}
+
 # Function to handle Git command suggestions
 copilot_git_suggest() {
-        gh copilot suggest -t git "$@"
+        _gh_copilot_suggest -t git "$@"
 }
 
 # Function to handle GitHub CLI command suggestions
 copilot_gh_suggest() {
-        gh copilot suggest -t gh "$@"
+        _gh_copilot_suggest -t gh "$@"
 }
 
 copilot_shell_suggest() {
-        gh copilot suggest -t shell "$@"
+        _gh_copilot_suggest -t shell "$@"
 }
 
 codex() {
