@@ -13,7 +13,7 @@ Keep a PR moving until it reaches the user-defined readiness bar, usually:
 - Required CI/checks are green or intentionally skipped.
 - CodeRabbit is green/approved, or latest CodeRabbit status is explicitly non-actionable.
 - Claude/review-with-tracking is clean.
-- Cursor/Copilot/Codex bot comments, top-level review bodies, and unresolved threads have no live actionable findings.
+- Cursor/Copilot/Codex bot comments, top-level review bodies, unresolved threads, and PR-body reaction signals have no live actionable findings.
 - Every addressed bot finding has a reply with commit SHA and validation evidence.
 - Human reviewers are surfaced to the user, not answered automatically.
 
@@ -45,12 +45,31 @@ Division of responsibility:
      `gh api repos/{owner}/{repo}/issues/<pr>/comments --paginate`
    - Review submissions and bodies:
      `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate`
+   - PR-body thumbs-up reactions:
+     `gh api 'repos/{owner}/{repo}/issues/<pr>/reactions?content=%2B1' --paginate`
    - Review threads:
      `gh api graphql -f query='query { repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<pr>) { reviewThreads(first:100) { nodes { id isResolved comments(first:30) { nodes { databaseId author { login } body path line createdAt } } } } } } }'`
    - Checks:
      `gh pr checks <pr> --json name,state,bucket,link,workflow,startedAt,completedAt`
 
 Always inspect review bodies, not only inline comments. Bots often put actionable findings in review summaries or top-level comments.
+
+## PR-Body Reaction Signals
+
+GitHub exposes PR-body reactions through the issue reactions API because every pull request is also an issue:
+
+```bash
+gh api 'repos/{owner}/{repo}/issues/<pr>/reactions?content=%2B1' --paginate \
+  --jq '.[] | {id, user: .user.login, content, created_at}'
+```
+
+Treat a `+1` reaction from `chatgpt-codex-connector[bot]` or another user-approved Codex bot account as Codex saying "looks good to me" only when all of these are true:
+
+- The reaction `created_at` is after the latest PR head commit timestamp.
+- There are no newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
+- The current PR head SHA matches the checks and feedback being summarized.
+
+If the Codex `+1` predates the latest head commit, classify it as stale and keep looking for newer Codex feedback. If there is no Codex `+1`, do not treat absence as an actionable finding by itself; rely on the normal Codex comments, review bodies, and unresolved threads. If a fresh `+1` conflicts with newer actionable Codex feedback, the feedback wins and the reaction is only historical context.
 
 ## Reviewer Policy
 
@@ -99,6 +118,7 @@ The authenticated user may appear as `pevd950`; treat those comments as user-aut
    - new bot inline comments
    - top-level bot comments
    - review bodies from bots
+   - fresh PR-body `+1` reactions from Codex bot accounts
    - human reviewer comments as user handoff items
 5. For each actionable bot finding, use `gh-pr-address-feedback` behavior:
    - verify
@@ -190,7 +210,8 @@ Before telling the user the PR is ready for final review, verify:
 - Latest bot review bodies/top-level comments have no live actionable findings.
 - CodeRabbit is approved/green or latest skip is clearly non-actionable and previous approval remains applicable.
 - Claude/review-with-tracking is clean.
-- Cursor Bugbot, Copilot, and Codex have no unresolved actionable findings.
+- Cursor Bugbot and Copilot have no unresolved actionable findings.
+- Codex has no unresolved actionable findings, or a fresh PR-body `+1` from the Codex bot after the latest head commit confirms "looks good to me" with no newer actionable Codex feedback.
 - Working tree is clean after push.
 
 If any item is ambiguous, keep monitoring or ask the user. Do not overstate readiness.
