@@ -16,13 +16,20 @@ Claude Code model choice is configuration and account dependent.
 Practical review command:
 
 ```bash
-timeout 10m claude --model opus -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text '<review prompt>'
+review_timeout() {
+  if command -v timeout >/dev/null 2>&1; then timeout "$@";
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$@";
+  else echo "No timeout/gtimeout available; ask before running without a runtime cap." >&2; return 124;
+  fi
+}
+
+review_timeout 10m claude --model opus -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence '<review prompt>'
 ```
 
 Pin only when supported:
 
 ```bash
-timeout 10m claude --model claude-opus-4-7 -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text '<review prompt>'
+review_timeout 10m claude --model claude-opus-4-7 -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence '<review prompt>'
 ```
 
 ## Gemini CLI
@@ -38,16 +45,16 @@ Gemini CLI model choice is also configuration, access, and release-channel depen
 Practical review command:
 
 ```bash
-GEMINI_CLI_TRUST_WORKSPACE=true timeout 10m gemini --skip-trust --model pro --prompt '<review prompt>' --approval-mode plan --output-format text
+review_timeout 10m env GEMINI_CLI_TRUST_WORKSPACE=true gemini --skip-trust --model pro --prompt '<review prompt>' --approval-mode plan --output-format text
 ```
 
 Pin only when available:
 
 ```bash
-GEMINI_CLI_TRUST_WORKSPACE=true timeout 10m gemini --skip-trust --model gemini-3.1-pro-preview --prompt '<review prompt>' --approval-mode plan --output-format text
+review_timeout 10m env GEMINI_CLI_TRUST_WORKSPACE=true gemini --skip-trust --model gemini-3.1-pro-preview --prompt '<review prompt>' --approval-mode plan --output-format text
 ```
 
-If `timeout` is unavailable, use `gtimeout` when installed or omit it and rely on CLI budget/plan mode controls.
+If neither `timeout` nor `gtimeout` is available, ask before running without a runtime cap.
 
 ## Local Checks Before Use
 
@@ -56,7 +63,7 @@ Run these before depending on either CLI:
 ```bash
 command -v claude
 claude --version
-claude --help | rg -- '--model|--max-budget-usd|--permission-mode'
+claude --help | rg -- '--model|--max-budget-usd|--permission-mode|--tools|--no-session-persistence'
 command -v gemini
 gemini --version
 gemini --help | rg -- '--model|--prompt|--approval-mode|--output-format'
