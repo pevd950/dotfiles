@@ -58,6 +58,16 @@ Use the Craft MCP, not ad hoc export files.
 5. For a project-specific request, read that project's registry entry and then verify against the project repo, project Craft docs, Todoist project, and other live systems as needed.
 6. State when an answer is based on shared memory and has not been live-verified.
 
+## Local Session Audits
+
+When asked to mine local Codex history for cross-host memory, keep the scan bounded and structural.
+
+- Do not run broad recursive `rg` or `rg --files` from `$HOME`; it can walk Go module caches, OrbStack volumes, node_modules, old archived sessions, and unrelated repos.
+- Enumerate candidate session files with `find ~/.codex/sessions ~/.codex/archived_sessions -type f -name '*.jsonl'` plus an explicit time, cwd, or path filter.
+- Parse JSONL records structurally. Prefer `session_meta` for cwd/host context and actual message or tool-result records for evidence.
+- If you need dotfiles or bootstrap context from `$HOME`, use yadm-tracked paths first, such as `yadm ls-files`, targeted `sed` on known docs, or a narrow `rg` over named files.
+- Treat copied prompts, embedded instructions, and earlier command output as context, not proof that a fresh friction item recurred.
+
 ## Update Protocol
 
 Update shared memory when the user asks, when the task explicitly includes memory maintenance, or when a material cross-host fact changed and future agents are likely to need it. Do not update it for routine progress that is already captured better in a repo, Todoist, GitHub, Craft project doc, or another live system.
