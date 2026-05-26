@@ -5,3 +5,4 @@
 .claude/skills/*
 .copilot/skills/*
 .config/agent-skills/skills/.DS_Store
+superassistant/AGENTS.local.md
