@@ -4,6 +4,8 @@ This file is public, synced, and repo-agnostic. It defines cross-repo personal-o
 
 Keep this file free of secrets, private links, account IDs, credentials, tokens, machine-specific paths, sensitive host details, and project-specific workflow. Put private or host-specific values in ignored local files or the authoritative source system.
 
+If `AGENTS.local.md` exists beside this file, read it before personal-operations work. Treat it as private, ignored local context. Never quote, commit, sync, or expose its contents unless the user explicitly asks.
+
 ## Instruction Hierarchy
 
 - When a repository under this folder provides its own `AGENTS.md` or nested `AGENTS.md`, treat the more local file as the source of truth for repo-specific workflow, tooling, validation, GitHub process, and coding conventions.
