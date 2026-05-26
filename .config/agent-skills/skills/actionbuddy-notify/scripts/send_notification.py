@@ -136,8 +136,11 @@ def main() -> int:
             result = run_shortcut(args.message, args.timeout)
         except subprocess.TimeoutExpired:
             after = validate_shortcut_input_body()
-            print(f"ERROR: Shortcut timed out after {args.timeout}s; {after}", file=sys.stderr)
-            return 1
+            print(
+                f"WARN: Shortcut timed out after {args.timeout}s; delivery may have succeeded; {after}",
+                file=sys.stderr,
+            )
+            return 0
 
         after = validate_shortcut_input_body()
         if result.returncode != 0:
