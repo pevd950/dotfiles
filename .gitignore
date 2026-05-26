@@ -4,3 +4,4 @@
 .codex/skills/*
 .claude/skills/*
 .copilot/skills/*
+.config/agent-skills/skills/.DS_Store
