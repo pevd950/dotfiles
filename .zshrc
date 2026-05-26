@@ -67,7 +67,7 @@ plugins=(
 has_docker_compose_cli_plugin() {
    local plugin
    for plugin in \
-      "$HOME/.docker/cli-plugins/docker-compose" \
+      "${DOCKER_CONFIG:-$HOME/.docker}/cli-plugins/docker-compose" \
       "/usr/local/lib/docker/cli-plugins/docker-compose" \
       "/usr/local/libexec/docker/cli-plugins/docker-compose" \
       "/usr/lib/docker/cli-plugins/docker-compose" \
