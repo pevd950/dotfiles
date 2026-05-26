@@ -111,6 +111,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
                 mandoc -T pdf "$(/usr/bin/man -w "$@")" | open -fa Preview
         }
 fi
+# Run GitHub Copilot suggestions only after invocation-time availability checks.
 _gh_copilot_suggest() {
         if ! command -v gh >/dev/null 2>&1; then
                 print -u2 "gh is required for Copilot suggestions."
@@ -123,6 +124,7 @@ _gh_copilot_suggest() {
         gh copilot suggest "$@"
 }
 
+# Suggest a shell command with GitHub Copilot.
 copilot_what-the-shell() {
         _gh_copilot_suggest -t shell "$@"
 }
@@ -137,6 +139,7 @@ copilot_gh_suggest() {
         _gh_copilot_suggest -t gh "$@"
 }
 
+# Suggest a shell command with GitHub Copilot.
 copilot_shell_suggest() {
         _gh_copilot_suggest -t shell "$@"
 }
