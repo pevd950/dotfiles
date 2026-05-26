@@ -14,6 +14,7 @@ zsh_files=(
   .zshenv
   .zshrc
   .zshrc_custom/alias.zsh
+  .zshrc_custom/docker-compose-detection.zsh
   .zshrc_custom/functions.zsh
   .zshrc_custom/macos-exports
   .zshrc_custom/debian-exports
