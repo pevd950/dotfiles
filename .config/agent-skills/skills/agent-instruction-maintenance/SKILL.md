@@ -15,7 +15,13 @@ description: "Review, update, and synchronize agent instructions and configs acr
 - Use after creating or editing instructions, or when standards change.
 
 ## Step-by-step workflow
-0) If the prompt includes automation metadata such as `Automation:`, `Automation ID:`, `Automation memory:`, or `Last run:`, load and follow `automation-run-hygiene` before scanning or editing. This prevents named maintenance-skill work from skipping automation memory normalization and inbox handoff rules.
+0) If the prompt includes automation metadata such as `Automation:`, `Automation ID:`, `Automation memory:`, or `Last run:`, load and follow `automation-run-hygiene` when that skill is available. If it is not available, apply this inline hygiene before scanning or editing:
+   - Resolve the automation ID and memory path from the prompt, then read the memory file if it exists.
+   - Use the latest successful checkpoint from memory as the scan start; otherwise use the prompt fallback window.
+   - Exclude the current automation run from historical evidence.
+   - Before finishing, append a concise run entry to the automation memory.
+   - End with the host app's required handoff or inbox directive when the environment requires one.
+This prevents named maintenance-skill work from skipping automation memory normalization and inbox handoff rules.
 1) Discover which ecosystems exist in the repo or user config.
 2) Resolve instruction file locations from the current source of truth before opening them.
 - For named skills, prefer the path supplied by the current session's skill inventory.
