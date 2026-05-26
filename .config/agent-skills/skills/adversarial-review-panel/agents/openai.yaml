@@ -1,0 +1,7 @@
+interface:
+  display_name: "Adversarial Review Panel"
+  short_description: "Stress-test risky plans with independent reviewers."
+  default_prompt: "Use $adversarial-review-panel to stress-test this ADR, architecture plan, API contract, or safety-sensitive design with bounded independent review."
+
+policy:
+  allow_implicit_invocation: true
