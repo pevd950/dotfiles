@@ -82,14 +82,11 @@ if [[ "$(uname)" == "Darwin" && -x "/Applications/MacUpdater.app/Contents/Resour
   alias macupdater='/Applications/MacUpdater.app/Contents/Resources/macupdater_client'
 fi
 
-# Copilot CLI
-if command -v gh >/dev/null 2>&1 \
-  && gh extension list 2>/dev/null | grep -Eq '^gh[[:space:]]+copilot([[:space:]]|$)'; then
-  alias wts='copilot_what-the-shell'
-  alias '??'='copilot_shell_suggest'
-  alias "git?"='copilot_git_suggest'
-  alias 'gh?'='copilot_gh_suggest'
-fi
+# Copilot CLI (lazy wrappers avoid running gh during shell startup)
+alias wts='copilot_what-the-shell'
+alias '??'='copilot_shell_suggest'
+alias "git?"='copilot_git_suggest'
+alias 'gh?'='copilot_gh_suggest'
 
 # Fun
 if command -v pbcopy >/dev/null 2>&1; then

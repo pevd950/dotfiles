@@ -15,6 +15,7 @@ typeset -U path PATH
 # Oh-my-zsh path
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_CUSTOM="$HOME/.zshrc_custom"
+[[ -r "$ZSH_CUSTOM/docker-compose-detection.zsh" ]] && source "$ZSH_CUSTOM/docker-compose-detection.zsh"
 
 if [[ -d "$HOME/.local/bin" ]]; then
    path=("$HOME/.local/bin" $path)
@@ -64,7 +65,8 @@ plugins=(
    zsh-syntax-highlighting
 )
 
-if command -v docker-compose >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
+if command -v docker-compose >/dev/null 2>&1 \
+   || { whence -w has_docker_compose_cli_plugin >/dev/null 2>&1 && has_docker_compose_cli_plugin; }; then
    plugins+=(docker-compose)
 fi
 

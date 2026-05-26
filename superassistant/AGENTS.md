@@ -1,8 +1,8 @@
-# Projects Agent Guidance
+# Superassistant Agent Guidance
 
 Keep global Codex instructions repo-agnostic and free of project-specific workflow.
 
-Use this file for cross-repo personal operations guidance that should apply to assistant work launched from the project directories alongside this file.
+Use this file for cross-repo personal operations guidance that should apply to assistant work launched from the superassistant workspace directories alongside this file.
 
 When a repository under this folder provides its own `AGENTS.md` or nested `AGENTS.md` files, treat those as the source of truth for repo-specific workflow, tooling, validation, GitHub process, and coding conventions.
 
@@ -35,3 +35,12 @@ Avoid duplicating repository instructions here. Keep this file focused on person
 - For cross-host assistant context, use the `shared-craft-memory` skill when available. Read it for project-adjacent personal operations, host coordination, active cross-host loops, or agent handoffs that may matter outside the current machine.
 - Keep shared Craft memory current when a material cross-host fact changes and future agents are likely to need it. Do not use it as a general activity log; live systems, project docs, and repos remain authoritative.
 - On hosts that need shared Craft memory, set `CRAFT_SHARED_MEMORY_URL` in a local ignored shell exports file such as `~/.zshrc_custom/exports-local.zsh`. Do not hard-code the private Craft link in tracked dotfiles.
+
+## Synced Multi-Host Workspace
+
+- Treat this directory as public, synced dotfiles/workspace context that may run on unlike hosts, including laptops, headless machines, Home Assistant-adjacent hosts, and CI runners.
+- Resolve the current host before host-targeted work. Prefer `AGENT_HOST_ALIAS` when set; otherwise use `hostname -s`.
+- Do not assume a tool, app, local path, browser profile, MCP server, or credential that worked on one host is available on the current host. Verify callability with a low-risk read/probe first, then state any gap.
+- Keep private links, tokens, credentials, machine-specific paths, sensitive host details, and per-host shell exports out of tracked synced files. Put those in ignored local files or the relevant source system.
+- Before adding personal operations guidance to tracked files, assume the content will be visible in the public dotfiles repository and prefer generic rules over private system names, URLs, account IDs, addresses, or internal topology.
+- Before editing nested folders, check for a more local `AGENTS.md` and whether the folder is its own Git repository. The nested repository owns its workflow and validation rules.

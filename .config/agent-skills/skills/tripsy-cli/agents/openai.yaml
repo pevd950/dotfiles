@@ -1,0 +1,4 @@
+interface:
+  display_name: "Tripsy CLI"
+  short_description: "Work with Tripsy travel data from the local CLI."
+  default_prompt: "Use Tripsy CLI to inspect trips, travel plans, itinerary items, or travel inbox/document context."

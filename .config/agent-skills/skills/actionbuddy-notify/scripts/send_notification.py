@@ -8,58 +8,13 @@ import plistlib
 import sqlite3
 import subprocess
 import sys
-import time
+import tempfile
 from pathlib import Path
+from typing import Any
 
 
 SHORTCUT_NAME = "Send Notification"
 DB_PATH = Path.home() / "Library" / "Shortcuts" / "Shortcuts.sqlite"
-READY_MESSAGE = "ActionBuddy notification relay ready."
-MAC_EPOCH_OFFSET = 978307200
-
-
-def mac_time() -> float:
-    return time.time() - MAC_EPOCH_OFFSET
-
-
-def build_actions(message: str) -> bytes:
-    send_uuid = "E4708B92-5AB2-498F-ADCF-2C3878AA8D7B"
-    output_uuid = "D4D835D6-8350-4B1D-80F4-093D80AAA4F7"
-    actions = [
-        {
-            "WFWorkflowActionIdentifier": "codes.rambo.ActionBuddy.SendNotification",
-            "WFWorkflowActionParameters": {
-                "AppIntentDescriptor": {
-                    "AppIntentIdentifier": "SendNotification",
-                    "BundleIdentifier": "codes.rambo.ActionBuddy",
-                    "Name": "ActionBuddy",
-                    "TeamIdentifier": "8C7439RJLG",
-                },
-                "body": message,
-                "UUID": send_uuid,
-            },
-        },
-        {
-            "WFWorkflowActionIdentifier": "is.workflow.actions.output",
-            "WFWorkflowActionParameters": {
-                "UUID": output_uuid,
-                "WFOutput": {
-                    "Value": {
-                        "attachmentsByRange": {
-                            "{0, 1}": {
-                                "OutputName": "Send Notification",
-                                "OutputUUID": send_uuid,
-                                "Type": "ActionOutput",
-                            }
-                        },
-                        "string": "\ufffc",
-                    },
-                    "WFSerializationType": "WFTextTokenString",
-                },
-            },
-        },
-    ]
-    return plistlib.dumps(actions, fmt=plistlib.FMT_BINARY)
 
 
 def connect_db() -> sqlite3.Connection:
@@ -68,41 +23,19 @@ def connect_db() -> sqlite3.Connection:
     return sqlite3.connect(DB_PATH)
 
 
-def find_shortcut(conn: sqlite3.Connection) -> tuple[int, int]:
+def find_shortcut(conn: sqlite3.Connection) -> int:
     row = conn.execute(
-        "select Z_PK, ZACTIONS from ZSHORTCUT where ZNAME = ?",
+        "select Z_PK from ZSHORTCUT where ZNAME = ?",
         (SHORTCUT_NAME,),
     ).fetchone()
     if not row:
         raise RuntimeError(f"Shortcut not found: {SHORTCUT_NAME}")
-    return int(row[0]), int(row[1])
+    return int(row[0])
 
 
-def patch_shortcut(message: str) -> None:
+def shortcut_actions() -> list[dict[str, Any]]:
     with connect_db() as conn:
-        shortcut_pk, actions_pk = find_shortcut(conn)
-        data = build_actions(message)
-        conn.execute(
-            "update ZSHORTCUTACTIONS set ZDATA = ? where Z_PK = ?",
-            (data, actions_pk),
-        )
-        conn.execute(
-            """
-            update ZSHORTCUT
-            set ZACTIONCOUNT = 2,
-                ZHASSHORTCUTINPUTVARIABLES = 0,
-                ZACTIONSDESCRIPTION = ?,
-                ZMODIFICATIONDATE = ?
-            where Z_PK = ?
-            """,
-            ("Send Notification and Stop and Output", mac_time(), shortcut_pk),
-        )
-        conn.commit()
-
-
-def validate_shortcut() -> None:
-    with connect_db() as conn:
-        shortcut_pk, _ = find_shortcut(conn)
+        shortcut_pk = find_shortcut(conn)
         data_row = conn.execute(
             "select ZDATA from ZSHORTCUTACTIONS where ZSHORTCUT = ?",
             (shortcut_pk,),
@@ -110,32 +43,70 @@ def validate_shortcut() -> None:
     if not data_row:
         raise RuntimeError(f"Shortcut actions not found: {SHORTCUT_NAME}")
     actions = plistlib.loads(data_row[0])
-    has_actionbuddy = any(
-        action.get("WFWorkflowActionIdentifier") == "codes.rambo.ActionBuddy.SendNotification"
-        for action in actions
-    )
-    if not has_actionbuddy:
-        raise RuntimeError("Send Notification shortcut does not contain ActionBuddy Send Notification action")
+    if not isinstance(actions, list):
+        raise RuntimeError("Shortcut actions payload is malformed")
+    return actions
 
 
-def quit_shortcuts() -> None:
-    subprocess.run(
-        ["osascript", "-e", 'quit app "Shortcuts"'],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
-    )
+def actionbuddy_body(actions: list[dict[str, Any]]) -> Any:
+    for action in actions:
+        if action.get("WFWorkflowActionIdentifier") == "codes.rambo.ActionBuddy.SendNotification":
+            return action.get("WFWorkflowActionParameters", {}).get("body")
+    raise RuntimeError("Send Notification shortcut does not contain ActionBuddy Send Notification action")
 
 
-def run_shortcut(timeout: int) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["shortcuts", "run", SHORTCUT_NAME],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=timeout,
-        check=False,
-    )
+def contains_extension_input(value: Any) -> bool:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key == "Type" and item == "ExtensionInput":
+                return True
+            if key == "OutputName" and item == "Shortcut Input":
+                return True
+            if contains_extension_input(item):
+                return True
+    elif isinstance(value, list):
+        return any(contains_extension_input(item) for item in value)
+    elif isinstance(value, str):
+        return value == "ExtensionInput"
+    return False
+
+
+def describe_body(body: Any) -> str:
+    if isinstance(body, dict):
+        if contains_extension_input(body):
+            return "body_type=dict with ExtensionInput attachment"
+        return "body_type=dict without ExtensionInput attachment"
+    if isinstance(body, str):
+        return "body_type=str"
+    return f"body_type={type(body).__name__}"
+
+
+def validate_shortcut_input_body() -> str:
+    body = actionbuddy_body(shortcut_actions())
+    description = describe_body(body)
+    if not isinstance(body, dict) or not contains_extension_input(body):
+        raise RuntimeError(
+            f"{SHORTCUT_NAME} body must be wired to Shortcut Input; found {description}."
+        )
+    return description
+
+
+def run_shortcut(message: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False) as input_file:
+        input_file.write(message)
+        input_file.flush()
+        input_path = Path(input_file.name)
+    try:
+        return subprocess.run(
+            ["shortcuts", "run", SHORTCUT_NAME, "--input-path", str(input_path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    finally:
+        input_path.unlink(missing_ok=True)
 
 
 def check_message(message: str) -> None:
@@ -149,34 +120,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="Validate message and shortcut without sending")
-    mode.add_argument("--send", action="store_true", help="Patch shortcut and send the notification")
+    mode.add_argument("--send", action="store_true", help="Send the notification through Shortcut Input")
     parser.add_argument("--message", required=True, help="Notification body to send")
     parser.add_argument("--timeout", type=int, default=30, help="Shortcut run timeout in seconds")
     args = parser.parse_args()
 
     try:
         check_message(args.message)
-        validate_shortcut()
+        before = validate_shortcut_input_body()
         if args.check:
-            print(f"OK: {SHORTCUT_NAME} is available; message length={len(args.message)}")
+            print(f"OK: {SHORTCUT_NAME} is available; {before}; message length={len(args.message)}")
             return 0
 
-        patch_shortcut(args.message)
-        quit_shortcuts()
-        result = run_shortcut(args.timeout)
-        patch_shortcut(READY_MESSAGE)
+        try:
+            result = run_shortcut(args.message, args.timeout)
+        except subprocess.TimeoutExpired:
+            after = validate_shortcut_input_body()
+            print(f"ERROR: Shortcut timed out after {args.timeout}s; {after}", file=sys.stderr)
+            return 1
 
+        after = validate_shortcut_input_body()
         if result.returncode != 0:
             stderr = result.stderr.strip() or "no stderr"
-            raise RuntimeError(f"Shortcut failed with exit {result.returncode}: {stderr}")
+            raise RuntimeError(f"Shortcut failed with exit {result.returncode}: {stderr}; {after}")
 
         output = result.stdout.strip() or "sent"
-        print(f"OK: {output}")
+        print(f"OK: {output}; {after}")
         return 0
-    except subprocess.TimeoutExpired:
-        patch_shortcut(READY_MESSAGE)
-        print(f"ERROR: Shortcut timed out after {args.timeout}s", file=sys.stderr)
-        return 1
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

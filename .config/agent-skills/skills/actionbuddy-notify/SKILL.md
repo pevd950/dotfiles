@@ -13,8 +13,14 @@ description: "Send the configured user a concise local notification through the 
 ## Requirements
 - The macOS shortcut must be named `Send Notification`.
 - The shortcut must contain ActionBuddy's `Send Notification` action.
-- The helper updates that shortcut just-in-time with the message body, runs it, then returns the shortcut to a neutral ready message.
-- The helper may need to run outside the sandbox because it touches `~/Library/Shortcuts/Shortcuts.sqlite`, quits Shortcuts to refresh cache, and invokes `shortcuts run`.
+- ActionBuddy's notification body must be wired to `Shortcut Input`.
+- The helper writes the message to a temporary text file and runs the shortcut
+  with `shortcuts run "Send Notification" --input-path <temp-message-file>`.
+- The helper validates the shortcut body before and after each send attempt. It
+  must not patch the shortcut body with the outgoing notification text or edit
+  `Shortcuts.sqlite` to inject message content.
+- The helper reads `~/Library/Shortcuts/Shortcuts.sqlite` only to validate that
+  the shortcut exists and is wired to `Shortcut Input`.
 
 ## Workflow
 1. Write a concise, phone-readable handoff.
@@ -24,7 +30,9 @@ description: "Send the configured user a concise local notification through the 
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 5. Send only after validation succeeds:
    - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
-6. Report the redacted result back to the user.
+6. If delivery fails with a readonly database, Operation not permitted, or Shortcuts access error in a sandboxed session, retry the same validated message with the session's approved local-automation escalation mechanism when policy permits.
+7. If delivery still fails, stop and report a concise redacted blocker instead of probing Shortcuts databases, processes, clipboard state, or app internals unless the user explicitly asked to debug the relay.
+8. Report the redacted result back to the user.
 
 ## Message Shape
 - Prefer one compact paragraph.
@@ -33,6 +41,10 @@ description: "Send the configured user a concise local notification through the 
 - If no action is needed, say so explicitly.
 
 ## Notes
-- ActionBuddy's shortcut action currently hangs when its body is connected to dynamic Shortcut Input or Clipboard variables through the CLI runner.
-- The reliable path is to patch the shortcut body as a literal string before running the shortcut.
-- Do not include secrets in notification text; the message is briefly stored in the local Shortcuts database while being sent.
+- Do not rewrite the installed shortcut with the outgoing notification text.
+- If the helper reports that the ActionBuddy body is literal text, repair the shortcut so the body uses `Shortcut Input`, then rerun validation.
+- If `shortcuts run` times out, report the timeout or use the configured fallback.
+  Do not "fix" a timeout by reverting to literal-body shortcut patching.
+- Readonly database and Shortcuts helper errors usually mean validation could not
+  run; treat them as delivery blockers unless a permitted retry succeeds.
+- Do not include secrets in notification text; the message is briefly written to a local temporary file while being sent.

@@ -4,6 +4,7 @@
 [include]
 	path = .gitconfig.local
 	path = .gitconfig.auth
+	path = .gitconfig.platform
 [init]
 	defaultBranch = main
 [github]
@@ -17,31 +18,6 @@
 [rebase]
 	# Automatically stash before a rebase and unstash afterwards.
 	autoStash = true
-
-[credential]
-	helper = osxkeychain
-# [merge]
-# 	tool = Kaleidoscope
-# [mergetool]
-# 	keepBackup = true
-	# prompt = false
-# [mergetool "Kaleidoscope"]
-# 	cmd = ksdiff --merge --output \"$MERGED\" --base \"$BASE\" -- \"$LOCAL\" --snapshot \"$REMOTE\" --snapshot
-# 	trustExitCode = true
-[diff]
-	tool = Kaleidoscope
-[difftool]
-	prompt = false
-[difftool "Kaleidoscope"]
-	cmd = ksdiff --partial-changeset --relative-path \"$MERGED\" -- \"$LOCAL\" \"$REMOTE\"
-[core]
-	pager = delta
-[interactive]
-	diffFilter = delta --color-only
-[delta]
-    navigate = true    # use n and N to move between diff sections
-    light = false
-    line-numbers = true
 
 [alias]
 	a = add

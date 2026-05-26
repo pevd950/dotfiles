@@ -28,9 +28,11 @@ run_verified_script() {
 
   local tmp_script
   tmp_script="$(mktemp)"
-  trap 'rm -f "$tmp_script"' RETURN
 
-  curl -fsSL "$url" -o "$tmp_script"
+  if ! curl -fsSL "$url" -o "$tmp_script"; then
+    rm -f "$tmp_script"
+    return 1
+  fi
 
   local actual_sha256
   actual_sha256="$(sha256_file "$tmp_script")"
@@ -38,10 +40,17 @@ run_verified_script() {
     echo "Checksum verification failed for $url" >&2
     echo "Expected: $expected_sha256" >&2
     echo "Actual:   $actual_sha256" >&2
+    rm -f "$tmp_script"
     return 1
   fi
 
+  local status
+  set +e
   "$interpreter" "$tmp_script" "$@"
+  status=$?
+  set -e
+  rm -f "$tmp_script"
+  return "$status"
 }
 
 brewfile_font_casks() {
@@ -84,14 +93,19 @@ install_brewfile_dependencies() {
 # Define a function to install Oh My Zsh
 install_oh_my_zsh() {
   if [ ! -d "$HOME/.oh-my-zsh" ]; then
-    run_verified_script /bin/sh "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256"
+    RUNZSH=no CHSH=no KEEP_ZSHRC=yes run_verified_script /bin/sh "$OH_MY_ZSH_INSTALL_URL" "$OH_MY_ZSH_INSTALL_SHA256"
   fi
 }
 
 # Define a function to install Starship
 install_starship() {
   if ! command -v starship &> /dev/null; then
-    run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
+    if [[ "$(detect_platform)" == "Linux" ]]; then
+      mkdir -p "$HOME/.local/bin"
+      run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y -b "$HOME/.local/bin"
+    else
+      run_verified_script /bin/sh "$STARSHIP_INSTALL_URL" "$STARSHIP_INSTALL_SHA256" -y
+    fi
   fi
 }
 
@@ -327,7 +341,7 @@ setup_shell() {
   fi
 
   # Install Oh My Zsh plugins
-  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting"
+  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.zshrc_custom}/plugins/zsh-syntax-highlighting"
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || return 1
 }
 
