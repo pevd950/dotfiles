@@ -7,7 +7,10 @@ typeset -U path PATH
 [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
 [[ -d "$HOME/.zshrc_custom/bin" ]] && path=("$HOME/.zshrc_custom/bin" $path)
 
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+if [[ -z "$CODEX_HOME" ]]; then
+        [[ -d "$HOME/.codex-home" ]] && CODEX_HOME="$HOME/.codex-home" || CODEX_HOME="$HOME/.codex"
+fi
+export CODEX_HOME
 export PATH
 
 [[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"
