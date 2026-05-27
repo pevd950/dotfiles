@@ -144,23 +144,6 @@ copilot_shell_suggest() {
         _gh_copilot_suggest -t shell "$@"
 }
 
-codex() {
-        if [ -n "$CODEX_HOME" ]; then
-                command codex "$@"
-                return
-        fi
-
-        if [ "$PWD" = "$HOME" ]; then
-                local codex_home="$HOME/.codex-home"
-                if [ ! -d "$codex_home" ]; then
-                        codex_home="$HOME/.codex"
-                fi
-                CODEX_HOME="$codex_home" command codex "$@"
-        else
-                command codex "$@"
-        fi
-}
-
 # Fun
 flip() {
         if command -v pbcopy >/dev/null 2>&1; then
