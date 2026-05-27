@@ -2,9 +2,27 @@
 
 Checked 2026-05-26.
 
+## Shared Command Setup
+
+Store substantial review prompts in a temporary file and pass the file contents as a quoted argument. Do not paste untrusted file excerpts directly into a shell command.
+
+```bash
+review_timeout() {
+  if command -v timeout >/dev/null 2>&1; then timeout "$@";
+  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$@";
+  else echo "No timeout/gtimeout available; ask before running without a runtime cap." >&2; return 124;
+  fi
+}
+
+review_prompt_file="/path/to/sanitized-review-prompt.txt"
+review_prompt="$(cat "$review_prompt_file")"
+```
+
 ## Claude Code
 
 Claude Code model choice is configuration and account dependent.
+
+Information current as of May 2026.
 
 - `claude --model <alias|name>` sets the model for the current session.
 - `ANTHROPIC_MODEL=<alias|name>` also sets the model for the launched session.
@@ -16,31 +34,26 @@ Claude Code model choice is configuration and account dependent.
 Practical review command:
 
 ```bash
-review_timeout() {
-  if command -v timeout >/dev/null 2>&1; then timeout "$@";
-  elif command -v gtimeout >/dev/null 2>&1; then gtimeout "$@";
-  else echo "No timeout/gtimeout available; ask before running without a runtime cap." >&2; return 124;
-  fi
-}
-
-review_timeout 10m claude --model opus -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence '<review prompt>'
+review_timeout 10m claude --model opus -p --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence "$review_prompt"
 ```
 
 Pin only when supported:
 
 ```bash
-review_timeout 10m claude --model claude-opus-4-7 -p --permission-mode dontAsk --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence '<review prompt>'
+review_timeout 10m claude --model claude-opus-4-7 -p --max-budget-usd 1.00 --output-format text --tools "" --no-session-persistence "$review_prompt"
 ```
+
+Do not use `--permission-mode dontAsk` for review-panel defaults. `--tools ""` removes built-in tools from the invocation, but it is not a complete MCP isolation guarantee in every Claude Code setup; if local MCP/tool startup cannot be ruled out or isolated, skip Claude or use a verified clean Claude configuration.
 
 ## Google Antigravity and Gemini CLI
 
 Google is transitioning consumer Gemini CLI usage to Antigravity CLI. On 2026-05-26, local `agy --version` returned `1.0.2`, authenticated through keyring, and selected `Gemini 3.5 Flash (Medium)` by default during smoke testing.
 
-Antigravity is agentic. For review-panel use, run it from an empty temp directory with `--sandbox` and pass all context in the prompt:
+Antigravity is agentic and can auto-discover user plugins, MCP servers, and hooks. For review-panel use, run it only with sanitized public context, from an empty temp directory, with `--sandbox`, and only after verifying plugins/MCP/hooks are disabled or clean for the review. If clean isolation cannot be verified, skip Antigravity.
 
 ```bash
 review_dir="$(mktemp -d "${TMPDIR:-/tmp}/agy-review.XXXXXX")"
-(cd "$review_dir" && review_timeout 2m agy --sandbox --print '<review prompt>' --print-timeout 90s)
+(cd "$review_dir" && review_timeout 2m agy --sandbox --print "$review_prompt" --print-timeout 90s)
 ```
 
 Important: `agy --print` expects the prompt immediately after `--print`. Put `--print-timeout` after the prompt, or the CLI may treat `--print-timeout` itself as the task.
@@ -53,16 +66,19 @@ Legacy Gemini CLI model choice is configuration, access, and release-channel dep
 - `pro` is the complex-reasoning alias and uses the preview model when enabled.
 - Gemini 3.1 Pro Preview is rolling out. Current docs say to check `/model` > Manual for `gemini-3.1-pro-preview`; if available, it can be launched with `-m gemini-3.1-pro-preview`.
 
-Practical review command:
+Use legacy Gemini only when it can run outside the trusted target repo with sanitized prompt context and tool isolation. Do not use a trusted-workspace headless command as the default review-panel path.
+
+Practical isolated shape:
 
 ```bash
-review_timeout 10m env GEMINI_CLI_TRUST_WORKSPACE=true gemini --skip-trust --model pro --prompt '<review prompt>' --approval-mode plan --output-format text
+review_dir="$(mktemp -d "${TMPDIR:-/tmp}/gemini-review.XXXXXX")"
+(cd "$review_dir" && review_timeout 10m gemini --model pro --prompt "$review_prompt" --approval-mode plan --output-format text)
 ```
 
 Pin only when available:
 
 ```bash
-review_timeout 10m env GEMINI_CLI_TRUST_WORKSPACE=true gemini --skip-trust --model gemini-3.1-pro-preview --prompt '<review prompt>' --approval-mode plan --output-format text
+(cd "$review_dir" && review_timeout 10m gemini --model gemini-3.1-pro-preview --prompt "$review_prompt" --approval-mode plan --output-format text)
 ```
 
 If neither `timeout` nor `gtimeout` is available, ask before running without a runtime cap.
@@ -79,13 +95,13 @@ GitHub Copilot CLI model choice is account and policy dependent.
 Practical review command:
 
 ```bash
-review_timeout 2m copilot -p '<review prompt>' --mode plan --no-custom-instructions --disable-builtin-mcps --available-tools='' --silent --stream off
+review_timeout 2m copilot -p "$review_prompt" --mode plan --no-custom-instructions --disable-builtin-mcps --available-tools='' --silent --stream off
 ```
 
 GitHub CLI wrapper:
 
 ```bash
-review_timeout 2m gh copilot -- -p '<review prompt>' --mode plan --no-custom-instructions --disable-builtin-mcps --available-tools='' --silent --stream off
+review_timeout 2m gh copilot -- -p "$review_prompt" --mode plan --no-custom-instructions --disable-builtin-mcps --available-tools='' --silent --stream off
 ```
 
 ## Local Checks Before Use
@@ -95,17 +111,15 @@ Run these before depending on either CLI:
 ```bash
 command -v claude
 claude --version
-claude --help | rg -- '--model|--max-budget-usd|--permission-mode|--tools|--no-session-persistence'
 command -v gemini
 gemini --version
-gemini --help | rg -- '--model|--prompt|--approval-mode|--output-format'
 command -v agy
 agy --version
-agy --help | rg -- '--print|--print-timeout|--sandbox'
 command -v copilot
 copilot --version
-copilot help | rg -- '--model|--prompt|--mode|--available-tools|--disable-builtin-mcps|--no-custom-instructions'
 ```
+
+Prefer low-risk smoke tests over `--help` greps for capability checks because CLI help output may omit supported flags. Record failures as reviewer coverage gaps instead of guessing.
 
 ## Sources
 
