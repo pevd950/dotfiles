@@ -13,23 +13,28 @@ description: "Send the configured user a concise local notification through the 
 ## Requirements
 - The macOS shortcut must be named `Send Notification`.
 - The shortcut must contain ActionBuddy's `Send Notification` action.
-- ActionBuddy's notification body must be wired to `Shortcut Input`.
-- The helper writes the message to a temporary text file and runs the shortcut
-  with `shortcuts run "Send Notification" --input-path <temp-message-file>`.
-- The helper validates the shortcut body before and after each send attempt. It
-  must not patch the shortcut body with the outgoing notification text or edit
-  `Shortcuts.sqlite` to inject message content.
+- ActionBuddy's notification title, subtitle, and body must be wired from a JSON
+  `Shortcut Input` dictionary with `title`, `subtitle`, and `body` fields.
+- `Show When Run` must stay disabled.
+- The helper writes the notification payload to a temporary JSON file and runs
+  the shortcut with `shortcuts run "Send Notification" --input-path <temp-json-file>`.
+- The helper validates the structured shortcut before and after each send
+  attempt. It must not patch the shortcut with the outgoing notification text or
+  edit `Shortcuts.sqlite` to inject message content.
 - The helper reads `~/Library/Shortcuts/Shortcuts.sqlite` only to validate that
-  the shortcut exists and is wired to `Shortcut Input`.
+  the shortcut exists and is wired to structured `Shortcut Input`.
+- Attachments are not part of the helper contract yet. Treat them as unvalidated
+  until a concrete file/image use case has been tested through `shortcuts run`
+  with `--input-path`.
 
 ## Workflow
 1. Write a concise, phone-readable handoff.
 2. Include direct URLs when they materially help the recipient jump into the work.
 3. Keep URLs as plain text, not Markdown.
 4. Validate first:
-   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
+   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --title "Codex" --subtitle "Validation" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 5. Send only after validation succeeds:
-   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
+   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --title "Codex" --subtitle "Ready" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 6. If delivery fails with a readonly database, Operation not permitted, or Shortcuts access error in a sandboxed session, retry the same validated message with the session's approved local-automation escalation mechanism when policy permits.
 7. If delivery still fails, stop and report a concise redacted blocker instead of probing Shortcuts databases, processes, clipboard state, or app internals unless the user explicitly asked to debug the relay.
 8. If `shortcuts run` times out after the pre/post Shortcut Input validation
@@ -39,13 +44,19 @@ description: "Send the configured user a concise local notification through the 
 
 ## Message Shape
 - Prefer one compact paragraph.
-- Start with `For the user from <agent>:` when the sender matters.
+- Use `--title` for the sender or workflow, such as `Codex` or `Morning Check`.
+- Use `--subtitle` for the status or reason, such as `Ready`, `Blocked`, or
+  `Needs Review`.
+- Start the body with `For the user from <agent>:` only when the sender is not
+  already clear from title/subtitle.
 - Include status, concrete context, links, and next action when available.
 - If no action is needed, say so explicitly.
 
 ## Notes
 - Do not rewrite the installed shortcut with the outgoing notification text.
-- If the helper reports that the ActionBuddy body is literal text, repair the shortcut so the body uses `Shortcut Input`, then rerun validation.
+- If the helper reports that the ActionBuddy shortcut still uses the legacy
+  body-only contract or literal text, repair the shortcut so title, subtitle,
+  and body are extracted from JSON `Shortcut Input`, then rerun validation.
 - If `shortcuts run` times out, report the warning or use the configured
   fallback. Do not "fix" a timeout by reverting to literal-body shortcut
   patching.
