@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Send a local ActionBuddy notification through the Send Notification shortcut."""
+"""Send a local ActionBuddy notification through the Send Notification shortcut.
+
+Supported notification content fields are title, subtitle, and message/body.
+Use all three fields when validating setup or helper changes.
+"""
 
 from __future__ import annotations
 
@@ -201,14 +205,25 @@ def check_message(message: str, title: str, subtitle: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog=(
+            "Example validation with all content fields: "
+            "--check --title Codex --subtitle Validation --message 'For the user from Codex: test notification.'"
+        ),
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="Validate message and shortcut without sending")
     mode.add_argument("--send", action="store_true", help="Send the notification through Shortcut Input")
-    parser.add_argument("--message", required=True, help="Notification body to send")
-    parser.add_argument("--title", default="ActionBuddy", help="Notification title")
-    parser.add_argument("--subtitle", default="Codex", help="Notification subtitle")
-    parser.add_argument("--timeout", type=int, default=30, help="Shortcut run timeout in seconds")
+    parser.add_argument("--message", required=True, help="Notification body to send; maps to JSON field 'body'")
+    parser.add_argument("--title", default="ActionBuddy", help="Notification title; maps to JSON field 'title'")
+    parser.add_argument("--subtitle", default="Codex", help="Notification subtitle; maps to JSON field 'subtitle'")
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="Shortcut run timeout in seconds; not notification content",
+    )
     args = parser.parse_args()
 
     try:

@@ -27,6 +27,16 @@ description: "Send the configured user a concise local notification through the 
   until a concrete file/image use case has been tested through `shortcuts run`
   with `--input-path`.
 
+## Supported Fields
+- Always prefer the structured helper fields when sending or validating:
+  - `--title`: notification title. Defaults to `ActionBuddy`.
+  - `--subtitle`: notification subtitle. Defaults to `Codex`.
+  - `--message`: notification body. Required.
+- `--timeout` is only the local `shortcuts run` timeout. It is not notification
+  content.
+- For validation after setup, sync, or helper changes, test all content fields
+  together instead of testing body-only delivery.
+
 ## Workflow
 1. Write a concise, phone-readable handoff.
 2. Include direct URLs when they materially help the recipient jump into the work.
