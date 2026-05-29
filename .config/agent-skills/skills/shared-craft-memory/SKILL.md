@@ -43,7 +43,12 @@ Use the resolved host identity consistently:
 
 ## Read Protocol
 
-Use the Craft MCP, not ad hoc export files.
+Use the Craft MCP when it is available. If Craft MCP is unavailable,
+unauthenticated, expired, or not exposed in the current agent session, use the
+local `craft-api` skill and its bundled helper script as the fallback. Do not
+hand-roll Craft HTTP requests in this workflow; the helper centralizes the
+observed auth header, user-agent, timeout, and error handling needed for this
+host.
 
 1. Resolve the current host identity.
 2. Resolve the Craft link before reading blocks.
@@ -57,6 +62,19 @@ Use the Craft MCP, not ad hoc export files.
    - relevant index subpages: Host Registry, Project Registry, Agent Handoffs, Integration Inventory, and Decision Log
 5. For a project-specific request, read that project's registry entry and then verify against the project repo, project Craft docs, Todoist project, and other live systems as needed.
 6. State when an answer is based on shared memory and has not been live-verified.
+
+When using the API fallback:
+
+- Load the `craft-api` skill first.
+- Ensure `CRAFT_API_BASE_URL` and `CRAFT_API_KEY` are present through the
+  host-local ignored secrets/startup path.
+- Probe `GET /connection` with the helper before reading or writing.
+- For Host Messages, read the `Host Messages` collection and filter rows whose
+  `To` property includes the resolved host or `Any`.
+- For status changes, read the collection schema first and update rows through
+  `PUT /collections/{collectionId}/items` with `itemsToUpdate`.
+- If the helper succeeds but a custom request fails, treat the custom request as
+  suspect before declaring Craft unavailable.
 
 ## Local Session Audits
 

@@ -37,6 +37,7 @@ python3 "$SKILL_DIR/scripts/craft_api.py" GET /documents
 ```
 
 Resolve the script relative to this `SKILL.md` file. Do not assume the current working directory is the skill folder, and do not hard-code a user's home path.
+When another skill needs Craft API access, call this helper instead of reimplementing HTTP in shell, Python, or curl unless you are deliberately debugging the helper itself.
 
 For manual `curl`, prefer:
 
