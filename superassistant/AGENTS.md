@@ -75,7 +75,7 @@ After any confirmed write, summarize what changed, where it changed, and any val
 - Read shared Craft memory for project-adjacent personal operations, host coordination, active cross-host loops, or agent handoffs that may matter outside the current machine.
 - Keep shared Craft memory current when a material cross-host fact changes and future agents are likely to need it.
 - Do not use shared Craft memory as a substitute for authoritative systems such as Todoist, calendar, mail, source repos, or project docs.
-- On hosts that need shared Craft memory, set `CRAFT_SHARED_MEMORY_URL` in a local ignored shell exports file such as `~/.zshrc_custom/exports-local.zsh`.
+- On hosts that need shared Craft memory from non-interactive Codex/automation shells, set `CRAFT_SHARED_MEMORY_URL` in `~/.zshenv.local`. Keep `~/.zshenv.local` to quiet `export` statements only. Use it for stable agent runtime values such as host aliases, Craft routing IDs, artifact roots, and local model paths. Use `~/.zshrc_custom/exports-local.zsh` for interactive-shell secrets, dynamic exports, and tool credentials that agents should load deliberately only when needed.
 - Do not hard-code private Craft links in tracked dotfiles.
 
 ## Synced Multi-Host Workspace

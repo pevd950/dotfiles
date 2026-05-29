@@ -99,6 +99,33 @@ yadm alt  # Regenerate alternates
 ### VS Code Prompts
 Stored in `.config/Code/User/prompts/`. If an app still expects the macOS Application Support path, create the symlink manually.
 
+### Host-Local Environment Files
+
+Keep host-local values out of tracked dotfiles. Use the narrowest local file
+that matches how the value is consumed:
+
+- `~/.zshenv.local`: stable agent and automation runtime configuration that
+  must be visible to non-interactive zsh commands. Keep it quiet and fast:
+  `export` statements only, no command substitutions, no output, no network
+  calls. Examples: `AGENT_HOST_ALIAS`, `CRAFT_SHARED_MEMORY_URL`,
+  `CRAFT_AGENT_OPS_FRICTION_LOG_BLOCK_ID`,
+  `CRAFT_PLATO_FRICTION_LOG_BLOCK_ID`, `AI_INBOX_DIR`, and local model paths.
+- `~/.zshrc_custom/exports-local.zsh`: interactive shell exports, dynamic
+  command-based exports, and tool credentials for human terminal sessions. It
+  may use commands such as `gh auth token`, but Codex or cron-style
+  non-interactive shells should not depend on it being sourced by default.
+  Agent tools that need one of these credentials should load it deliberately for
+  that action and avoid printing values.
+
+Private object IDs, private Craft links, tokens, and host-specific paths belong
+in one of these ignored local files, not in tracked skills or docs. Prefer
+`.zshenv.local` for non-secret routing/path values that agents need frequently;
+keep API tokens and dynamic auth in `exports-local.zsh` unless a scheduled
+automation has a narrower, explicitly documented secrets-loading path. When a
+value needs to be set on multiple hosts, leave a Host Message in shared Craft
+memory with the env var names and verification command, rather than committing
+the private values.
+
 ## 🔀 GitHub Codespaces
 
 This repo auto-configures Codespaces. GitHub runs `setup.sh` automatically (not the full yadm bootstrap).

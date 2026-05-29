@@ -94,6 +94,14 @@ Common write endpoints:
 - Shell expansion can leak secrets into Craft if a payload is built with unescaped `$CRAFT_API_KEY` or `$CRAFT_API_BASE_URL`. Use single quotes, JSON arguments, or helper scripts so examples remain literal.
 - API client defaults matter. Avoid default Python `urllib` headers; set a user agent explicitly.
 
+## Images and Attachments
+
+- Local paths and `file://` URLs are not durable inside Craft documents. Do not leave transient pasteboard paths as the only image record.
+- Craft image blocks need a resolved Craft-accessible URL. In MCP paths, `file://` or localhost image URLs can fail with misleading "Document not found" errors; treat that as an unsupported image insertion path, not necessarily a missing document.
+- If the source image came from a Codex chat and the original pasteboard file has expired, recover `input_image` payloads from the relevant Codex session JSONL structurally with a JSON parser, decode `data:image/...;base64,...`, and save stable local copies before trying to insert them elsewhere.
+- When the Craft desktop app is available, a reliable fallback is to copy the bitmap data itself to the clipboard, not the file list, then paste into the open Craft document. On macOS, `osascript` can set the clipboard to `(read (POSIX file "<image path>") as JPEG picture)`.
+- Verify image insertion by reading the document back and confirming blocks of `type: "image"` with `https://r.craft.do/...` URLs. Remove accidental generic `type: "file"` blocks created by pasting a file list instead of image data.
+
 ## Collections
 
 - Read schema before adding or updating rows.

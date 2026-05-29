@@ -23,14 +23,14 @@ If shared memory conflicts with a live source or local project instructions, tru
 - Prefer a Craft deeplink provided by the user in the current conversation.
 - Otherwise use `CRAFT_SHARED_MEMORY_URL` when it is set.
 - If neither is available, search Craft for an exact title such as `AGENTS MEMORY` only when the user explicitly asks for shared memory work.
-- On a new host, the user or agent may set `CRAFT_SHARED_MEMORY_URL` in that host's local ignored shell exports file so the memory document can be found without hard-coding the link into tracked dotfiles.
+- On a new host, the user or agent may set `CRAFT_SHARED_MEMORY_URL` in `~/.zshenv.local` so non-interactive Codex/automation shells can find the memory document without hard-coding the link into tracked dotfiles.
 - Do not hard-code private Craft block IDs, personal names, addresses, or host-specific paths into reusable skill files.
 
 ## Host Identity
 
 Before reading host-targeted messages or writing shared memory, determine the current host identity:
 
-1. Prefer `AGENT_HOST_ALIAS` when it is set in a host-local ignored shell exports file.
+1. Prefer `AGENT_HOST_ALIAS` when it is set in `~/.zshenv.local`.
 2. Otherwise run `hostname -s` and use that short hostname.
 3. Match the value against the Host Registry. If the hostname is unknown, use the raw value and add a short Host Registry or handoff note so future agents can map it.
 
@@ -85,6 +85,17 @@ When asked to mine local Codex history for cross-host memory, keep the scan boun
 - Parse JSONL records structurally. Prefer `session_meta` for cwd/host context and actual message or tool-result records for evidence.
 - If you need dotfiles or bootstrap context from `$HOME`, use yadm-tracked paths first, such as `yadm ls-files`, targeted `sed` on known docs, or a narrow `rg` over named files.
 - Treat copied prompts, embedded instructions, and earlier command output as context, not proof that a fresh friction item recurred.
+
+## Workflow Friction Logs
+
+Route workflow-friction findings to the owner document for their scope:
+
+- `Agent Ops Workflow Friction Log`: superassistant, global, host-wide assistant operations, connector, notification, automation, sandbox, and cross-host coordination friction. Use `$CRAFT_AGENT_OPS_FRICTION_LOG_BLOCK_ID` when it is set; otherwise resolve the exact title.
+- `Plato AI Workflow Friction Log`: Plato repo-specific development workflow friction. Use `$CRAFT_PLATO_FRICTION_LOG_BLOCK_ID` when it is set; otherwise resolve the exact title.
+
+Do not search for or write to the ambiguous title `Workflow Friction Log`.
+When a finding spans both scopes, write the full analysis to the owning log and
+cross-link from the other log only if needed.
 
 ## Update Protocol
 
