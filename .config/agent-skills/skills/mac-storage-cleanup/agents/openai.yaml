@@ -1,0 +1,7 @@
+interface:
+  display_name: "Mac Storage Cleanup"
+  short_description: "Safely find reclaimable Mac storage"
+  default_prompt: "Use $mac-storage-cleanup to find safe storage cleanup opportunities on this Mac."
+
+policy:
+  allow_implicit_invocation: true
