@@ -84,6 +84,30 @@ Common write endpoints:
 - `POST /comments`: add anchored comments. Treat as experimental and verify.
 - `POST /upload`: upload and insert files. Treat as experimental and verify.
 
+## Daily Notes
+
+Use Craft's native daily-note surface for date-based notes. A document titled like
+`2026.05.30` is only a regular document and will not appear as that day's Craft
+Daily Note.
+
+Read today's native daily note with:
+
+```shell
+python3 "$SKILL_DIR/scripts/craft_api.py" GET /blocks --query date=today --query maxDepth=3
+```
+
+If Craft returns `NOT_FOUND_ERROR` for the daily note, create it by inserting
+content at a date position, not by creating a document:
+
+```shell
+python3 "$SKILL_DIR/scripts/craft_api.py" POST /blocks \
+  --json '{"position":{"date":"today","position":"end"},"markdown":"# Daily Command Center\n\n## Scratchpad"}'
+```
+
+For a specific day, use the ISO date string in the position and read query, such
+as `date=2026-05-30`. After creation, verify with `GET /blocks?date=<date>`;
+do not rely on `GET /documents/search` as proof that a native daily note exists.
+
 ## Formatting Notes
 
 - Markdown insertion is sensitive to newline shape. In shell commands, pass real newlines, not literal `\n` sequences. Read back the document and fix escaped `\n` artifacts.
