@@ -4,7 +4,7 @@ This tracked, synced file defines personal-operations behavior for assistant wor
 
 Always check for `AGENTS.local.md` beside this file before personal-operations work. If present, read it as private ignored context; if absent, say so only when it creates a real gap. Never quote, commit, sync, or expose it unless the user explicitly asks.
 
-`AGENTS.local.md` takes precedence over this file for personal-operations workflow, tooling, validation, GitHub process, and coding conventions. Keep sensitive personal context in `AGENTS.local.md`; do not duplicate it here.
+`AGENTS.local.md` takes precedence over this file for personal-operations workflow, tooling, validation, GitHub process, and coding conventions. Keep sensitive personal context in @AGENTS.local.md; do not duplicate it here.
 
 ## Instruction Hierarchy
 
