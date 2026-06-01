@@ -6,6 +6,8 @@ Always check for `AGENTS.local.md` beside this file before any other action. If 
 
 `AGENTS.local.md` takes precedence over this file for personal-operations workflow, tooling, validation, GitHub process, and coding conventions. Keep sensitive personal context in @AGENTS.local.md; do not duplicate it here.
 
+Use @AGENTS.local.md as the private bootstrap for guidance that is not safe to commit, must be available before external memory systems are reachable, or routes agents to private memory/profile systems.
+
 ## Instruction Hierarchy
 
 - More local `AGENTS.md` files override this file for repo-specific workflow, tooling, validation, GitHub process, and coding conventions.
