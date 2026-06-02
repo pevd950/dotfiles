@@ -13,7 +13,7 @@
         "hooks" : [
           {
             "type" : "command",
-            "command" : "\/Users\/pablovalero\/.claude\/shellfish-notify.sh claude"
+            "command" : "$HOME\/.claude\/shellfish-notify.sh claude"
           }
         ]
       }
@@ -24,7 +24,7 @@
         "hooks" : [
           {
             "type" : "command",
-            "command" : "\/Users\/pablovalero\/.claude\/shellfish-notify.sh claude"
+            "command" : "$HOME\/.claude\/shellfish-notify.sh claude"
           }
         ]
       }
