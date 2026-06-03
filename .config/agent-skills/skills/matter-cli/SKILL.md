@@ -89,7 +89,7 @@ When surfacing Matter queue items into Todoist:
 - Include `matter:item:<id>` in the description for dedupe.
 - Include `Matter content id: <numeric-content-id>`.
 - Include the original source URL separately as `Source URL`.
-- Apply the `matter` Todoist label and preserve existing due date/priority choices unless the user asks to change them.
+- Apply the `read` Todoist label only. Do not add a `matter` label; the visible Matter link and `matter:item:<id>` description line are enough source provenance. Preserve existing due date/priority choices unless the user asks to change them.
 
 ## Automation Notes
 
