@@ -20,7 +20,9 @@ def main() -> int:
     parser.add_argument("--query", action="append", default=[], help="Query pair key=value; may repeat")
     parser.add_argument("--json", dest="json_body", help="Inline JSON request body")
     parser.add_argument("--json-file", help="File containing JSON request body")
+    parser.add_argument("--body-file", help="File containing a raw request body, for example upload bytes")
     parser.add_argument("--accept", default="application/json")
+    parser.add_argument("--content-type", help="Content-Type for --body-file or an explicit JSON override")
     parser.add_argument("--auth", choices=["bearer", "x-craft-api-key"], default="bearer")
     parser.add_argument("--timeout", type=float, default=30.0, help="Request timeout in seconds")
     args = parser.parse_args()
@@ -56,8 +58,9 @@ def main() -> int:
         url = f"{url}{separator}{query}"
 
     body = None
-    if args.json_body and args.json_file:
-        print("Use --json or --json-file, not both", file=sys.stderr)
+    body_sources = [bool(args.json_body), bool(args.json_file), bool(args.body_file)]
+    if sum(body_sources) > 1:
+        print("Use only one of --json, --json-file, or --body-file", file=sys.stderr)
         return 2
     if args.json_body:
         try:
@@ -79,13 +82,22 @@ def main() -> int:
         except json.JSONDecodeError as error:
             print(f"Invalid JSON in --json-file: {error}", file=sys.stderr)
             return 2
+    elif args.body_file:
+        try:
+            with open(args.body_file, "rb") as handle:
+                body = handle.read()
+        except OSError as error:
+            print(f"Cannot read --body-file: {error}", file=sys.stderr)
+            return 2
 
     headers = {
         "Accept": args.accept,
         "User-Agent": "curl/8.7.1",
     }
     if body is not None:
-        headers["Content-Type"] = "application/json"
+        headers["Content-Type"] = args.content_type or "application/json"
+    elif args.content_type:
+        headers["Content-Type"] = args.content_type
     if args.auth == "bearer":
         headers["Authorization"] = f"Bearer {api_key}"
     else:
