@@ -345,6 +345,22 @@ setup_shell() {
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || return 1
 }
 
+setup_1password_dev() {
+  local platform="$1"
+
+  if [[ "$platform" != "Darwin" ]]; then
+    return 0
+  fi
+
+  if [[ -x "$HOME/scripts/setup-1password-dev.zsh" ]]; then
+    "$HOME/scripts/setup-1password-dev.zsh"
+  elif [[ -f "$HOME/scripts/setup-1password-dev.zsh" ]]; then
+    zsh "$HOME/scripts/setup-1password-dev.zsh"
+  else
+    echo "No 1Password developer setup script found, skipping"
+  fi
+}
+
 main() {
   local platform
   platform="$(detect_platform)"
@@ -360,6 +376,7 @@ main() {
   setup_packages "$platform"
   setup_runtimes "$platform"
   setup_shell "$platform"
+  setup_1password_dev "$platform"
 }
 
 main "$@"

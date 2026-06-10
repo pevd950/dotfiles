@@ -161,8 +161,11 @@ if [ "$OS" = "macos" ]; then
    # export NVM_DIR="$HOME/.nvm"
    # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"                   # This loads nvm
    # [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" # This loads nvm bash_completion
-   # Enable this for 1Password CLI Plugins
-   # source ~/.config/op/plugins.sh
+   # 1Password CLI shell plugin aliases. Keep this conditional and avoid
+   # global aliases unless a plugin is intentionally configured.
+   if [[ -r "$HOME/.config/op/plugins.sh" ]]; then
+      source "$HOME/.config/op/plugins.sh"
+   fi
    # source ~/.config/broot/launcher/bash/br
    # source /Users/pablovalero/.config/broot/launcher/bash/br
 elif [ "$OS" = "debian" ]; then

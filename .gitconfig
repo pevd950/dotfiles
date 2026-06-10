@@ -9,6 +9,8 @@
 	defaultBranch = main
 [github]
 	user = pevd950
+[url "git@github.com:pevd950/"]
+	insteadOf = https://github.com/pevd950/
 [push]
 	default = simple
 	autoSetupRemote = true
