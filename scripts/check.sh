@@ -18,6 +18,8 @@ zsh_files=(
   .zshrc_custom/functions.zsh
   .zshrc_custom/macos-exports
   .zshrc_custom/debian-exports
+  .zshrc_custom/bin/onepassword-dev-preflight
+  scripts/setup-1password-dev.zsh
 )
 
 shellcheck "${bash_files[@]}"
