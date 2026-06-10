@@ -175,13 +175,38 @@ ensure_ssh_config_identity_agent() {
   chmod 600 "$ssh_config"
 }
 
-github_ssh_auth_ready() {
+ssh_agent_has_keys() {
+  local agent_socket="$1"
   local key_count
 
-  [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK:-}" ]] || return 1
-  ssh-add -l >/dev/null 2>&1 || return 1
-  key_count="$(ssh-add -l 2>/dev/null | wc -l | tr -d ' ')"
+  [[ -n "$agent_socket" && -S "$agent_socket" ]] || return 1
+  SSH_AUTH_SOCK="$agent_socket" ssh-add -l >/dev/null 2>&1 || return 1
+  key_count="$(SSH_AUTH_SOCK="$agent_socket" ssh-add -l 2>/dev/null | wc -l | tr -d ' ')"
   [[ "${key_count:-0}" -gt 0 ]]
+}
+
+github_ssh_auth_ready() {
+  local configured_agent=""
+  local ssh_config="$HOME/.ssh/config"
+
+  if command -v ssh >/dev/null 2>&1 && [[ -f "$ssh_config" ]]; then
+    configured_agent="$(ssh -F "$ssh_config" -G github.com 2>/dev/null | awk 'tolower($1) == "identityagent" { $1=""; sub(/^[[:space:]]+/, ""); print; exit }' || true)"
+  fi
+
+  case "$configured_agent" in
+    ""|"none")
+      ssh_agent_has_keys "${SSH_AUTH_SOCK:-}"
+      ;;
+    "SSH_AUTH_SOCK")
+      ssh_agent_has_keys "${SSH_AUTH_SOCK:-}"
+      ;;
+    "~/"*)
+      ssh_agent_has_keys "$HOME/${configured_agent#"~/"}"
+      ;;
+    *)
+      ssh_agent_has_keys "$configured_agent"
+      ;;
+  esac
 }
 
 ensure_gh_ssh_protocol() {
