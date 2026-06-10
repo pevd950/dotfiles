@@ -64,7 +64,7 @@ ensure_ssh_config_identity_agent() {
   local ssh_config="$ssh_dir/config"
   local include_dir="$ssh_dir/config.d"
   local include_file="$include_dir/1password-agent.conf"
-  local include_line='Include ~/.ssh/config.d/*.conf'
+  local include_line='Include ~/.ssh/config.d/1password-agent.conf'
   local agent_path='~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock'
   local agent_socket="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
   local tmp_file
@@ -94,9 +94,10 @@ ensure_ssh_config_identity_agent() {
 
   if awk '
     /^# >>> dotfiles 1Password SSH agent$/ { marker=1 }
-    /^[[:space:]]*Include[[:space:]]+~\/\.ssh\/config\.d\/\*\.conf[[:space:]]*$/ { include_seen=1 }
-    /^[[:space:]]*(Host|Match)[[:space:]]+/ && !include_seen { block_before_include=1 }
-    END { exit (include_seen && !marker && !block_before_include) ? 0 : 1 }
+    /^[[:space:]]*Include[[:space:]]+~\/\.ssh\/config\.d\/1password-agent\.conf[[:space:]]*$/ { include_seen=1 }
+    /^[[:space:]]*Include[[:space:]]+~\/\.ssh\/config\.d\/\*\.conf[[:space:]]*$/ { wildcard_seen=1 }
+    /^[[:space:]]*(Host|Match)[[:space:]]+/ && !(include_seen || wildcard_seen) { block_before_include=1 }
+    END { exit ((include_seen || wildcard_seen) && !marker && !block_before_include) ? 0 : 1 }
   ' "$ssh_config"; then
     status "ssh config include" "present before SSH blocks"
     return 0
@@ -114,7 +115,7 @@ ensure_ssh_config_identity_agent() {
         emitted = 1
       }
     }
-    /^[[:space:]]*Include[[:space:]]+.*\.ssh\/config\.d\/\*\.conf[[:space:]]*$/ { next }
+    /^[[:space:]]*Include[[:space:]]+.*\.ssh\/config\.d\/1password-agent\.conf[[:space:]]*$/ { next }
     /^# >>> dotfiles 1Password SSH agent$/ { skip=1; next }
     /^# <<< dotfiles 1Password SSH agent$/ { skip=0; next }
     skip { next }
@@ -201,10 +202,11 @@ write_agent_toml_from_1password() {
             (999; if has_word($words; $names[$i]) then [$i, .] | min else . end);
       def score:
         (.title | ascii_downcase) as $title
-        | ($host | ascii_downcase) as $host_l
+        | ($host | ascii_downcase | sub("\\.local$"; "")) as $host_base
         | words(.title) as $words
-        | if $title == ($host_l + ".local ssh key") then 0
-          elif has_word($words; $host_l) then 1
+        | if $title == ($host_base + ".local ssh key") then 0
+          elif $title == ($host_base + " ssh key") then 0
+          elif has_word($words; $host_base) then 1
           else 10 + priority_index($title)
           end;
       sort_by(score, (.title | ascii_downcase))
