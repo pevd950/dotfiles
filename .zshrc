@@ -61,7 +61,7 @@ plugins=(
    per-directory-history
    history
    terraform
-   web-search
+   # web-search
    zsh-syntax-highlighting
 )
 
@@ -74,7 +74,7 @@ if [[ "$OS" == "macos" ]]; then
    plugins+=(
       copyfile
       copypath
-      kubectl
+      # kubectl
       macos
       1password
    )
@@ -134,25 +134,40 @@ autoload -U +X bashcompinit && bashcompinit
 
 # Source Last OS-specific export files
 if [ "$OS" = "macos" ]; then
-   if command -v kubectl >/dev/null 2>&1; then
-      source <(kubectl completion zsh)
-   fi
-   #Completion for 1Password CLI
-   if command -v op >/dev/null 2>&1; then
-      eval "$(op completion zsh)"
-      compdef _op op
-   fi
-   # Init ruby env
+   # Skip eager kubectl/op completion generation; run tool-specific completion setup manually when needed.
+   # Keep shims on PATH for project commands; lazy-load manager shell integration on first direct use.
    if command -v rbenv >/dev/null 2>&1; then
-      eval "$(rbenv init - zsh)"
+      [[ -d "$HOME/.rbenv/shims" ]] && path=("$HOME/.rbenv/shims" $path)
+      _lazy_init_rbenv() {
+         unset -f rbenv _lazy_init_rbenv
+         eval "$(command rbenv init - zsh)"
+      }
+      rbenv() {
+         _lazy_init_rbenv
+         rbenv "$@"
+      }
    fi
-   # Init node env
    if command -v nodenv >/dev/null 2>&1; then
-      eval "$(nodenv init -)"
+      [[ -d "$HOME/.nodenv/shims" ]] && path=("$HOME/.nodenv/shims" $path)
+      _lazy_init_nodenv() {
+         unset -f nodenv _lazy_init_nodenv
+         eval "$(command nodenv init -)"
+      }
+      nodenv() {
+         _lazy_init_nodenv
+         nodenv "$@"
+      }
    fi
-   # Skip startup-time shim rebuilds; manual and install-time rehashes still work.
    if command -v pyenv >/dev/null 2>&1; then
-      eval "$(pyenv init - --no-rehash)"
+      [[ -d "$HOME/.pyenv/shims" ]] && path=("$HOME/.pyenv/shims" $path)
+      _lazy_init_pyenv() {
+         unset -f pyenv _lazy_init_pyenv
+         eval "$(command pyenv init - --no-rehash)"
+      }
+      pyenv() {
+         _lazy_init_pyenv
+         pyenv "$@"
+      }
    fi
    if command -v bit >/dev/null 2>&1; then
       complete -o nospace -C "$(command -v bit)" bit
