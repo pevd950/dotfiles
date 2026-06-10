@@ -96,7 +96,10 @@ ensure_ssh_config_identity_agent() {
     return 0
   fi
 
-  tmp_file="$(mktemp)"
+  tmp_file="$(mktemp)" || {
+    status "ssh config include" "skipped; mktemp failed"
+    return 0
+  }
   awk -v include_line="$include_line" '
     function emit_include() {
       if (!emitted) {
@@ -181,15 +184,21 @@ write_agent_toml_from_1password() {
   }
   if ! op item list --categories "SSH Key" --format json 2>/dev/null \
     | jq -r --arg host "$host_alias" --arg priority "$peer_priority" '
+      def words($value):
+        $value | ascii_downcase | gsub("[^a-z0-9]+"; " ") | split(" ") | map(select(length > 0));
+      def has_word($words; $word):
+        ($words | index($word | ascii_downcase)) != null;
       def priority_index($title):
         ($priority | split(" ")) as $names
+        | words($title) as $words
         | reduce range(0; $names | length) as $i
-            (999; if ($title | contains($names[$i] | ascii_downcase)) then [$i, .] | min else . end);
+            (999; if has_word($words; $names[$i]) then [$i, .] | min else . end);
       def score:
         (.title | ascii_downcase) as $title
         | ($host | ascii_downcase) as $host_l
+        | words(.title) as $words
         | if $title == ($host_l + ".local ssh key") then 0
-          elif ($title | contains($host_l)) then 1
+          elif has_word($words; $host_l) then 1
           else 10 + priority_index($title)
           end;
       sort_by(score, (.title | ascii_downcase))
