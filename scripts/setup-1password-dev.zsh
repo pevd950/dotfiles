@@ -175,9 +175,23 @@ ensure_ssh_config_identity_agent() {
   chmod 600 "$ssh_config"
 }
 
+github_ssh_auth_ready() {
+  local key_count
+
+  [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK:-}" ]] || return 1
+  ssh-add -l >/dev/null 2>&1 || return 1
+  key_count="$(ssh-add -l 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${key_count:-0}" -gt 0 ]]
+}
+
 ensure_gh_ssh_protocol() {
   if ! command -v gh >/dev/null 2>&1; then
     status "gh git_protocol" "skipped; gh missing"
+    return 0
+  fi
+
+  if ! github_ssh_auth_ready; then
+    status "gh git_protocol" "skipped; SSH auth unavailable"
     return 0
   fi
 
