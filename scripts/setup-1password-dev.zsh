@@ -82,7 +82,7 @@ ensure_ssh_config_identity_agent() {
 
     if [[ -e "$ssh_config" && "$remove_managed_include" -eq 1 ]]; then
       tmp_file="$(mktemp)" || {
-        status "ssh config include" "skipped; 1Password SSH agent socket missing"
+        status "ssh config include" "skipped; temp file unavailable for stale include cleanup"
         return 0
       }
       awk '
