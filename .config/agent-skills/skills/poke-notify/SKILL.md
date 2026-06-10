@@ -1,6 +1,6 @@
 ---
 name: poke-notify
-description: "Send the configured user a concise handoff message through Poke's inbound SMS webhook using the local POKE_API_KEY environment variable; use when the user asks an agent to notify them that work is done, ready for review, or needs attention, and include helpful URLs or concrete follow-up details when available."
+description: "Send the configured user a concise handoff message through Poke's inbound API message webhook using the local POKE_API_KEY environment variable; use when the user asks an agent to notify them that work is done, ready for review, or needs attention, and include helpful URLs or concrete follow-up details when available."
 ---
 
 # Poke Notify
@@ -12,7 +12,7 @@ description: "Send the configured user a concise handoff message through Poke's 
 - Use it for handoffs, not just pings. Include the minimum context the recipient needs to act without reopening the full thread first.
 
 ## Endpoint
-- `https://poke.com/api/v1/inbound-sms/webhook`
+- `https://poke.com/api/v1/inbound/api-message`
 
 ## Requirements
 - `POKE_API_KEY` must already be set in the shell environment.

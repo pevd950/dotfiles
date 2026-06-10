@@ -6,12 +6,12 @@ import sys
 import urllib.error
 import urllib.request
 
-ENDPOINT = "https://poke.com/api/v1/inbound-sms/webhook"
+ENDPOINT = "https://poke.com/api/v1/inbound/api-message"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate or send a notification message through Poke's inbound SMS webhook."
+        description="Validate or send a notification message through Poke's inbound API message webhook."
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument(
