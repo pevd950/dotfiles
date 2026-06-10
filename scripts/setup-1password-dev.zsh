@@ -177,7 +177,7 @@ ensure_ssh_config_identity_agent() {
     printf "# Keep this include before other Host or Match blocks in ~/.ssh/config.\n"
     printf "# Use the GUI-backed 1Password SSH agent only for local sessions.\n"
     printf "# Inbound SSH sessions are unattended; let forwarded agents or host-specific SSH config handle them.\n"
-    printf '%s\n' 'Match exec "test -z \"$SSH_CONNECTION\""'
+    printf '%s\n' 'Match exec "test -z \"${SSH_CONNECTION}${SSH_CLIENT}\""'
     printf "  IdentityAgent \"%s\"\n" "$agent_path"
     printf "Match all\n"
   } > "$include_file"
