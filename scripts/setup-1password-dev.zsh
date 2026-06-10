@@ -86,6 +86,16 @@ ensure_ssh_config_identity_agent() {
     return 0
   fi
 
+  if awk '
+    /^# >>> dotfiles 1Password SSH agent$/ { marker=1 }
+    /^[[:space:]]*Include[[:space:]]+~\/\.ssh\/config\.d\/\*\.conf[[:space:]]*$/ { include_seen=1 }
+    /^[[:space:]]*Host[[:space:]]+\*[[:space:]]*($|#)/ && !include_seen { broad_host_before_include=1 }
+    END { exit (include_seen && !marker && !broad_host_before_include) ? 0 : 1 }
+  ' "$ssh_config"; then
+    status "ssh config include" "present before defaults"
+    return 0
+  fi
+
   tmp_file="$(mktemp)"
   awk -v include_line="$include_line" '
     function emit_include() {
@@ -120,7 +130,7 @@ ensure_gh_ssh_protocol() {
     return 0
   fi
 
-  if [[ "$(gh config get git_protocol 2>/dev/null || true)" == "ssh" ]]; then
+  if [[ "$(gh config get git_protocol -h github.com 2>/dev/null || true)" == "ssh" ]]; then
     status "gh git_protocol" "ssh"
     return 0
   fi
