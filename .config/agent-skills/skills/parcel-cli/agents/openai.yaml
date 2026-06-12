@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parcel CLI"
+  short_description: "Track and add Parcel deliveries via API."
+  default_prompt: "Use $parcel-cli to inspect Parcel deliveries, resolve carrier codes, or prepare a confirmed package add."
