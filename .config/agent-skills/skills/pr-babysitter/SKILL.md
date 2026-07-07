@@ -170,6 +170,16 @@ The authenticated user may appear as `pevd950`; treat those comments as user-aut
 
 If checks/reviews will take longer than the current turn, create or update a Codex heartbeat automation instead of losing the loop.
 
+Heartbeat state is only a wakeup mechanism. Each heartbeat run must re-verify the target repo, PR number, branch, and latest head SHA from live GitHub before acting. Do not trust saved prompt text, previous thread summaries, sidebar/app status, or prior payloads as current PR state.
+
+At the start of every heartbeat:
+
+1. Run the Startup Checklist again, or use the GitHub connector equivalent if `gh` is unavailable.
+2. Compare the live PR URL, number, branch, and head SHA against the heartbeat prompt.
+3. If the prompt points at the wrong PR/thread, `target_thread_id` is invalid, or the PR cannot be verified live, stop and report the mismatch instead of editing, replying, or marking ready.
+4. Treat Codex app/sidebar heartbeat updates as best-effort UI state only. They do not replace live GitHub checks, review comments, review threads, reactions, or local branch status.
+5. After every push or external review change, refresh the heartbeat prompt with the latest head SHA and known state; stale heartbeat payloads must not drive readiness decisions.
+
 Use `codex_app.automation_update` when available:
 
 - `kind`: `heartbeat`

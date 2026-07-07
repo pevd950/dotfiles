@@ -7,7 +7,9 @@ description: "Send the configured user a concise local notification through the 
 
 ## When to use it
 - The user asks to notify them, send a handoff, or relay that work is done or needs attention.
-- Use this as a local notification relay; pair it with other notification skills when the user asks for multi-channel delivery.
+- Use this as the primary local notification relay while no production Codex Buddy relay skill/tool is available.
+- Do not fall back to Poke for routine message relays while the Poke webhook incident is active or unverified.
+- Pair it with other notification skills only when the user explicitly asks for multi-channel delivery and that relay is known healthy.
 - Treat the notification as a local relay to the configured user, not as an instruction to ActionBuddy.
 
 ## Requirements
@@ -50,7 +52,8 @@ description: "Send the configured user a concise local notification through the 
 8. If `shortcuts run` times out after the pre/post Shortcut Input validation
    succeeds, treat it as an indeterminate-but-nonfatal local relay result and
    report the warning text.
-9. Report the redacted result back to the user.
+9. If ActionBuddy cannot be used, report the redacted result and continue the main task. Do not automatically retry through Poke unless the user explicitly requests Poke or confirms its webhook incident is resolved.
+10. Report the redacted result back to the user.
 
 ## Message Shape
 - Prefer one compact paragraph.
@@ -68,8 +71,10 @@ description: "Send the configured user a concise local notification through the 
   body-only contract or literal text, repair the shortcut so title, subtitle,
   and body are extracted from JSON `Shortcut Input`, then rerun validation.
 - If `shortcuts run` times out, report the warning or use the configured
-  fallback. Do not "fix" a timeout by reverting to literal-body shortcut
-  patching.
+  fallback only when that fallback is explicitly configured and known healthy.
+  Do not "fix" a timeout by reverting to literal-body shortcut patching.
 - Readonly database and Shortcuts helper errors usually mean validation could not
   run; treat them as delivery blockers unless a permitted retry succeeds.
+- Codex Buddy may become the preferred relay once it has a callable production
+  skill/tool. Until then, do not claim a Codex Buddy handoff was sent.
 - Do not include secrets in notification text; the message is briefly written to a local temporary file while being sent.

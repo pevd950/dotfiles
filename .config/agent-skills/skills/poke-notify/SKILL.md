@@ -1,13 +1,15 @@
 ---
 name: poke-notify
-description: "Send the configured user a concise handoff message through Poke's inbound API message webhook using the local POKE_API_KEY environment variable; use when the user asks an agent to notify them that work is done, ready for review, or needs attention, and include helpful URLs or concrete follow-up details when available."
+description: "Use Poke's inbound API message webhook only when the user explicitly asks for Poke or confirms the webhook incident is resolved. Do not use it as a default completion, handoff, or fallback notification relay."
 ---
 
 # Poke Notify
 
 ## When to use it
 - The user explicitly asks you to send a message through Poke.
-- You need to notify the configured user that work is done, ready for review, or needs attention.
+- The user confirms the current Poke webhook incident is resolved and asks to resume Poke relays.
+- Do not use Poke for routine completion, ready-for-review, blocker, or automation handoff relays.
+- Do not use Poke as an ActionBuddy fallback while the webhook incident is active or unverified.
 - Treat Poke as a relay/messenger, not the reviewer or executor of the task.
 - Use it for handoffs, not just pings. Include the minimum context the recipient needs to act without reopening the full thread first.
 
@@ -51,7 +53,7 @@ description: "Send the configured user a concise handoff message through Poke's 
 ## Notes
 - Auth uses `Authorization: Bearer $POKE_API_KEY`.
 - The helper script performs schema validation before any real delivery.
-- DNS or connection errors usually mean the notification was not delivered; treat them as delivery blockers unless a permitted retry succeeds.
+- DNS, timeout, webhook, or connection errors usually mean the notification was not delivered. Treat them as delivery blockers; do not repeatedly retry or silently fall back through Poke.
 - The canonical skill lives in `~/.config/agent-skills/skills/poke-notify/`.
 - Provider-specific locations should use symlinks to this shared folder.
 - Avoid imperative messages like `go to the laptop` with no context; they make Poke infer the wrong role.
