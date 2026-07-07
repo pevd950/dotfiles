@@ -408,6 +408,7 @@ main() {
   ensure_ssh_config_identity_agent
   write_agent_toml_from_1password
   ensure_gh_ssh_protocol
+  status "read-only preflight" "~/.zshrc_custom/bin/onepassword-dev-preflight"
 }
 
 main "$@"

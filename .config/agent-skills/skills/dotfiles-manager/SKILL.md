@@ -99,6 +99,42 @@ Write dotfiles guidance for multiple Macs and future hosts:
 - Prefer "discover then act" instructions over host-specific constants.
 - If a path is intentionally user-specific, make that explicit.
 
+## 1Password Developer Baseline
+
+For 1Password, GitHub auth, SSH agent, or developer-token routing work, start
+with the non-mutating baseline before changing files:
+
+```bash
+~/.zshrc_custom/bin/onepassword-dev-preflight
+```
+
+Use the preflight to classify the host, not to collect secrets. It should answer:
+
+- whether `op`, `1Password.app`, `onepassword-mcp`, and the Codex `1password`
+  MCP entry are available
+- whether `op account list`, `op plugin list`, `gh auth status`, and
+  `gh api user` can run without printing their output
+- whether `GH_TOKEN` or `GITHUB_TOKEN` are set in the current environment,
+  because env overrides can mask the 1Password/gh baseline
+- whether `SSH_AUTH_SOCK`, `ssh-add`, 1Password `agent.toml`, GitHub
+  `IdentityAgent`, and SSH auth to GitHub are usable
+- which variable names are exported from quiet local env files, without
+  printing values
+
+Only run the mutating setup script after the baseline shows the intended gap or
+the user asked for repair:
+
+```bash
+scripts/setup-1password-dev.zsh
+```
+
+Keep public tracked guidance to command names, variable names, and non-secret
+mechanics. Do not commit private 1Password item paths, vault IDs, token values,
+host-local Craft links, or generated secret files. If a remote host is involved,
+verify inheritance by pulling the yadm commit on that host and running the same
+preflight there; do not assume the local host's 1Password app, SSH socket, or
+CLI auth state exists remotely.
+
 ## When To Ask First
 
 Ask before proceeding when the task involves:
