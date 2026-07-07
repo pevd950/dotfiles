@@ -36,9 +36,10 @@
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
+  "inputNeededNotifEnabled": true,
+  "agentPushNotifEnabled": true,
   "feedbackSurveyState": {
     "lastShownTime": 1754084405712
   },
-  "agentPushNotifEnabled": true,
-  "inputNeededNotifEnabled": true
+  "tui": "fullscreen"
 }
