@@ -55,9 +55,13 @@ If writing your own HTTP client, set a normal `User-Agent`. Python `urllib`'s de
 1. Probe `GET /connection` and confirm the expected space/timezone.
 2. Discover locations with `GET /folders` when placement matters, then discover targets with `GET /documents`, `GET /documents/search`, or `GET /blocks?id=<blockId>`.
 3. Read before writing. Capture target block IDs, document IDs, folder IDs, collection schema, and enough current content to roll back.
-4. Make the smallest mutation that satisfies the request.
-5. Read back the changed block, document, folder listing, collection, task, or comment anchor.
-6. Return the Craft app deeplink from `/connection.urlTemplates`, `clickableLink`, or the MCP/tool output when available.
+4. When creating a document or nested page, resolve the writable root before body writes:
+   - Treat returned document links, clickable links, document IDs, and page-block IDs as locators until a read confirms the block that accepts child insertion.
+   - For nested Craft pages, prefer a structured page block through the exposed MCP or API surface. Plain markdown headings can create loose blocks instead of a page.
+   - Write body blocks to the resolved page/root block ID, then read back that same ID before notifications or handoffs.
+5. Make the smallest mutation that satisfies the request.
+6. Read back the changed block, document, folder listing, collection, task, or comment anchor.
+7. Return the Craft app deeplink from `/connection.urlTemplates`, `clickableLink`, or the MCP/tool output when available.
 
 ## Endpoint Map
 
@@ -102,6 +106,10 @@ Common write endpoints:
 - Document IDs are root block IDs. Use a document ID with `GET /blocks?id=<documentId>` to fetch document content.
 - Locations are either built-ins (`unsorted`, `templates`, `trash`, `daily_notes` for listing/searching) or folder IDs from `GET /folders`.
 - For new durable notes, create the page shell with `POST /documents`, then insert body blocks with `POST /blocks` at `position:{pageId:"...",position:"end"}`. Verify with `GET /blocks`.
+- Treat any returned Craft deeplink, `documentLink`, `clickableLink`, or create response as a locator, not proof that you already have the writable block ID. Resolve or read the candidate before `POST /blocks`.
+- After `POST /documents`, immediately read the created candidate with `GET /blocks?id=<candidate>`. If the read fails or reveals a wrapper/link rather than the actual page body, use the available link-resolution surface for the current Craft tool/API, then insert into the resolved root block.
+- For nested pages, use structured `type:"page"` block creation when that surface is available. Do not rely on a markdown heading to create a page that can later receive body blocks.
+- Verify final page content by reading the resolved page/root block. Do not notify or hand off based only on a successful create response.
 - When placement matters, list folders first and create directly into the right destination instead of creating in `unsorted` and leaving cleanup to the user.
 - When moving documents, use `destination:{folderId:"..."}` or `destination:{destination:"unsorted"|"templates"}`. Use delete only for a deliberate soft-delete to trash.
 
@@ -142,6 +150,7 @@ do not rely on `GET /documents/search` as proof that a native daily note exists.
 
 - Markdown insertion is sensitive to newline shape. In shell commands, pass real newlines, not literal `\n` sequences. Read back the document and fix escaped `\n` artifacts.
 - For multiple list items, insert them together with real single newlines. If updating a single existing list item to multiple items fails, insert the replacement list after a nearby sibling, then delete the old block.
+- Plain markdown headings and titles do not necessarily create nested pages. When nesting is required, create a structured page block and resolve/read that page before writing its body.
 - For code blocks, prefer structured API blocks with `type: "code"`, `rawCode`, and `language`. Markdown code fences may round-trip as inline code in some MCP paths.
 - Craft-specific markdown tokens from the API docs include `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, and `[text](date://YYYY-MM-DD)`.
 - Two leading spaces represent one Craft indentation level. Preserve indentation when editing nested lists and nested pages.
