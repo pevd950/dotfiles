@@ -62,7 +62,7 @@ If the current session has an OpenAI docs MCP, use `$openai-docs` or the docs MC
 
 1. Load local guidance such as `AGENTS.md` and private local guidance when applicable.
 2. Inventory current assets:
-   - skills under `~/.config/agent-skills/skills`;
+   - skills under `~/.agents/skills`;
    - Codex skills under `${CODEX_HOME:-$HOME/.codex}/skills` when relevant;
    - automations under `${CODEX_HOME:-$HOME/.codex}/automations`;
    - custom agents if the host has an agent root.
@@ -94,7 +94,7 @@ Then report:
 
 ## Creation Rules
 
-- For personal skills, prefer `~/.config/agent-skills/skills`.
+- For personal skills, prefer `~/.agents/skills`.
 - Create only `SKILL.md` and `agents/openai.yaml` unless a script or reference file is genuinely needed.
 - Do not create a plugin when one skill is enough. Use a plugin only when there is a coherent installable bundle or external tool surface.
 - Do not create an automation until the prompt, cadence, permissions, output destination, and stop condition are clear.

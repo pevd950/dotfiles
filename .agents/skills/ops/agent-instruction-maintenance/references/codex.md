@@ -1,7 +1,7 @@
 # Codex Skill Guidance (GPT-5.2 Codex)
 
 ## Scope
-- Codex skills live in `~/.codex/skills/<skill-name>/SKILL.md`.
+- Codex user skills live in `~/.agents/skills/<skill-name>/SKILL.md` or categorized subdirectories such as `~/.agents/skills/development/<skill-name>/SKILL.md`.
 - The frontmatter `name` and `description` are the only trigger inputs.
 - Keep SKILL.md concise; add deeper docs under `references/` and scripts under `scripts/`.
 
@@ -26,8 +26,8 @@
 
 ## Skills (agent skills)
 - Locations are scoped and override lower precedence:
-  - Repo: `$CWD/.codex/skills`, parent repo folder, repo root `.codex/skills`
-  - User: `$CODEX_HOME/skills`
+  - Repo: `$CWD/.agents/skills`, parent repo folder, repo root `.agents/skills`
+  - User: `$HOME/.agents/skills`
   - Admin: `/etc/codex/skills`
   - System: bundled
 - Symlinked skills are supported.

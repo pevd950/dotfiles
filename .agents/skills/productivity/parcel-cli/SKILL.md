@@ -10,7 +10,7 @@ description: Work with Parcel package tracking through the official Parcel API. 
 - Use the bundled helper script first:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py --help
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py --help
 ```
 
 - Auth uses `PARCEL_API_KEY`, expected from the host's local shell exports such as `~/.zshenv.local`.
@@ -19,7 +19,7 @@ $HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py --help
 - Use dry-run output for planning and confirmation:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py add \
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py add \
   --tracking "1Z..." \
   --carrier ups \
   --description "Package description"
@@ -28,7 +28,7 @@ $HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py add \
 - Only use `--confirm` after approval:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py add \
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py add \
   --tracking "1Z..." \
   --carrier ups \
   --description "Package description" \
@@ -53,19 +53,19 @@ $HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py add \
 Search carriers:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py carriers ups
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py carriers ups
 ```
 
 Summarize active deliveries without dumping all event details:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py deliveries --mode active --summary
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py deliveries --mode active --summary
 ```
 
 Return JSON when downstream processing matters:
 
 ```bash
-$HOME/.config/agent-skills/skills/parcel-cli/scripts/parcel_api.py deliveries --mode recent --json
+$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py deliveries --mode recent --json
 ```
 
 ## Adding Deliveries

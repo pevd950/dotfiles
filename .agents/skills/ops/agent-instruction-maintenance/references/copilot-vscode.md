@@ -14,7 +14,7 @@
 
 ## Agent Skills
 - GitHub Copilot supports project skills in `.github/skills` or `.claude/skills`.
-- Personal skills live in `~/.copilot/skills` or `~/.claude/skills`.
+- Personal skills live in `~/.agents/skills` or `~/.copilot/skills`; prefer `~/.agents/skills` for portable shared skills.
 - GitHub Copilot CLI is public preview; VS Code stable support is rolling out (Insiders first).
 - `SKILL.md` requires `name` and `description`; optional `license`.
 

@@ -21,7 +21,7 @@ Use this skill for recurring automation threads and scheduled scout/router work.
 2. Resolve paths from the live environment:
    - `CODEX_HOME=${CODEX_HOME:-$HOME/.codex}`.
    - Resolve automation memory from the prompt or under `$CODEX_HOME/automations/<automation-id>/memory.md`.
-   - Resolve skills from the current session inventory first, then `$CODEX_HOME/skills`, then `~/.config/agent-skills/skills`.
+   - Resolve skills from the current session inventory first, then `$HOME/.agents/skills`, then provider-specific compatibility folders when relevant.
 3. Read the automation memory before scanning or writing when it exists.
 4. Choose the scan window:
    - Use the latest successful checkpoint from memory when available.

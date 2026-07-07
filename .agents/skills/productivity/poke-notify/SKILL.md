@@ -54,7 +54,7 @@ description: "Use Poke's inbound API message webhook only when the user explicit
 - Auth uses `Authorization: Bearer $POKE_API_KEY`.
 - The helper script performs schema validation before any real delivery.
 - DNS, timeout, webhook, or connection errors usually mean the notification was not delivered. Treat them as delivery blockers; do not repeatedly retry or silently fall back through Poke.
-- The canonical skill lives in `~/.config/agent-skills/skills/poke-notify/`.
+- The canonical skill lives in `~/.agents/skills/productivity/poke-notify/`.
 - Provider-specific locations should use symlinks to this shared folder.
 - Avoid imperative messages like `go to the laptop` with no context; they make Poke infer the wrong role.
 - Good link targets include GitHub PRs, GitHub issues, CI/build pages, docs, designs, and other URLs the recipient can open directly from the notification.

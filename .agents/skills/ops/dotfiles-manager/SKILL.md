@@ -1,6 +1,6 @@
 ---
 name: dotfiles-manager
-description: Safely inspect, edit, commit, push, or sync the user's yadm-managed dotfiles. Use when working on files under the home-directory dotfiles checkout, `~/.config/agent-skills`, global AGENTS guidance, shell/app config, bootstrap scripts, or when the user asks for yadm, dotfiles, cross-machine config, or live-home repo changes. Prioritize exact-path yadm operations and avoid broad `$HOME` scans.
+description: Safely inspect, edit, commit, push, or sync the user's yadm-managed dotfiles. Use when working on files under the home-directory dotfiles checkout, `~/.agents/skills`, global AGENTS guidance, shell/app config, bootstrap scripts, or when the user asks for yadm, dotfiles, cross-machine config, or live-home repo changes. Prioritize exact-path yadm operations and avoid broad `$HOME` scans.
 ---
 
 # Dotfiles Manager
@@ -79,8 +79,11 @@ After a developer-clone PR merges, sync the live checkout with non-interactive c
 For personal skills, treat this as the canonical root unless the user names another root:
 
 ```bash
-SKILL_ROOT="${XDG_CONFIG_HOME:-$HOME/.config}/agent-skills/skills"
+SKILL_ROOT="$HOME/.agents/skills"
 ```
+
+Keep shared skills organized by category under that root, for example
+`$HOME/.agents/skills/development/<skill-name>/SKILL.md`.
 
 Create only essential skill files:
 

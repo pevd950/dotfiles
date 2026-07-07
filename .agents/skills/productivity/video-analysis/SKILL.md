@@ -41,7 +41,7 @@ If Gemini flags a bug that local frames do not confirm, say it was a false lead 
 Gemini plus dense local frames for a UI bug:
 
 ```bash
-python3 "$HOME/.config/agent-skills/skills/video-analysis/scripts/video_analyze.py" \
+python3 "$HOME/.agents/skills/productivity/video-analysis/scripts/video_analyze.py" \
   /path/to/repro.mov \
   --mode ui-bug \
   --question "Find the subtle animation glitch during navigation"
@@ -50,7 +50,7 @@ python3 "$HOME/.config/agent-skills/skills/video-analysis/scripts/video_analyze.
 Focused inspection around a known moment:
 
 ```bash
-python3 "$HOME/.config/agent-skills/skills/video-analysis/scripts/video_analyze.py" \
+python3 "$HOME/.agents/skills/productivity/video-analysis/scripts/video_analyze.py" \
   /path/to/repro.mov \
   --mode ui-bug \
   --start 00:12 \
@@ -61,7 +61,7 @@ python3 "$HOME/.config/agent-skills/skills/video-analysis/scripts/video_analyze.
 Local-only artifacts when Gemini is unnecessary or unavailable:
 
 ```bash
-python3 "$HOME/.config/agent-skills/skills/video-analysis/scripts/video_analyze.py" \
+python3 "$HOME/.agents/skills/productivity/video-analysis/scripts/video_analyze.py" \
   /path/to/video.mp4 \
   --mode frame-only \
   --question "Inspect the transition"

@@ -25,41 +25,57 @@ run_setup_script() {
 }
 
 setup_agent_skills() {
-  echo "Setting up agent skills symlinks..."
-  local skills_root="$HOME/.config/agent-skills/skills"
-  local codex_home="${CODEX_HOME:-$HOME/.codex}"
-  local codex_dir="$codex_home/skills"
+  echo "Setting up agent skills compatibility links..."
+  local skills_root="$HOME/.agents/skills"
   local claude_dir="$HOME/.claude/skills"
+  local legacy_root="$HOME/.config/agent-skills/skills"
+  local codex_dir="${CODEX_HOME:-$HOME/.codex}/skills"
   local copilot_dir="$HOME/.copilot/skills"
-  local skill_path name target_dir target link_dest
+  local skill_path name target link_dest provider_dir legacy_target
 
-  mkdir -p "$codex_dir" "$claude_dir" "$copilot_dir"
+  mkdir -p "$claude_dir"
+
+  for provider_dir in "$codex_dir" "$copilot_dir" "$claude_dir"; do
+    [[ -d "$provider_dir" ]] || continue
+    shopt -s nullglob
+    for target in "$provider_dir"/*; do
+      [[ -L "$target" ]] || continue
+      link_dest=$(readlink "$target" || true)
+      if [[ "$link_dest" == "$legacy_root"/* || "$link_dest" == "$skills_root"/* ]]; then
+        echo "Removing obsolete provider skill link: $target"
+        rm "$target"
+      elif [[ ! -e "$target" ]]; then
+        echo "Removing broken provider skill link: $target"
+        rm "$target"
+      fi
+    done
+    shopt -u nullglob
+  done
 
   if [[ -d "$skills_root" ]]; then
     shopt -s nullglob
-    for skill_path in "$skills_root"/*; do
+    for skill_path in "$skills_root"/* "$skills_root"/*/*; do
       [[ -d "$skill_path" ]] || continue
+      [[ -f "$skill_path/SKILL.md" ]] || continue
       name=$(basename "$skill_path")
-      for target_dir in "$codex_dir" "$claude_dir" "$copilot_dir"; do
-        target="$target_dir/$name"
-        if [[ -L "$target" ]]; then
-          link_dest=$(readlink "$target" || true)
-          if [[ "$link_dest" == "$skill_path" ]]; then
-            continue
-          fi
-          if [[ ! -e "$target" ]]; then
-            echo "Removing broken symlink: $target"
-            rm "$target"
-          else
-            echo "Skipping existing non-matching path: $target"
-            continue
-          fi
-        elif [[ -e "$target" ]]; then
-          echo "Skipping existing non-matching path: $target"
+      target="$claude_dir/$name"
+      legacy_target="$legacy_root/$name"
+      if [[ -L "$target" ]]; then
+        link_dest=$(readlink "$target" || true)
+        if [[ "$link_dest" == "$skill_path" ]]; then
+          continue
+        elif [[ "$link_dest" == "$legacy_target" || ! -e "$target" ]]; then
+          echo "Updating Claude skill link: $target"
+          rm "$target"
+        else
+          echo "Skipping existing non-matching Claude skill path: $target"
           continue
         fi
-        ln -s "$skill_path" "$target"
-      done
+      elif [[ -e "$target" ]]; then
+        echo "Skipping existing non-matching Claude skill path: $target"
+        continue
+      fi
+      ln -s "$skill_path" "$target"
     done
     shopt -u nullglob
   else

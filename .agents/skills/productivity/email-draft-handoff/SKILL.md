@@ -38,7 +38,7 @@ Use the helper script to avoid malformed links.
 ```bash
 TO="$(cat /path/to/to.txt)"
 SUBJECT="$(cat /path/to/subject.txt)"
-python3 "$HOME/.config/agent-skills/skills/email-draft-handoff/scripts/build_mailto.py" \
+python3 "$HOME/.agents/skills/productivity/email-draft-handoff/scripts/build_mailto.py" \
   --to "$TO" \
   --subject "$SUBJECT" \
   --body-file /path/to/body.txt

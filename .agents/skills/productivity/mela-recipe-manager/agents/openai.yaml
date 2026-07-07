@@ -1,0 +1,3 @@
+display_name: Mela Recipe Manager
+short_description: Read, add, organize, image, and verify Mela recipes safely.
+default_prompt: Manage my Mela recipe library: inspect the catalog, create image-first .melarecipe imports when a picture is wanted, add recipes through Mela, organize categories, and verify the result.

@@ -44,9 +44,9 @@ description: "Send the configured user a concise local notification through the 
 2. Include direct URLs when they materially help the recipient jump into the work.
 3. Keep URLs as plain text, not Markdown.
 4. Validate first:
-   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --check --title "Codex" --subtitle "Validation" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
+   - `python3 "$HOME/.agents/skills/productivity/actionbuddy-notify/scripts/send_notification.py" --check --title "Codex" --subtitle "Validation" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 5. Send only after validation succeeds:
-   - `python3 "$HOME/.config/agent-skills/skills/actionbuddy-notify/scripts/send_notification.py" --send --title "Codex" --subtitle "Ready" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
+   - `python3 "$HOME/.agents/skills/productivity/actionbuddy-notify/scripts/send_notification.py" --send --title "Codex" --subtitle "Ready" --message "For the user from Codex: test notification. Context: validating ActionBuddy relay. Next step: none."`
 6. If delivery fails with a readonly database, Operation not permitted, or Shortcuts access error in a sandboxed session, retry the same validated message with the session's approved local-automation escalation mechanism when policy permits.
 7. If delivery still fails, stop and report a concise redacted blocker instead of probing Shortcuts databases, processes, clipboard state, or app internals unless the user explicitly asked to debug the relay.
 8. If `shortcuts run` times out after the pre/post Shortcut Input validation
