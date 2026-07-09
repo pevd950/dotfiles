@@ -56,6 +56,24 @@ Division of responsibility:
 
 Always inspect review bodies, not only inline comments. Bots often put actionable findings in review summaries or top-level comments.
 
+## Bot Review Trigger Policy
+
+Default: do not manually request Codex, CodeRabbit, Claude/review-with-tracking, or other review bots just because a PR was marked ready. For a non-draft PR targeting `main`, the repository automation is expected to request or trigger the required bot reviews automatically.
+
+Manual bot invocation is an exception. Only post `@codex review`, `@coderabbitai review`, or equivalent manual review commands when one of these is true:
+
+- The PR intentionally remains draft and the user asks for a bot pass while it is still draft.
+- The PR base branch is not `main`, so the normal ready-for-review automation may not apply.
+- The automatic trigger clearly failed or stalled after live verification of checks, comments, reactions, and workflow state.
+- The user explicitly asks for a manual bot review request.
+
+When the user asks to mark a draft PR ready for review:
+
+1. Mark the PR ready only after local validation and any requested pre-review cleanup.
+2. Re-check the live PR state and wait for the automatic review/check machinery.
+3. Do not immediately post manual bot review comments.
+4. If the expected bots do not appear, report that as a trigger failure and ask or proceed only if the exception criteria above are met.
+
 ## Codex Reaction Signals
 
 GitHub exposes PR-body reactions through the issue reactions API because every pull request is also an issue:
