@@ -2,5 +2,6 @@
   "id": "clea",
   "displayName": "Clea",
   "description": "A Codex pet based on Clea, Pablo's dark gray-brown striped tabby cat with green eyes, short fur, and a curled tail.",
+  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }

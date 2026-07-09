@@ -2,5 +2,6 @@
   "id": "plato",
   "displayName": "Plato",
   "description": "A Codex pet based on Plato, Pablo's long-haired black-and-white cat with a black mask, black ears and tail, white fluffy body, and pink nose.",
+  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }
