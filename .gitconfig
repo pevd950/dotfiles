@@ -3,8 +3,8 @@
 ###
 [include]
 	path = .gitconfig.local
-	path = .gitconfig.auth
 	path = .gitconfig.platform
+	path = .gitconfig.auth
 [init]
 	defaultBranch = main
 [github]
