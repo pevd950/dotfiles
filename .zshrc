@@ -76,7 +76,9 @@ if [[ "$OS" == "macos" ]]; then
       copypath
       # kubectl
       macos
-      1password
+      # 1password  # runs `op` on every shell start, triggering macOS app-data
+      # prompts at app launch; cached completion in $ZSH_CUSTOM/completions/_op
+      # instead (regenerate after op upgrades: op completion zsh > $ZSH_CUSTOM/completions/_op)
    )
 fi
 #Disabled plugins
@@ -100,6 +102,10 @@ fi
 if [[ -n $SSH_CONNECTION ]]; then
    PROMPT="%{$fg[white]%}%n@%{$fg[green]%}%m%{$reset_color%} ${PROMPT}"
 fi
+
+# Cached completions (e.g. _op) so tools don't run at startup; must be on
+# fpath before oh-my-zsh's compinit.
+[[ -d "$ZSH_CUSTOM/completions" ]] && fpath=("$ZSH_CUSTOM/completions" $fpath)
 
 # Custom configurations
 if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
