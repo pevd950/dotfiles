@@ -18,7 +18,7 @@ This page does not replace live Codex threads, delegation prompts, repository in
 3. Built-in/local memory for host-local learning.
 4. Shared Craft context for durable facts that another host needs.
 
-When sources conflict, trust the more live or local authoritative source and correct the shared context when the difference is durable.
+When sources conflict, trust the more live or local authoritative source and correct the shared context when the difference is durable. If a volatile claim cannot be verified live, identify it as unverified shared-memory context that may be stale; do not present it as current fact.
 
 ## When To Read
 
@@ -38,7 +38,7 @@ The coordinating agent should:
 1. Resolve the current host from `AGENT_HOST_ALIAS` or `hostname -s`.
 2. Inspect available live Codex threads first when current worker status matters.
 3. Read the shared Craft root for durable routing and host context.
-4. Verify volatile claims against the target repo, host, or service.
+4. Verify volatile claims against the target repo, host, or service. If verification is unavailable, disclose that the claim comes only from shared memory and may be stale.
 5. Put all task-specific context in the delegation prompt instead of making the worker rediscover it.
 
 ## Worker Protocol
@@ -47,8 +47,9 @@ An agent on a worker host should:
 
 1. Treat the delegation prompt and local repository instructions as its primary context.
 2. Read the shared root only when outside-host context is actually needed.
-3. Publish an update only after learning a durable fact, decision, blocker, or routing change that another host will likely need.
-4. Send current completion/status through the available thread relay; do not use Craft as a status queue.
+3. Before publishing an update, resolve the current host from `AGENT_HOST_ALIAS` or `hostname -s`; do not publish with an unknown or guessed host identity.
+4. Publish an update only after learning a durable fact, decision, blocker, or routing change that another host will likely need.
+5. Send current completion/status through the available thread relay; do not use Craft as a status queue.
 
 ## Update Rules
 
