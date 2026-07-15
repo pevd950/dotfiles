@@ -122,9 +122,10 @@ in one of these ignored local files, not in tracked skills or docs. Prefer
 `.zshenv.local` for non-secret routing/path values that agents need frequently;
 keep API tokens and dynamic auth in `exports-local.zsh` unless a scheduled
 automation has a narrower, explicitly documented secrets-loading path. When a
-value needs to be set on multiple hosts, leave a Host Message in shared Craft
-memory with the env var names and verification command, rather than committing
-the private values.
+value needs to be set on multiple hosts, include the env var names and
+verification command in each live delegation prompt rather than committing the
+private values. After verification, record only any durable routing convention
+in shared Craft context; do not use Craft as a setup queue.
 
 ## 🔀 GitHub Codespaces
 
