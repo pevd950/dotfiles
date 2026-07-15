@@ -56,6 +56,7 @@ An agent on a worker host should:
 - Keep each new durable update to one short item: host, date, area, fact or decision, why another host needs it, and a canonical source or verification.
 - Keep host snapshots compact. Prune stale context instead of appending corrections indefinitely.
 - Do not add run logs, task queues, routine progress, duplicate project state, or integration inventories.
+- Ask before writing client-, tenant-, project-, or otherwise confidential context when the shared Craft audience is broader than the source audience.
 - Never store secrets, tokens, passwords, private keys, payment details, unnecessary personal identifiers, or detailed sensitive records.
 - Shared context is not authorization for external, destructive, financial, legal, privacy-sensitive, or production actions.
 
@@ -63,7 +64,7 @@ An agent on a worker host should:
 
 - Prefer a Craft deeplink supplied in the current conversation.
 - Otherwise use `CRAFT_SHARED_MEMORY_URL` from the host-local ignored environment.
-- Search Craft by exact title only when the user explicitly asks for shared-memory work and no configured link is available.
+- Search Craft for the exact title `Shared Agent Context` only when the user explicitly asks for shared-memory work and no configured link is available.
 - Do not hard-code private Craft IDs, personal names, or host-specific paths into this reusable skill.
 
 ## Craft Access
