@@ -57,8 +57,8 @@ Division of responsibility:
    - Review submissions and bodies:
      `gh api repos/{owner}/{repo}/pulls/<pr>/reviews --paginate`
      (retain each review author, state, body, and `commit_id`)
-   - PR-body thumbs-up reactions:
-     `gh api 'repos/{owner}/{repo}/issues/<pr>/reactions?content=%2B1' --paginate`
+   - PR-body reactions:
+     `gh api repos/{owner}/{repo}/issues/<pr>/reactions --paginate`
    - Review threads:
      `gh api graphql -f query='query { repository(owner:"<owner>", name:"<repo>") { pullRequest(number:<pr>) { reviewThreads(first:100) { nodes { id isResolved comments(first:30) { nodes { databaseId author { login } body path line createdAt } } } } } } }'`
    - Checks:
@@ -111,14 +111,15 @@ Codex is complete only when all of these are true:
 - There are no newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
 - The no-issues evidence is bound to the live `headRefOid`: either a positive
   Codex review has that `commit_id`, or the approved Codex bot reacted `+1` to
-  an authorized review request naming that full SHA, or the monitor observed a
-  new Codex `eyes`-to-`+1` completion cycle while that head remained unchanged.
+  an authorized review request naming that full SHA, or—after recording the
+  live head—the monitor observed new Codex `eyes` appear and later become `+1`
+  while that head remained unchanged.
 
 Never compare reaction time with commit authored or committed time; those
-timestamps are forgeable. A PR-body `+1` is advisory unless it completed that
-observed head-stable cycle. Never reuse reaction evidence after a push, and let
-newer actionable feedback override it. If no head-bound signal exists, report
-Codex status as unverified.
+timestamps are forgeable. A PR-body `+1` is advisory unless its `eyes` first
+appeared after the live head was recorded. Never reuse reaction evidence after
+a push, and let newer actionable feedback override it. If no head-bound signal
+exists, report Codex status as unverified.
 
 After every push or fresh `@codex review` request:
 
