@@ -31,3 +31,5 @@ done
 for file in "${zsh_files[@]}"; do
   zsh -n "$file"
 done
+
+python3 -m unittest discover -s tests -p 'test_*.py'
