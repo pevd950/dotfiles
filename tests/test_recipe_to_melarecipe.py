@@ -1,0 +1,307 @@
+from __future__ import annotations
+
+import base64
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+HELPER = (
+    REPO_ROOT
+    / ".agents"
+    / "skills"
+    / "productivity"
+    / "mela-recipe-manager"
+    / "scripts"
+    / "recipe_to_melarecipe.py"
+)
+MAX_IMAGE_BYTES = 25 * 1024 * 1024
+PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
+    "/x8AAusB9Y9Z4WQAAAAASUVORK5CYII="
+)
+HELPER_SPEC = importlib.util.spec_from_file_location(
+    "recipe_to_melarecipe_for_tests",
+    HELPER,
+)
+assert HELPER_SPEC is not None and HELPER_SPEC.loader is not None
+HELPER_MODULE = importlib.util.module_from_spec(HELPER_SPEC)
+HELPER_SPEC.loader.exec_module(HELPER_MODULE)
+
+
+class RecipeToMelaRecipeImageTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.inbox = self.root / "inbox"
+        self.output = self.root / "output"
+        self.inbox.mkdir()
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def run_helper(
+        self,
+        image_paths: list[Path],
+        *,
+        image_roots: list[Path] | None = None,
+        include_inbox_env: bool = True,
+        inbox_path: Path | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        spec_path = self.root / "recipe.spec.json"
+        spec_path.write_text(
+            json.dumps(
+                {
+                    "title": "Security Test Recipe",
+                    "ingredients": ["one ingredient"],
+                    "instructions": ["one instruction"],
+                    "imagePaths": [str(path) for path in image_paths],
+                }
+            ),
+            encoding="utf-8",
+        )
+        environment = {"PATH": os.environ.get("PATH", "")}
+        if include_inbox_env:
+            environment["AI_INBOX_DIR"] = str(inbox_path or self.inbox)
+        command = [
+            sys.executable,
+            str(HELPER),
+            str(spec_path),
+            "-o",
+            str(self.output),
+        ]
+        for image_root in image_roots or []:
+            command.extend(["--image-root", str(image_root)])
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=3,
+        )
+
+    def test_allows_supported_image_inside_inbox(self) -> None:
+        image_path = self.inbox / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper([image_path])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        artifact = json.loads(
+            (self.output / "security-test-recipe.melarecipe").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(base64.b64decode(artifact["images"][0]), PNG_1X1)
+
+    def test_allows_supported_image_inside_explicit_root(self) -> None:
+        approved_root = self.root / "approved"
+        approved_root.mkdir()
+        image_path = approved_root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper(
+            [image_path],
+            image_roots=[approved_root],
+            include_inbox_env=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_file_outside_approved_roots_without_leaking_path(self) -> None:
+        unrelated_file = self.root / "unrelated.txt"
+        unrelated_file.write_text("private-marker", encoding="utf-8")
+
+        result = self.run_helper([unrelated_file])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside approved image roots", result.stderr)
+        self.assertNotIn(str(unrelated_file), result.stderr)
+        self.assertNotIn("private-marker", result.stderr)
+
+    def test_rejects_symlink_even_when_target_is_inside_approved_root(self) -> None:
+        image_path = self.inbox / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+        symlink_path = self.inbox / "cover-link.png"
+        symlink_path.symlink_to(image_path)
+
+        result = self.run_helper([symlink_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must not be a symlink", result.stderr)
+        self.assertNotIn(str(symlink_path), result.stderr)
+
+    def test_rejects_parent_symlink_that_escapes_approved_root(self) -> None:
+        outside_root = self.root / "outside"
+        outside_root.mkdir()
+        image_path = outside_root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+        linked_directory = self.inbox / "linked-directory"
+        linked_directory.symlink_to(outside_root, target_is_directory=True)
+
+        result = self.run_helper([linked_directory / "cover.png"])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("outside approved image roots", result.stderr)
+        self.assertNotIn(str(image_path), result.stderr)
+
+    def test_rejects_parent_replacement_race(self) -> None:
+        parent = self.inbox / "parent"
+        parent.mkdir()
+        image_path = parent / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+        resolved_image = image_path.resolve()
+
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "cover.png").write_bytes(PNG_1X1 + b"outside")
+        original_parent = self.inbox / "original-parent"
+        real_open = os.open
+        swapped = False
+
+        def racing_open(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            nonlocal swapped
+            if not swapped and (
+                Path(path) == resolved_image or path == "parent"
+            ):
+                parent.rename(original_parent)
+                parent.symlink_to(outside, target_is_directory=True)
+                swapped = True
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(HELPER_MODULE.os, "open", side_effect=racing_open):
+            with self.assertRaises(SystemExit) as raised:
+                HELPER_MODULE.read_approved_image(
+                    str(image_path),
+                    0,
+                    [self.inbox.resolve()],
+                )
+
+        self.assertTrue(swapped)
+        self.assertIn("could not be read safely", str(raised.exception))
+        self.assertNotIn(str(image_path), str(raised.exception))
+
+    def test_sanitizes_parent_symlink_loop_resolution_failure(self) -> None:
+        loop_path = self.inbox / "loop"
+        loop_path.symlink_to(loop_path, target_is_directory=True)
+        image_path = loop_path / "cover.png"
+
+        result = self.run_helper([image_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is unavailable", result.stderr)
+        self.assertNotIn(str(image_path), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_rejects_directory_inside_approved_root(self) -> None:
+        directory_path = self.inbox / "not-a-file.png"
+        directory_path.mkdir()
+
+        result = self.run_helper([directory_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be a regular file", result.stderr)
+        self.assertNotIn(str(directory_path), result.stderr)
+
+    def test_rejects_fifo_without_waiting_for_a_writer(self) -> None:
+        fifo_path = self.inbox / "not-a-file.png"
+        os.mkfifo(fifo_path)
+
+        result = self.run_helper([fifo_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be a regular file", result.stderr)
+        self.assertNotIn(str(fifo_path), result.stderr)
+
+    def test_rejects_non_image_file_inside_approved_root(self) -> None:
+        non_image = self.inbox / "not-an-image.png"
+        non_image.write_text("private-marker", encoding="utf-8")
+
+        result = self.run_helper([non_image])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported image content", result.stderr)
+        self.assertNotIn("private-marker", result.stderr)
+
+    def test_rejects_oversized_image_before_embedding(self) -> None:
+        oversized_image = self.inbox / "oversized.png"
+        with oversized_image.open("wb") as handle:
+            handle.write(PNG_1X1)
+            handle.truncate(MAX_IMAGE_BYTES + 1)
+
+        result = self.run_helper([oversized_image])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exceeds the 25 MiB limit", result.stderr)
+
+    def test_requires_an_approved_root_for_image_paths(self) -> None:
+        image_path = self.root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper([image_path], include_inbox_env=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires AI_INBOX_DIR or --image-root", result.stderr)
+
+    def test_explicit_root_works_when_default_inbox_is_unavailable(self) -> None:
+        approved_root = self.root / "approved"
+        approved_root.mkdir()
+        image_path = approved_root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper(
+            [image_path],
+            image_roots=[approved_root],
+            inbox_path=self.root / "missing-inbox",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_sanitizes_embedded_nul_in_image_path(self) -> None:
+        malformed_path = Path(f"{self.inbox}/cover\u0000.png")
+
+        result = self.run_helper([malformed_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is unavailable", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_sanitizes_approved_root_symlink_loop_resolution_failure(self) -> None:
+        loop_root = self.root / "loop-root"
+        loop_root.symlink_to(loop_root, target_is_directory=True)
+        image_path = self.root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper(
+            [image_path],
+            image_roots=[loop_root],
+            include_inbox_env=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("approved image root is unavailable", result.stderr)
+        self.assertNotIn(str(loop_root), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_recipe_without_image_paths_does_not_require_approved_root(self) -> None:
+        result = self.run_helper([], include_inbox_env=False)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

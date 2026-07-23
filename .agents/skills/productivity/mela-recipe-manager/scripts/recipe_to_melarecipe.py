@@ -4,11 +4,29 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
+import stat
 import sys
 import uuid
 from pathlib import Path
 from typing import Any
+
+
+MAX_IMAGE_BYTES = 25 * 1024 * 1024
+DIRECTORY_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+)
+FILE_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+)
 
 
 def slugify(value: str) -> str:
@@ -52,7 +70,144 @@ def optional_string(data: dict[str, Any], key: str) -> str | None:
     return value or None
 
 
-def build_payload(spec: dict[str, Any]) -> dict[str, Any]:
+def supported_image_content(data: bytes) -> bool:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if data.startswith(b"\xff\xd8\xff"):
+        return True
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return True
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return True
+    if data.startswith((b"II*\x00", b"MM\x00*")):
+        return True
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return data[8:12] in {
+            b"avif",
+            b"avis",
+            b"heic",
+            b"heix",
+            b"hevc",
+            b"hevx",
+            b"mif1",
+            b"msf1",
+        }
+    return False
+
+
+def approved_image_roots(extra_roots: list[Path]) -> list[Path]:
+    root_candidates = [(root, False) for root in extra_roots]
+    inbox_dir = os.environ.get("AI_INBOX_DIR")
+    if inbox_dir:
+        root_candidates.append((Path(inbox_dir), bool(extra_roots)))
+    if not root_candidates:
+        raise SystemExit("imagePaths requires AI_INBOX_DIR or --image-root")
+
+    roots: list[Path] = []
+    for root_candidate, optional in root_candidates:
+        try:
+            root = root_candidate.expanduser().resolve(strict=True)
+        except (OSError, RuntimeError, ValueError) as error:
+            if optional:
+                continue
+            raise SystemExit("approved image root is unavailable") from error
+        if not root.is_dir():
+            if optional:
+                continue
+            raise SystemExit("approved image root must be a directory")
+        if root not in roots:
+            roots.append(root)
+    return roots
+
+
+def open_directory_without_symlinks(path: Path) -> int:
+    descriptor = os.open(path.anchor, DIRECTORY_OPEN_FLAGS)
+    try:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(
+                component,
+                DIRECTORY_OPEN_FLAGS,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def open_file_beneath_root(path: Path, root: Path) -> int:
+    descriptor = open_directory_without_symlinks(root)
+    try:
+        relative_parts = path.relative_to(root).parts
+        for component in relative_parts[:-1]:
+            next_descriptor = os.open(
+                component,
+                DIRECTORY_OPEN_FLAGS,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        filename = relative_parts[-1] if relative_parts else "."
+        return os.open(filename, FILE_OPEN_FLAGS, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def read_approved_image(
+    image_path: str, image_index: int, image_roots: list[Path]
+) -> bytes:
+    label = f"imagePaths[{image_index}]"
+    candidate = Path(image_path).expanduser()
+    if not candidate.is_absolute():
+        raise SystemExit(f"{label} must be an absolute path")
+    try:
+        if candidate.is_symlink():
+            raise SystemExit(f"{label} must not be a symlink")
+        resolved = candidate.resolve(strict=True)
+    except SystemExit:
+        raise
+    except (OSError, RuntimeError, ValueError) as error:
+        raise SystemExit(f"{label} is unavailable") from error
+    matching_roots = [
+        root
+        for root in image_roots
+        if resolved == root or root in resolved.parents
+    ]
+    if not matching_roots:
+        raise SystemExit(f"{label} is outside approved image roots")
+    approved_root = max(matching_roots, key=lambda root: len(root.parts))
+
+    descriptor = -1
+    try:
+        descriptor = open_file_beneath_root(resolved, approved_root)
+        file_status = os.fstat(descriptor)
+        if not stat.S_ISREG(file_status.st_mode):
+            raise SystemExit(f"{label} must be a regular file")
+        if file_status.st_size > MAX_IMAGE_BYTES:
+            raise SystemExit(f"{label} exceeds the 25 MiB limit")
+        with os.fdopen(descriptor, "rb", closefd=True) as handle:
+            descriptor = -1
+            data = handle.read(MAX_IMAGE_BYTES + 1)
+    except SystemExit:
+        raise
+    except OSError as error:
+        raise SystemExit(f"{label} could not be read safely") from error
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+    if len(data) > MAX_IMAGE_BYTES:
+        raise SystemExit(f"{label} exceeds the 25 MiB limit")
+    if not supported_image_content(data):
+        raise SystemExit(f"{label} has unsupported image content")
+    return data
+
+
+def build_payload(
+    spec: dict[str, Any], extra_image_roots: list[Path] | None = None
+) -> dict[str, Any]:
     title = optional_string(spec, "title")
     if not title:
         raise SystemExit("title is required")
@@ -107,11 +262,11 @@ def build_payload(spec: dict[str, Any]) -> dict[str, Any]:
 
     images = string_list(spec.get("images"), "images")
     image_paths = string_list(spec.get("imagePaths"), "imagePaths")
-    for image_path in image_paths:
-        path = Path(image_path).expanduser()
-        if not path.exists():
-            raise SystemExit(f"image path does not exist: {path}")
-        images.append(base64.b64encode(path.read_bytes()).decode("ascii"))
+    if image_paths:
+        image_roots = approved_image_roots(extra_image_roots or [])
+        for image_index, image_path in enumerate(image_paths):
+            image_data = read_approved_image(image_path, image_index, image_roots)
+            images.append(base64.b64encode(image_data).decode("ascii"))
     if images:
         payload["images"] = images
 
@@ -126,13 +281,20 @@ def main() -> int:
     parser.add_argument("-o", "--output-dir", type=Path, default=Path("."), help="Destination directory.")
     parser.add_argument("--filename", help="Override output filename.")
     parser.add_argument("--compact", action="store_true", help="Write compact JSON.")
+    parser.add_argument(
+        "--image-root",
+        action="append",
+        default=[],
+        type=Path,
+        help="Additional approved directory for imagePaths; may repeat.",
+    )
     args = parser.parse_args()
 
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
         raise SystemExit("spec must be a JSON object")
 
-    payload = build_payload(spec)
+    payload = build_payload(spec, args.image_root)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     filename = args.filename or f"{slugify(payload['title'])}.melarecipe"
     if not filename.endswith(".melarecipe"):
