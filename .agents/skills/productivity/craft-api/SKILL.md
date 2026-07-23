@@ -20,10 +20,11 @@ Expected local-only variables:
 
 - `CRAFT_API_BASE_URL`: connection URL ending in `/api/v1`
 - `CRAFT_API_KEY`: private key for that connection
+- `CRAFT_FORMATTING_SAMPLE_URL` (optional): private Craft note to inspect as a live formatting sample when creating polished documents
 
 If those variables are missing, ask the user to add them to a host-local ignored secrets file or shell startup path. Do not assume a specific home directory, dotfiles layout, shell, or secrets-file path.
 
-Never write API keys, private Craft links, user-specific paths, or space IDs into tracked skill files, PR bodies, Craft demo pages, or logs.
+Never write API keys, private Craft links, user-specific paths, or space IDs into tracked skill files, PR bodies, Craft demo pages, or logs. Keep private sample URLs in host-local env or private memory.
 
 ## Auth
 
@@ -61,7 +62,7 @@ If writing your own HTTP client, set a normal `User-Agent`. Python `urllib`'s de
    - Write body blocks to the resolved page/root block ID, then read back that same ID before notifications or handoffs.
 5. Make the smallest mutation that satisfies the request.
 6. Read back the changed block, document, folder listing, collection, task, or comment anchor.
-7. Return the Craft app deeplink from `/connection.urlTemplates`, `clickableLink`, or the MCP/tool output when available.
+7. Return the Craft app deeplink from `/connection.urlTemplates`, `clickableLink`, or the MCP/tool output when available. In Markdown-capable surfaces, wrap Craft deep links in labeled Markdown links, for example `[Release notes](craftdocs://open?...)`; avoid raw `craftdocs://...` strings in GitHub Discussions, issues, PRs, Craft notes, Todoist descriptions, and Codex reports unless raw links are explicitly requested.
 
 ## Endpoint Map
 
@@ -148,8 +149,15 @@ do not rely on `GET /documents/search` as proof that a native daily note exists.
 
 ## Formatting Notes
 
+- For polished, rich, visual, or highly scannable Craft documents, first read `references/craft-formatting-patterns.md`. If `CRAFT_FORMATTING_SAMPLE_URL` is set and live Craft access is available, inspect that private sample for structure and styling patterns without copying private content or storing the URL in shared files.
 - Markdown insertion is sensitive to newline shape. In shell commands, pass real newlines, not literal `\n` sequences. Read back the document and fix escaped `\n` artifacts.
 - For multiple list items, insert them together with real single newlines. If updating a single existing list item to multiple items fails, insert the replacement list after a nearby sibling, then delete the old block.
+- Design durable Craft pages to be glanceable first: start with a quote or callout that says what the page is for, then add a compact table, status/phase map, or collection before long prose.
+- Put detail behind toggles, nested pages, or collection item page bodies instead of making the root document a long scroll. Toggle markdown starts with `+ Section title`; child blocks need two leading spaces, such as `  - **Summary:** ...`.
+- Markdown tables become native Craft tables and can preserve inline links. Use them for resource lists, comparisons, status matrices, and reading paths before writing repeated prose sections.
+- Use `<callout>...</callout>` for important notices or read-first summaries. Multi-paragraph callout markdown creates multiple callout blocks, which can be useful but should be intentional.
+- Use separators sparingly between major sections. Markdown `***` or `---` creates line blocks; the MCP style surface can then apply `--separator washi --washi-pattern <hex|grid|wave|dot|stripe|diagonal>`.
+- Use page personalization deliberately for polished user-facing notes: `blocks search-unsplash`, then apply `--cover-url`, `--cover-attribution`, `--theme-id`, `--font`, and separator styling. Verify final `.styling`; avoid strong tinted themes for durable reference pages unless the user wants a bold look. Neutral themes such as `black-white` or `default` are safer than highly colored themes.
 - Plain markdown headings and titles do not necessarily create nested pages. When nesting is required, create a structured page block and resolve/read that page before writing its body.
 - For code blocks, prefer structured API blocks with `type: "code"`, `rawCode`, and `language`. Markdown code fences may round-trip as inline code in some MCP paths.
 - Craft-specific markdown tokens from the API docs include `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, and `[text](date://YYYY-MM-DD)`.
