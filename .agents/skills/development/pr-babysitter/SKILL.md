@@ -42,7 +42,7 @@ Division of responsibility:
 1. Confirm GitHub context:
    - `gh auth status`
    - `gh repo view --json nameWithOwner -q .nameWithOwner`
-   - `gh pr view <pr> --json number,url,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,reviewDecision`
+   - `gh pr view <pr> --json number,url,state,closed,mergedAt,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,reviewDecision`
 2. Confirm local branch safety before edits:
    - `git status --short`
    - Stop and ask if unrelated uncommitted changes are present.
@@ -78,7 +78,8 @@ Manual bot invocation is an exception. Only post `@codex review`, `@coderabbitai
 - The user explicitly asks for a manual bot review request.
 
 Every exceptional manual Codex request must name the recorded full
-`headRefOid`. Do not reuse the request after a push.
+`headRefOid`. When creating it, record its comment ID and trusted issuer. Do not
+reuse the request after a push.
 
 When the user asks to mark a draft PR ready for review:
 
@@ -111,9 +112,9 @@ Codex is complete only when all of these are true:
 - There are no newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
 - The no-issues evidence is bound to the live `headRefOid`: either a positive
   Codex review has that `commit_id`, or the approved Codex bot reacted `+1` to
-  an authorized review request naming that full SHA, or—after recording the
-  live head—the monitor observed new Codex `eyes` appear and later become `+1`
-  while that head remained unchanged.
+  the recorded authorized request ID from its trusted issuer naming that full
+  SHA, or—after recording the live head—the monitor observed new Codex `eyes`
+  appear and later become `+1` while that head remained unchanged.
 
 Never compare reaction time with commit authored or committed time; those
 timestamps are forgeable. A PR-body `+1` is advisory unless its `eyes` first
