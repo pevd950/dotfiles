@@ -130,7 +130,7 @@ Codex is complete only when all of these are true:
 
 - Every relevant Codex `eyes` reaction is gone from the PR body and latest review request comment.
 - There are no newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
-- The current PR head SHA matches the checks and feedback being summarized.
+- The live `headRefOid` matches the checks and feedback being summarized.
 - The completion evidence is explicitly bound to the exact current head: for
   example, a Codex review `commit_id` equals `headRefOid`, or another trusted
   GitHub record names that exact SHA.
