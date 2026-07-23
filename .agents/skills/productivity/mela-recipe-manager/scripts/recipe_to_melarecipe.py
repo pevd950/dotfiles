@@ -114,14 +114,18 @@ def read_approved_image(
         raise SystemExit(f"{label} must not be a symlink")
     try:
         resolved = candidate.resolve(strict=True)
-    except OSError as error:
+    except (OSError, RuntimeError) as error:
         raise SystemExit(f"{label} is unavailable") from error
     if not any(resolved == root or root in resolved.parents for root in image_roots):
         raise SystemExit(f"{label} is outside approved image roots")
 
     descriptor = -1
     try:
-        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
         descriptor = os.open(resolved, flags)
         file_status = os.fstat(descriptor)
         if not stat.S_ISREG(file_status.st_mode):

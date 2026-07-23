@@ -75,6 +75,7 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
             capture_output=True,
             text=True,
             env=environment,
+            timeout=3,
         )
 
     def test_allows_supported_image_inside_inbox(self) -> None:
@@ -142,6 +143,18 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         self.assertIn("outside approved image roots", result.stderr)
         self.assertNotIn(str(image_path), result.stderr)
 
+    def test_sanitizes_parent_symlink_loop_resolution_failure(self) -> None:
+        loop_path = self.inbox / "loop"
+        loop_path.symlink_to(loop_path, target_is_directory=True)
+        image_path = loop_path / "cover.png"
+
+        result = self.run_helper([image_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is unavailable", result.stderr)
+        self.assertNotIn(str(image_path), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_rejects_directory_inside_approved_root(self) -> None:
         directory_path = self.inbox / "not-a-file.png"
         directory_path.mkdir()
@@ -151,6 +164,16 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("must be a regular file", result.stderr)
         self.assertNotIn(str(directory_path), result.stderr)
+
+    def test_rejects_fifo_without_waiting_for_a_writer(self) -> None:
+        fifo_path = self.inbox / "not-a-file.png"
+        os.mkfifo(fifo_path)
+
+        result = self.run_helper([fifo_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be a regular file", result.stderr)
+        self.assertNotIn(str(fifo_path), result.stderr)
 
     def test_rejects_non_image_file_inside_approved_root(self) -> None:
         non_image = self.inbox / "not-an-image.png"
