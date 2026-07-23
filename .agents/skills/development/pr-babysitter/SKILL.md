@@ -106,9 +106,10 @@ Division of responsibility:
      require it to match the recorded `headRepository.nameWithOwner`. For a fork
      PR, do not push the reviewed branch to the base repository.
    - Push with the explicit refspec
-     `HEAD:refs/heads/<validated-headRefName>` and exact lease
-     `--force-with-lease=refs/heads/<validated-headRefName>:<recorded-starting-SHA>`;
-     do not rely on an upstream or configured push refspec.
+     `HEAD:refs/heads/<validated-headRefName>` using normal, non-force semantics;
+     do not rely on an upstream or configured push refspec. If the push is
+     rejected or the remote head changed, stop and restart the snapshot. Never
+     force push unless the user explicitly authorizes that exact operation.
 3. Gather the complete review corpus every loop:
    - Inline diff comments:
      `gh api repos/{owner}/{repo}/pulls/<pr>/comments --paginate`
