@@ -14,6 +14,19 @@ from typing import Any
 
 
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
+DIRECTORY_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+)
+FILE_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+)
 
 
 def slugify(value: str) -> str:
@@ -83,24 +96,63 @@ def supported_image_content(data: bytes) -> bool:
 
 
 def approved_image_roots(extra_roots: list[Path]) -> list[Path]:
-    root_candidates = list(extra_roots)
+    root_candidates = [(root, False) for root in extra_roots]
     inbox_dir = os.environ.get("AI_INBOX_DIR")
     if inbox_dir:
-        root_candidates.append(Path(inbox_dir))
+        root_candidates.append((Path(inbox_dir), bool(extra_roots)))
     if not root_candidates:
         raise SystemExit("imagePaths requires AI_INBOX_DIR or --image-root")
 
     roots: list[Path] = []
-    for root_candidate in root_candidates:
+    for root_candidate, optional in root_candidates:
         try:
             root = root_candidate.expanduser().resolve(strict=True)
-        except (OSError, RuntimeError) as error:
+        except (OSError, RuntimeError, ValueError) as error:
+            if optional:
+                continue
             raise SystemExit("approved image root is unavailable") from error
         if not root.is_dir():
+            if optional:
+                continue
             raise SystemExit("approved image root must be a directory")
         if root not in roots:
             roots.append(root)
     return roots
+
+
+def open_directory_without_symlinks(path: Path) -> int:
+    descriptor = os.open(path.anchor, DIRECTORY_OPEN_FLAGS)
+    try:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(
+                component,
+                DIRECTORY_OPEN_FLAGS,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def open_file_beneath_root(path: Path, root: Path) -> int:
+    descriptor = open_directory_without_symlinks(root)
+    try:
+        relative_parts = path.relative_to(root).parts
+        for component in relative_parts[:-1]:
+            next_descriptor = os.open(
+                component,
+                DIRECTORY_OPEN_FLAGS,
+                dir_fd=descriptor,
+            )
+            os.close(descriptor)
+            descriptor = next_descriptor
+        filename = relative_parts[-1] if relative_parts else "."
+        return os.open(filename, FILE_OPEN_FLAGS, dir_fd=descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def read_approved_image(
@@ -110,23 +162,26 @@ def read_approved_image(
     candidate = Path(image_path).expanduser()
     if not candidate.is_absolute():
         raise SystemExit(f"{label} must be an absolute path")
-    if candidate.is_symlink():
-        raise SystemExit(f"{label} must not be a symlink")
     try:
+        if candidate.is_symlink():
+            raise SystemExit(f"{label} must not be a symlink")
         resolved = candidate.resolve(strict=True)
-    except (OSError, RuntimeError) as error:
+    except SystemExit:
+        raise
+    except (OSError, RuntimeError, ValueError) as error:
         raise SystemExit(f"{label} is unavailable") from error
-    if not any(resolved == root or root in resolved.parents for root in image_roots):
+    matching_roots = [
+        root
+        for root in image_roots
+        if resolved == root or root in resolved.parents
+    ]
+    if not matching_roots:
         raise SystemExit(f"{label} is outside approved image roots")
+    approved_root = max(matching_roots, key=lambda root: len(root.parts))
 
     descriptor = -1
     try:
-        flags = (
-            os.O_RDONLY
-            | getattr(os, "O_NOFOLLOW", 0)
-            | getattr(os, "O_NONBLOCK", 0)
-        )
-        descriptor = os.open(resolved, flags)
+        descriptor = open_file_beneath_root(resolved, approved_root)
         file_status = os.fstat(descriptor)
         if not stat.S_ISREG(file_status.st_mode):
             raise SystemExit(f"{label} must be a regular file")

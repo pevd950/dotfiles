@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +27,13 @@ PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8"
     "/x8AAusB9Y9Z4WQAAAAASUVORK5CYII="
 )
+HELPER_SPEC = importlib.util.spec_from_file_location(
+    "recipe_to_melarecipe_for_tests",
+    HELPER,
+)
+assert HELPER_SPEC is not None and HELPER_SPEC.loader is not None
+HELPER_MODULE = importlib.util.module_from_spec(HELPER_SPEC)
+HELPER_SPEC.loader.exec_module(HELPER_MODULE)
 
 
 class RecipeToMelaRecipeImageTests(unittest.TestCase):
@@ -44,6 +53,7 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         *,
         image_roots: list[Path] | None = None,
         include_inbox_env: bool = True,
+        inbox_path: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         spec_path = self.root / "recipe.spec.json"
         spec_path.write_text(
@@ -59,7 +69,7 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         )
         environment = {"PATH": os.environ.get("PATH", "")}
         if include_inbox_env:
-            environment["AI_INBOX_DIR"] = str(self.inbox)
+            environment["AI_INBOX_DIR"] = str(inbox_path or self.inbox)
         command = [
             sys.executable,
             str(HELPER),
@@ -143,6 +153,48 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         self.assertIn("outside approved image roots", result.stderr)
         self.assertNotIn(str(image_path), result.stderr)
 
+    def test_rejects_parent_replacement_race(self) -> None:
+        parent = self.inbox / "parent"
+        parent.mkdir()
+        image_path = parent / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+        resolved_image = image_path.resolve()
+
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "cover.png").write_bytes(PNG_1X1 + b"outside")
+        original_parent = self.inbox / "original-parent"
+        real_open = os.open
+        swapped = False
+
+        def racing_open(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            nonlocal swapped
+            if not swapped and (
+                Path(path) == resolved_image or path == "parent"
+            ):
+                parent.rename(original_parent)
+                parent.symlink_to(outside, target_is_directory=True)
+                swapped = True
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        with mock.patch.object(HELPER_MODULE.os, "open", side_effect=racing_open):
+            with self.assertRaises(SystemExit) as raised:
+                HELPER_MODULE.read_approved_image(
+                    str(image_path),
+                    0,
+                    [self.inbox.resolve()],
+                )
+
+        self.assertTrue(swapped)
+        self.assertIn("could not be read safely", str(raised.exception))
+        self.assertNotIn(str(image_path), str(raised.exception))
+
     def test_sanitizes_parent_symlink_loop_resolution_failure(self) -> None:
         loop_path = self.inbox / "loop"
         loop_path.symlink_to(loop_path, target_is_directory=True)
@@ -204,6 +256,29 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires AI_INBOX_DIR or --image-root", result.stderr)
+
+    def test_explicit_root_works_when_default_inbox_is_unavailable(self) -> None:
+        approved_root = self.root / "approved"
+        approved_root.mkdir()
+        image_path = approved_root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper(
+            [image_path],
+            image_roots=[approved_root],
+            inbox_path=self.root / "missing-inbox",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_sanitizes_embedded_nul_in_image_path(self) -> None:
+        malformed_path = Path(f"{self.inbox}/cover\u0000.png")
+
+        result = self.run_helper([malformed_path])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is unavailable", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_sanitizes_approved_root_symlink_loop_resolution_failure(self) -> None:
         loop_root = self.root / "loop-root"
