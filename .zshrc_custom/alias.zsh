@@ -54,10 +54,6 @@ if command -v code >/dev/null 2>&1; then
   alias vsc='code .'
   alias coden='code --new-window'
 fi
-alias nvzshrc='nvim ~/.zshrc'
-alias nvaliases='nvim "$ZSH_CUSTOM"/alias.zsh'
-alias nvstarship='nvim ~/.config/starship.toml'
-
 # Command Overrides
 if command -v bat >/dev/null 2>&1; then
   alias bcat='bat --paging=never'
@@ -69,7 +65,6 @@ if command -v eza >/dev/null 2>&1; then
 elif command -v exa >/dev/null 2>&1; then
   alias dir='exa --icons -s=Name'
 fi
-alias nv='nvim'
 if [[ "$(uname)" == "Darwin" ]]; then
   alias ql='quick-look'
   alias pman='preman'
