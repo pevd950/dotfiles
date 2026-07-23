@@ -239,24 +239,31 @@ extendedKeyUsage = serverAuth
         self.assertNotIn(TEST_CREDENTIAL, result.stderr)
 
     def test_allows_same_origin_https_redirect_with_credentials(self) -> None:
-        server = self.start_server(use_tls=True)
-        server.redirect_to = (
-            f"https://localhost:{server.server_port}/api/v1/final"
-        )
+        auth_modes = {
+            "bearer": ("authorization", f"Bearer {TEST_CREDENTIAL}"),
+            "x-craft-api-key": ("x_craft_api_key", TEST_CREDENTIAL),
+        }
+        for auth_mode, (header_name, expected_value) in auth_modes.items():
+            with self.subTest(auth_mode=auth_mode):
+                server = self.start_server(use_tls=True)
+                server.redirect_to = (
+                    f"https://localhost:{server.server_port}/api/v1/final"
+                )
 
-        result = self.run_helper(
-            f"https://localhost:{server.server_port}/api/v1"
-        )
+                result = self.run_helper(
+                    f"https://localhost:{server.server_port}/api/v1",
+                    auth=auth_mode,
+                )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, '{"ok":true}')
-        self.assertEqual(len(server.requests), 2)
-        self.assertEqual(
-            server.requests[0]["authorization"], f"Bearer {TEST_CREDENTIAL}"
-        )
-        self.assertEqual(
-            server.requests[1]["authorization"], f"Bearer {TEST_CREDENTIAL}"
-        )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, '{"ok":true}')
+                self.assertEqual(len(server.requests), 2)
+                self.assertEqual(
+                    server.requests[0][header_name], expected_value
+                )
+                self.assertEqual(
+                    server.requests[1][header_name], expected_value
+                )
 
 
 if __name__ == "__main__":
