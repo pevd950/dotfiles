@@ -5,12 +5,54 @@ import json
 import os
 import math
 import sys
+from typing import Optional, Tuple
 import urllib.error
 import urllib.parse
 import urllib.request
 
 
 MAX_TIMEOUT_SECONDS = 300.0
+
+
+class UnsafeRedirectError(Exception):
+    pass
+
+
+def https_origin(url: str) -> Tuple[str, str, int]:
+    parsed_url = urllib.parse.urlsplit(url)
+    if parsed_url.scheme.lower() != "https" or not parsed_url.netloc:
+        raise ValueError("URL must be absolute and use HTTPS")
+    if parsed_url.username is not None or parsed_url.password is not None:
+        raise ValueError("URL must not include userinfo")
+    if parsed_url.hostname is None:
+        raise ValueError("URL must include a hostname")
+    port = parsed_url.port or 443
+    return ("https", parsed_url.hostname.lower(), port)
+
+
+class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, trusted_origin: Tuple[str, str, int]) -> None:
+        super().__init__()
+        self.trusted_origin = trusted_origin
+
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer,
+        code: int,
+        message: str,
+        headers,
+        new_url: str,
+    ) -> Optional[urllib.request.Request]:
+        try:
+            redirect_origin = https_origin(new_url)
+        except ValueError as error:
+            raise UnsafeRedirectError(str(error)) from error
+        if redirect_origin != self.trusted_origin:
+            raise UnsafeRedirectError("redirect target is outside the trusted origin")
+        return super().redirect_request(
+            request, file_pointer, code, message, headers, new_url
+        )
 
 
 def main() -> int:
@@ -38,9 +80,17 @@ def main() -> int:
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in api_key):
         print("CRAFT_API_KEY contains invalid control characters", file=sys.stderr)
         return 2
-    parsed_base_url = urllib.parse.urlsplit(base_url)
-    if parsed_base_url.scheme not in {"http", "https"} or not parsed_base_url.netloc:
-        print("CRAFT_API_BASE_URL must be an absolute http(s) URL", file=sys.stderr)
+    try:
+        parsed_base_url = urllib.parse.urlsplit(base_url)
+        if parsed_base_url.scheme.lower() != "https":
+            print("CRAFT_API_BASE_URL must use HTTPS", file=sys.stderr)
+            return 2
+        if parsed_base_url.username is not None or parsed_base_url.password is not None:
+            print("CRAFT_API_BASE_URL must not include userinfo", file=sys.stderr)
+            return 2
+        trusted_origin = https_origin(base_url)
+    except ValueError as error:
+        print(f"CRAFT_API_BASE_URL is invalid: {error}", file=sys.stderr)
         return 2
 
     path = args.path if args.path.startswith("/") else f"/{args.path}"
@@ -104,12 +154,16 @@ def main() -> int:
         headers["x-craft-api-key"] = api_key
 
     request = urllib.request.Request(url, data=body, headers=headers, method=args.method)
+    opener = urllib.request.build_opener(SameOriginRedirectHandler(trusted_origin))
     try:
-        with urllib.request.urlopen(request, timeout=args.timeout) as response:
+        with opener.open(request, timeout=args.timeout) as response:
             payload = response.read()
             sys.stdout.buffer.write(payload)
             if sys.stdout.isatty() and not payload.endswith(b"\n"):
                 sys.stdout.write("\n")
+    except UnsafeRedirectError as error:
+        sys.stderr.write(f"Craft API blocked unsafe redirect: {error}\n")
+        return 1
     except urllib.error.HTTPError as error:
         sys.stderr.write(f"Craft API returned HTTP {error.code}\n")
         detail = error.read().decode("utf-8", errors="replace")

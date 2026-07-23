@@ -6,3 +6,5 @@
 .copilot/skills/*
 .config/agent-skills/skills/.DS_Store
 superassistant/AGENTS.local.md
+__pycache__/
+*.py[cod]
