@@ -205,6 +205,23 @@ class RecipeToMelaRecipeImageTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires AI_INBOX_DIR or --image-root", result.stderr)
 
+    def test_sanitizes_approved_root_symlink_loop_resolution_failure(self) -> None:
+        loop_root = self.root / "loop-root"
+        loop_root.symlink_to(loop_root, target_is_directory=True)
+        image_path = self.root / "cover.png"
+        image_path.write_bytes(PNG_1X1)
+
+        result = self.run_helper(
+            [image_path],
+            image_roots=[loop_root],
+            include_inbox_env=False,
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("approved image root is unavailable", result.stderr)
+        self.assertNotIn(str(loop_root), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_recipe_without_image_paths_does_not_require_approved_root(self) -> None:
         result = self.run_helper([], include_inbox_env=False)
 

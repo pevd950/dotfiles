@@ -94,7 +94,7 @@ def approved_image_roots(extra_roots: list[Path]) -> list[Path]:
     for root_candidate in root_candidates:
         try:
             root = root_candidate.expanduser().resolve(strict=True)
-        except OSError as error:
+        except (OSError, RuntimeError) as error:
             raise SystemExit("approved image root is unavailable") from error
         if not root.is_dir():
             raise SystemExit("approved image root must be a directory")
