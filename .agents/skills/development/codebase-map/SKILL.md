@@ -5,87 +5,21 @@ description: Build a concise map of a codebase area before implementation. Use w
 
 # Codebase Map
 
-## What this skill does
-- Orients the agent in an unfamiliar or complex codebase area before editing.
-- Traces entrypoints, data flow, side effects, tests, docs, and validation commands.
-- Produces a compact map that helps future work start from evidence instead of guesses.
+Produce a compact, evidence-based map of a codebase area. This is orientation, not architecture critique — use `architecture-scout` to judge or improve boundaries.
 
-## When to use it
-- Trigger phrases: "zoom out", "map this area", "orient me", "where does this live", "trace this subsystem", "give a new agent context", "find the right seam".
-- Use before implementation when the relevant files, ownership, or flow are unclear.
-- Use for handoffs when another agent needs durable context.
-- Do not use as an architecture critique by default; use `architecture-scout` when the task is to judge or improve boundaries.
+Anchor first: what is being mapped, what the map is for (implementation, debugging, review, onboarding, issue planning), and the depth required. Trace the real flow — entrypoints, domain logic, persistence and provider side effects, auth and validation, error paths, async work — and note the local patterns a change should follow: nearby analogous features, test style and fixtures, DI/adapter conventions, generated-code workflow, and the repo's validation commands.
 
-## Default stance
-- Read broad enough to avoid wrong assumptions, then narrow quickly.
-- Prefer local instructions, docs, tests, and code over memory or guesses.
-- Keep the output concise and actionable.
-- Separate confirmed facts from likely paths and open questions.
-- Avoid proposing large changes unless the user asks for recommendations.
+## Map contents
 
-## Workflow
+- Key files and what each owns.
+- Main flow in 5-10 bullets.
+- Tests and validation commands.
+- Existing patterns to follow and likely edit seams.
+- Confirmed facts separated from likely paths and open questions.
+- Related issues, PRs, or docs when known.
 
-### 1. Anchor the question
-Identify:
-- feature, bug, workflow, endpoint, screen, command, or subsystem being mapped
-- intended use of the map: implementation, debugging, review, onboarding, or issue planning
-- target depth: quick orientation, implementation-ready handoff, or deep subsystem map
+## Handoff for another agent
 
-### 2. Find entrypoints
-Search for:
-- routes, commands, jobs, actions, screens, controllers, views, or handlers
-- public APIs, generated clients, schemas, migrations, or configuration
-- tests that already exercise the behavior
-- docs or runbooks that describe expected behavior
+Make it self-contained enough to continue without private chat history: exact paths and commands, what was searched and what was not found, known constraints and out-of-scope areas, validation expectations.
 
-Use fast targeted searches. Avoid reading the entire repo when the area can be narrowed.
-
-### 3. Trace flow
-Map:
-- caller -> entrypoint -> service/domain logic -> persistence/provider/external side effect
-- request/response or input/output shape
-- configuration and feature flags
-- auth, permissions, ownership, and validation
-- error paths and observability
-- async/background work, retries, streaming, or cancellation
-- data lifecycle: creation, update, read, deletion, migration, cache, or index
-
-### 4. Identify local patterns
-Look for:
-- nearby analogous features
-- naming conventions
-- test style and fixtures
-- dependency injection or adapter patterns
-- generated code workflow
-- validation commands used by the repo
-
-### 5. Summarize the map
-Include:
-- key files and what each owns
-- main flow in 5-10 bullets
-- tests and validation commands
-- extension seams or likely edit points
-- unknowns, risks, or questions
-- related issues, PRs, or docs when known
-
-### 6. Handoff for another agent
-When preparing context for another agent:
-- include exact paths and commands
-- include what was searched and what was not found
-- include known constraints and out-of-scope areas
-- include validation expectations
-- keep it self-contained enough to continue without private chat history
-
-## Expected outputs
-- Concise subsystem map.
-- File/function/endpoint/test references.
-- Data and control flow summary.
-- Existing patterns to follow.
-- Likely implementation seams.
-- Validation commands and remaining unknowns.
-
-## Do not
-- Do not turn orientation into an unbounded architecture review.
-- Do not claim behavior from naming alone; verify with code or tests.
-- Do not list every file if only a few are relevant.
-- Do not recommend refactors unless asked or unless the map would be misleading without a risk note.
+Do not claim behavior from naming alone, list files that are not relevant, or recommend refactors unless asked (or the map would mislead without a risk note).

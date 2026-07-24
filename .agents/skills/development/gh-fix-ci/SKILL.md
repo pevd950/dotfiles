@@ -3,94 +3,30 @@ name: "gh-fix-ci"
 description: "Use when a user asks to debug or fix failing GitHub PR checks that run in GitHub Actions. Prefer this custom skill when you need deeper local log inspection or Xcode/xcresult artifact recovery. Use the GitHub app for PR metadata when available, and use `gh` for Actions check and log inspection before implementing any approved fix."
 ---
 
-
 # GitHub Actions CI Fix
 
-## Overview
+Use the GitHub app/connector for PR metadata and patch context when available; use `gh` for Actions checks and logs — the connector does not cover that workflow end to end. Summarize the root cause first, propose a focused fix plan, and implement only after explicit approval.
 
-Use this skill when the task is specifically about failing GitHub Actions checks on a pull request. This custom version keeps the richer local helper script, including Xcode and `xcresult` artifact recovery when Actions logs are incomplete.
+## Helper script
 
-- Use the GitHub app for PR metadata, changed files, and patch context when it is available.
-- Use `gh` for GitHub Actions checks and logs because the connector does not expose that workflow end to end.
-- Summarize the root cause first, propose a focused fix plan, and implement only after explicit approval.
+`scripts/inspect_pr_checks.py` handles `gh` field drift, job-log fallbacks, and Xcode `xcresult` artifact recovery when Actions logs are incomplete:
 
-Prereq: authenticate with GitHub CLI once, then confirm with `gh auth status`. Repo and workflow scopes are typically required for Actions inspection.
+```bash
+PYTHON_BIN=${PYTHON_BIN:-python3}; command -v "$PYTHON_BIN" >/dev/null || PYTHON_BIN=python
+"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "<number-or-url>" [--json] [--max-lines 200 --context 40]
+```
 
-## Inputs
+- Exit code `1` means "failing checks were found", not a crash. Treat the payload as evidence; suspect the helper only when output is malformed or a traceback points at the script or runtime.
+- Give it a generous first wait — log and artifact fetches take several seconds, and empty intermediate output while it runs is normal.
+- The `xcresult` path is best-effort enrichment: it needs `xcrun` locally and usable uploaded artifacts.
 
-- `repo`: path inside the repo (default `.`)
-- `pr`: PR number or URL (optional; defaults to current branch PR)
-- `gh` authentication for the repo host
+## Manual fallback
 
-## Quick start
+`gh pr checks <pr> --json name,state,bucket,link,startedAt,completedAt,workflow` — if a field is rejected, retry with the fields the installed `gh` supports. For each failing check, extract the run id from `detailsUrl`/`link`, then `gh run view <run_id> --log`; if the run log says it is still in progress, fetch job logs via `gh api /repos/<owner>/<repo>/actions/jobs/<job_id>/logs`.
 
-- Resolve Python once per run:
-  - `PYTHON_BIN=${PYTHON_BIN:-python3}`
-  - `command -v "$PYTHON_BIN" >/dev/null || PYTHON_BIN=python`
-- `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "<number-or-url>"`
-- Add `--json` if you want machine-friendly output for summarization.
-- When running the helper through Codex `exec_command`, give it a generous first wait.
-  - Prefer `yield_time_ms` around `10000` and a real `timeout_ms` because log and artifact fetches often take several seconds before producing output.
-  - Empty intermediate output while the process is still running is normal; do not treat that as a stuck helper unless it exceeds the command timeout.
-- Treat exit code `1` from the helper as "failing checks were found", not as a script crash.
-  - Use the JSON or text payload as evidence first.
-  - Only treat the helper itself as broken when the output is malformed or the traceback points to the script/runtime.
+## Scope and reporting
 
-## Workflow
-
-1. Verify `gh` authentication.
-   - Run `gh auth status` in the repo.
-   - If unauthenticated, ask the user to run `gh auth login` with repo and workflow scopes before proceeding.
-2. Resolve the PR.
-   - If the user provides a PR number or URL, use that directly.
-   - Otherwise prefer the current branch PR with `gh pr view --json number,url`.
-   - When repo and PR are known, fetch PR metadata and patch context through the GitHub app when available.
-3. Inspect failing checks (GitHub Actions only).
-   - Preferred: run the bundled script. It handles `gh` field drift, job-log fallbacks, and Xcode `xcresult` recovery:
-     - `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "<number-or-url>"`
-     - Add `--json` for machine-friendly output.
-   - Manual fallback:
-     - `gh pr checks <pr> --json name,state,bucket,link,startedAt,completedAt,workflow`
-       - If a field is rejected, rerun with the available fields reported by `gh`.
-     - For each failing check, extract the run id from `detailsUrl` or `link` and run:
-       - `gh run view <run_id> --json name,workflowName,conclusion,status,url,event,headBranch,headSha`
-       - `gh run view <run_id> --log`
-     - If the run log says it is still in progress, fetch job logs directly:
-       - `gh api "/repos/<owner>/<repo>/actions/jobs/<job_id>/logs" > "<path>"`
-4. Scope non-GitHub Actions checks.
-   - If `detailsUrl` is not a GitHub Actions run, label it as external and only report the URL.
-   - Do not attempt Buildkite or other providers here; keep the workflow lean.
-5. Summarize failures for the user.
-   - Provide the failing check name, run URL, and a concise log snippet.
-   - Call out missing logs explicitly and do not over-claim certainty.
-   - If the helper recovered an `xcresult` summary, surface that as the best available evidence.
-6. Propose a focused fix plan and wait for approval.
-   - Keep the plan tied directly to the failing checks and the observed root cause.
-7. Implement after approval.
-   - Apply the approved fix locally.
-   - Run the most relevant local verification available.
-8. Recheck status and summarize residual risk.
-   - Suggest re-running the relevant tests and `gh pr checks`.
-   - Report what is still unverified, what may still be flaky, and whether any failing checks were external and therefore not actionable here.
-
-## Bundled Resources
-
-### scripts/inspect_pr_checks.py
-
-Fetch failing PR checks, pull GitHub Actions logs, and extract a failure snippet. Exits non-zero when failures remain so it can be used in automation.
-
-Extra behavior in this custom copy:
-- Attempts to download likely result artifacts for Xcode or iOS jobs.
-- Uses `xcrun xcresulttool` when available to recover failing-test summaries from `.xcresult` bundles when logs are incomplete.
-
-Usage examples:
-- `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "123"`
-- `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --pr "https://github.com/org/repo/pull/123" --json`
-- `"$PYTHON_BIN" "<path-to-skill>/scripts/inspect_pr_checks.py" --repo "." --max-lines 200 --context 40`
-
-## Guardrails
-
-- Do not imply that the GitHub app can replace `gh` for Actions log retrieval.
-- Treat non-GitHub Actions providers as report-only unless the user explicitly wants a separate investigation path.
+- Non-GitHub-Actions checks (Buildkite and other providers): label as external and report only the URL.
+- Report the failing check name, run URL, and a concise log snippet; call out missing logs rather than over-claiming certainty. Surface recovered `xcresult` summaries as the best available evidence.
 - If the failure is clearly unrelated to the local diff, say so before proposing code changes.
-- Treat the `xcresult` path as best-effort enrichment, not a guarantee; it only applies on systems with `xcrun` and when the workflow uploads usable artifacts.
+- After an approved fix: run the most relevant local verification, suggest re-running the tests and `gh pr checks`, and report what remains unverified, possibly flaky, or external and not actionable here.
