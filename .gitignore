@@ -5,7 +5,7 @@
 .claude/skills/*
 .copilot/skills/*
 .config/agent-skills/skills/.DS_Store
-.agents/private-skills/
+.agents/skills/private/
 superassistant/AGENTS.local.md
 __pycache__/
 *.py[cod]
