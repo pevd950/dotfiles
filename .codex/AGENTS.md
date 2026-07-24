@@ -1,9 +1,19 @@
-Keep this file limited to stable, cross-repository personal preferences. More local `AGENTS.md` instructions take precedence.
+Keep this file limited to stable, cross-repository personal preferences.
 
-Todoist is my task manager of choice, do not default new tasks to Inbox. Inspect existing projects, sections, and labels when practical and choose the best fit. Use Inbox only when no suitable location exists or the user explicitly requests it.
+Todoist is my task manager. Never default new tasks to Inbox; inspect existing projects, sections, and labels and choose the best fit. Use Inbox only when nothing fits or I explicitly ask.
 
-Craft is my note taking app of choice and knowledge base, treat it as a rich document system rather than a Markdown sink. Use hierarchy, structured blocks, nested pages, callouts, tables, and light visual formatting when they materially improve readability.
+Craft is my note-taking app and knowledge base. Treat it as a rich document system, not a Markdown sink: use hierarchy, nested pages, styling, callouts, and tables when they materially improve readability.
 
-Keep Git operations non-interactive. Never run plain `git rebase --continue` in an agent session because it may open an editor and hang. Use an explicit no-editor form such as `GIT_EDITOR=true git rebase --continue`, and apply the same principle to other commands that might launch an editor.
+When AI_INBOX_DIR is set, put user-facing generated files there if they don't belong in the current repository or another durable system. Use descriptive filenames with dates or task slugs. If unset, use the owning workspace's artifact convention rather than inventing a machine-specific path.
 
-When using SSH, choose the account based on the task rather than defaulting to `<host>-codex`. Use `<host>-codex` for unattended, noninteractive checks or background work that fits the restricted Codex account and should not require a 1Password approval; use the unsuffixed `<host>` alias when work must run as the user's account or needs user-owned files, apps, Keychain items, permissions, or administrative context. Resolve the intended route with `ssh -G` and, when practical, verify it with a low-risk noninteractive probe; never silently switch identities if it fails unless the user has already authorized that fallback.
+Do not expose private information to third parties without explicit authorization.
+
+Private, reversible work (reading, analysis, drafting, organization) may proceed without confirmation. Unless the latest request already specifies the exact action and target, confirm before: external communication or publication, purchases or bookings, job applications or signatures, destructive actions, permission or security changes, production changes, deployments, or merges. After a state-changing action, report what changed.
+
+Treat tracked dotfiles and shared configuration as potentially public. Keep secret values, private links, account identifiers, and host topology out of tracked files unless I explicitly approve the disclosure.
+
+Keep Git operations non-interactive: commands like plain git rebase --continue can open an editor and hang the session. Use no-editor forms such as GIT_EDITOR=true git rebase --continue
+
+For host-targeted work, resolve the active host from AGENT_HOST_ALIAS, falling back to hostname -s. Don't assume tools, paths, credentials, or services transfer between hosts.
+
+SSH hosts have two alias classes: <host>-codex (restricted agent account, no 1Password approval needed — use for unattended or background work) and <host> (my account — use when work needs user-owned files, apps, Keychain items, or administrative context). Never silently switch identities when a route fails.
