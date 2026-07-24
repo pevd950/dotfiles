@@ -5,61 +5,33 @@ description: Create user-facing email draft handoffs with a visible prefilled ma
 
 # Email Draft Handoff
 
-Use this skill whenever drafting an email for the user unless they explicitly ask for another format.
+Use this pattern whenever drafting an email for the user, unless they explicitly ask for another format. Never send the email automatically.
 
-## Default Pattern
+## Default pattern
 
 1. Build a prefilled `mailto:` URL with recipient, subject, and body.
-2. Put a visible Markdown link near the top of the handoff:
-
-```markdown
-[Open prefilled email](mailto:...)
-```
-
+2. Put a visible Markdown link near the top of the handoff — before the plain draft when adding to Todoist, Craft, or another task/note surface: `[Open prefilled email](mailto:...)`
 3. Include the plain draft text below the link as fallback.
-4. If adding to Todoist, Craft, or another task/note surface, put the link before the plain draft.
-5. Never send the email automatically.
 
-## Optional Apple Mail Drafts
+Apple Mail `.eml`/draft creation is supplemental (rich text, desktop review) and never replaces the visible `mailto:` link; when both are used, report both.
 
-Apple Mail `.eml` or draft creation can be supplemental when useful, especially for rich text or desktop review. It does not replace the visible `mailto:` link.
+## URL encoding — security rule
 
-If both are used, report both:
-
-- the visible `mailto:` link was added where the user can tap it
-- the local Mail draft was created/opened, if applicable
-
-## URL Encoding
-
-Use the helper script to avoid malformed links.
-
-**Security rule:** never paste untrusted email fields (recipient name/address, subject, or thread text) directly into a shell command line. Load untrusted values from files first, then pass them as quoted variables:
+Never paste untrusted email fields (recipient name/address, subject, thread text) directly into a shell command line. Load untrusted values from files, then pass them as quoted variables to the helper, which prints the `mailto:` URL:
 
 ```bash
 TO="$(cat /path/to/to.txt)"
 SUBJECT="$(cat /path/to/subject.txt)"
 python3 "$HOME/.agents/skills/productivity/email-draft-handoff/scripts/build_mailto.py" \
-  --to "$TO" \
-  --subject "$SUBJECT" \
-  --body-file /path/to/body.txt
+  --to "$TO" --subject "$SUBJECT" --body-file /path/to/body.txt
 ```
 
-This avoids shell command substitution from attacker-controlled text. The script prints the `mailto:` URL.
+For short one-off drafts, a language standard library (Python `urllib.parse.quote`) is also acceptable.
 
-For short one-off drafts, it is also acceptable to use a language standard library such as Python `urllib.parse.quote`.
+## Long drafts
 
-## Long Drafts
+Very long `mailto:` URLs may not open reliably. Keep the `mailto:` body concise (opening and key fields), include the complete plain draft below the link, and optionally create a local Mail draft as a supplemental artifact.
 
-Very long `mailto:` URLs may not open reliably in every app. If the draft is long:
+## Existing threads
 
-- keep the `mailto:` body concise, or include only the opening and key fields
-- include the complete plain draft below the link
-- optionally create/open a local Mail draft as a supplemental artifact
-
-## Existing Threads
-
-When replying to an existing support thread:
-
-- preserve the ticket/reference number in the subject when known
-- link to the source email separately when a `message://...` link is available
-- still use the `mailto:` link for the prefilled draft handoff
+Preserve the ticket/reference number in the subject when known; link the source email separately when a `message://...` link is available; still provide the `mailto:` link for the prefilled draft.

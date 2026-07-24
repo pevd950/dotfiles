@@ -5,75 +5,27 @@ description: Work with Raindrop.io bookmarks through the official remote MCP end
 
 # Raindrop MCP
 
-## Core Rules
+## Core rules
 
-- Use the official Raindrop.io MCP endpoint directly when `mcp__raindrop__...` tools are not exposed in the current session:
+- When `mcp__raindrop__...` tools are not exposed in the session, call the official endpoint `https://api.raindrop.io/rest/v2/ai/mcp` directly through the bundled helper. `codex mcp list` is configuration-only — it does not prove the tools are callable here.
+- Auth: `RAINDROP_ACCESS_TOKEN`; source the host's local shell exports first if it is not already set.
+- Resolve the helper relative to this SKILL.md (`SKILL_DIR`); do not hard-code a home path.
+- Prove access with a live read before claiming Raindrop works: `python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call fetch_current_user`.
+- Read-only by default. No create/update/delete/merge/retag of bookmarks, collections, or highlights unless the user explicitly asks; for mutations, first read the affected object and state exactly what will change.
 
-```text
-https://api.raindrop.io/rest/v2/ai/mcp
-```
-
-- Source the host's local shell exports before reads when `RAINDROP_ACCESS_TOKEN` is not already available:
-
-```bash
-source /path/to/local/exports
-```
-
-- Let `SKILL_DIR` mean the directory containing this `SKILL.md`. Resolve the helper relative to the skill file; do not hard-code a user's home path.
-
-- Prove access with a live read before claiming Raindrop works:
-
-```bash
-python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call fetch_current_user
-```
-
-- Treat `codex mcp list` as configuration-only. It does not prove Raindrop tools are callable in the current Codex session.
-- Prefer read-only operations. Do not create, update, delete, merge, or retag bookmarks/collections/highlights unless the user explicitly asks for that mutation.
-- For mutating operations, first read the affected bookmark, collection, tag, or highlight and state the exact object that will change.
-
-## Common Reads
-
-List available MCP tools:
+## Common reads
 
 ```bash
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" tools
-```
-
-Fetch current account/library stats:
-
-```bash
-python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call fetch_current_user
-```
-
-Search bookmarks:
-
-```bash
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_bookmarks '{"query":"swift concurrency","limit":10}'
-```
-
-Fetch bookmark content:
-
-```bash
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call fetch_bookmark_content '{"bookmark_id":123456}'
-```
-
-Inspect organization:
-
-```bash
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_collections '{"limit":50}'
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_tags '{"limit":50}'
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_highlights '{"limit":20}'
-```
-
-Find cleanup candidates:
-
-```bash
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_misplaced_bookmarks '{"limit":20}'
 python3 "$SKILL_DIR/scripts/raindrop_mcp.py" call find_mistagged_bookmarks '{"limit":20}'
 ```
 
-## Response Style
+## Response style
 
-- Summarize only the useful fields; do not dump raw bookmark payloads unless requested.
-- Include direct bookmark URLs when they help the user act.
-- For organization audits, group findings into small actionable batches rather than trying to clean the whole library at once.
+Summarize the useful fields — no raw bookmark payload dumps unless requested. Include direct bookmark URLs when they help the user act. For organization audits, group findings into small actionable batches rather than cleaning the whole library at once.

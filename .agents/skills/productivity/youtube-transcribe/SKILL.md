@@ -5,69 +5,26 @@ description: Download a YouTube video with yt-dlp, extract audio with ffmpeg, tr
 
 # YouTube Transcribe
 
-## Workflow
-
 Use the bundled script:
 
 ```bash
 scripts/youtube_transcribe.sh "https://www.youtube.com/watch?v=..."
 ```
 
-The script creates one folder per video and writes:
+It creates one folder per video and writes `video.*`, `audio.wav`, `transcript.md`, `transcript.txt`, `transcript.srt`, `transcript.json`, and `metadata.json`. Keep generated artifacts in the per-video folder; do not scatter files into the output root.
 
-- `video.*`
-- `audio.wav`
-- `transcript.md`
-- `transcript.txt`
-- `transcript.srt`
-- `transcript.json`
-- `metadata.json`
+## Environment
 
-## Required Environment
+Requires `yt-dlp`, `ffmpeg`, `whisper-cli`, and `python3` on `PATH`. Machine-local configuration stays outside the tracked skill:
 
-The script needs these local tools on `PATH`:
+- Output root: `$AI_INBOX_DIR/YouTube` by default; override with `YT_TRANSCRIBE_OUTPUT_DIR` or `--output-dir` only when this workflow needs a tool-specific root.
+- Whisper model path: `YT_TRANSCRIBE_WHISPER_MODEL`, or `--model` for one-offs.
 
-```bash
-yt-dlp
-ffmpeg
-whisper-cli
-python3
-```
-
-Configure machine-local paths outside the tracked skill:
-
-```bash
-export AI_INBOX_DIR="..."
-export YT_TRANSCRIBE_WHISPER_MODEL="..."
-```
-
-The script writes to `$AI_INBOX_DIR/YouTube` by default. Use `YT_TRANSCRIBE_OUTPUT_DIR`,
-`--output-dir`, or `--model` for one-off overrides.
-
-## Common Commands
-
-Default run:
-
-```bash
-scripts/youtube_transcribe.sh "$URL"
-```
-
-Specify language and title hint:
+## Options
 
 ```bash
 scripts/youtube_transcribe.sh "$URL" --language auto --title "Short readable folder name"
-```
-
-Use a different output root or model:
-
-```bash
 scripts/youtube_transcribe.sh "$URL" --output-dir "$DIR" --model "$MODEL"
 ```
 
-## Notes
-
-- Prefer `AI_INBOX_DIR` as the shared artifact root for files that should sync outside the current host.
-- Use `YT_TRANSCRIBE_OUTPUT_DIR` only when this workflow needs a tool-specific output root.
-- Use `YT_TRANSCRIBE_WHISPER_MODEL` for the local model path.
-- Do not hard-code personal filesystem paths into this skill.
-- Keep generated artifacts in the per-video folder; do not scatter files into the output root.
+Do not hard-code personal filesystem paths into this skill.

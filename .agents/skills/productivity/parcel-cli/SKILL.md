@@ -5,76 +5,32 @@ description: Work with Parcel package tracking through the official Parcel API. 
 
 # Parcel CLI
 
-## Core Rules
+## Core rules
 
-- Use the bundled helper script first:
+- Use the bundled helper: `$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py --help`.
+- Auth uses `PARCEL_API_KEY` from the host's local shell exports (such as `~/.zshenv.local`). Never print, paste, commit, or store the key in skill files, repo files, notes, or logs.
+- Adding a delivery is an externally visible state change. Run `add` without `--confirm` for dry-run planning; use `--confirm` (optionally `--notify`) only after the user explicitly approves the exact tracking number, carrier code, and description.
 
-```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py --help
-```
+## API facts
 
-- Auth uses `PARCEL_API_KEY`, expected from the host's local shell exports such as `~/.zshenv.local`.
-- Never print, paste, commit, or store the API key in skill files, repo files, notes, or logs.
-- Adding a delivery is an externally visible state change in Parcel. Do not run a confirmed add unless the user explicitly approves the exact tracking number, carrier code, and description.
-- Use dry-run output for planning and confirmation:
+- Docs: `https://parcelapp.net/help/api.html`. Key goes in the `api-key` HTTP header.
+- `POST https://api.parcel.app/external/add-delivery/` — one delivery per request; limit 20 add requests/day including failures; cannot add tracking numbers that require extra input (email, postcode); new deliveries may show no data until Parcel's server updates.
+- `GET https://api.parcel.app/external/deliveries/?filter_mode=active|recent`
+- `GET https://api.parcel.app/external/supported_carriers.json`
 
-```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py add \
-  --tracking "1Z..." \
-  --carrier ups \
-  --description "Package description"
-```
-
-- Only use `--confirm` after approval:
+## Common reads
 
 ```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py add \
-  --tracking "1Z..." \
-  --carrier ups \
-  --description "Package description" \
-  --notify \
-  --confirm
+"$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py" carriers ups
+"$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py" deliveries --mode active --summary
+"$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py" deliveries --mode recent --json
 ```
 
-## API Facts
+## Adding deliveries
 
-- API docs: `https://parcelapp.net/help/api.html`
-- Add endpoint: `POST https://api.parcel.app/external/add-delivery/`
-- Deliveries endpoint: `GET https://api.parcel.app/external/deliveries/?filter_mode=active|recent`
-- Carrier list: `GET https://api.parcel.app/external/supported_carriers.json`
-- API key is sent as the `api-key` HTTP header.
-- Add-delivery limit is 20 requests per day, including failed requests.
-- Add accepts one delivery per request.
-- The API cannot add tracking numbers that require extra input such as email or postcode.
-- Newly added deliveries may show no data until Parcel's server updates them.
-
-## Common Reads
-
-Search carriers:
-
-```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py carriers ups
-```
-
-Summarize active deliveries without dumping all event details:
-
-```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py deliveries --mode active --summary
-```
-
-Return JSON when downstream processing matters:
-
-```bash
-$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py deliveries --mode recent --json
-```
-
-## Adding Deliveries
-
-1. Extract candidate tracking numbers from the live source.
-2. Resolve the carrier code with `carriers`.
-3. Check recent or active deliveries for duplicates when practical.
-4. Show a compact approval table: tracking number, carrier code/name, description, source.
-5. After explicit approval, run `add --confirm`.
-6. Report success, failures, and any quota or carrier limitations.
+1. Extract candidate tracking numbers from the live source and resolve the carrier code with `carriers`.
+2. Check recent/active deliveries for duplicates when practical.
+3. Show a compact approval table: tracking number, carrier code/name, description, source.
+4. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.

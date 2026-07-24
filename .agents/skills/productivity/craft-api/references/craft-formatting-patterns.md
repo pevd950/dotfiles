@@ -64,6 +64,19 @@ Safer defaults:
 
 Avoid strong tinted backgrounds for reference pages unless the user explicitly wants that look; they can make long notes harder to read.
 
+## Markdown Mechanics (API/MCP)
+
+- Markdown insertion is sensitive to newline shape. In shell commands, pass real newlines, not literal `\n` sequences; read back and fix escaped `\n` artifacts.
+- Insert multiple list items together with real single newlines. If updating one existing list item into multiple items fails, insert the replacement list after a nearby sibling, then delete the old block.
+- Two leading spaces represent one Craft indentation level. Preserve indentation when editing nested lists and nested pages.
+- Plain markdown headings and titles do not necessarily create nested pages. When nesting is required, create a structured page block and resolve/read that page before writing its body.
+- Multi-paragraph callout markdown creates multiple callout blocks — sometimes useful, but make it intentional.
+- Markdown `***` or `---` creates line blocks; the MCP style surface can then apply `--separator washi --washi-pattern <hex|grid|wave|dot|stripe|diagonal>`.
+- Markdown code fences may round-trip as inline code in some MCP paths; prefer structured `type: "code"` blocks with `rawCode` and `language`.
+- Craft-specific markdown tokens from the API docs: `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, `[text](date://YYYY-MM-DD)`.
+- Collection tags — `<collection>`, `<collectionItem>`, `<property>`, `<contentPreview>`, `<itemsPreview>` — are output-only. Do not send them as input.
+- Inline highlights use Craft's named color set, not arbitrary hex: `yellow`, `green`, `mint`, `cyan`, `blue`, `purple`, `pink`, `red`, `gray`, and gradient variants such as `gradient-blue`, `gradient-purple`, `gradient-red`, `gradient-yellow`, `gradient-brown`.
+
 ## Live Sample Hook
 
 If `CRAFT_FORMATTING_SAMPLE_URL` is set in the local environment and Craft access is available, use it as a private live sample for visual structure. Resolve the link first, read the sample, extract reusable layout/style patterns, and do not copy private content or hard-code the URL into tracked/shared files.

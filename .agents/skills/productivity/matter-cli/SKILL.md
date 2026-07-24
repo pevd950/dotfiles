@@ -5,103 +5,48 @@ description: Work with a Matter reading library through the local Matter CLI. Us
 
 # Matter CLI
 
-## Core Rules
+## Core rules
 
-- Use the local CLI directly. The default install path is `$HOME/.matter/bin/matter`; if it is unavailable, check `command -v matter`.
-- Prove access with a live read before claiming Matter works: `matter account` is the lightweight auth/reachability check.
-- Treat `codex mcp list` and plugin discovery as irrelevant for Matter library reads; Matter is accessed through the CLI.
-- If a Matter CLI command fails with connectivity text such as `Unable to connect. Is the computer able to access the url?`, retry in a network-capable/escalated context before diagnosing auth failure.
-- Keep changes conservative. Do not move, archive, delete, retag, or mutate Matter items unless the user asked for that exact operation.
-- Preserve the `sent to kindle` tag. Matter applies it through its Kindle workflow, so do not remove or normalize it.
+- Default install path `$HOME/.matter/bin/matter`; fall back to `command -v matter`. Matter is accessed through this CLI — MCP/plugin discovery is irrelevant for library reads.
+- Prove access with `matter account` before claiming Matter works. Connectivity errors like `Unable to connect. Is the computer able to access the url?` mean retry in a network-capable/escalated context before diagnosing auth failure.
+- Keep changes conservative: do not move, archive, delete, retag, or mutate items unless the user asked for that exact operation.
+- Preserve the `sent to kindle` tag — Matter applies it through its Kindle workflow; never remove or normalize it.
 
-## Common Reads
-
-Use queue order for reading-list work:
+## Common reads
 
 ```bash
-"$HOME/.matter/bin/matter" items list --status queue --order library_position --limit 20
-```
-
-Use inbox order for incoming feed/newsletter work:
-
-```bash
-"$HOME/.matter/bin/matter" items list --status inbox --order inbox_position --limit 20
-```
-
-Use search before pulling full article bodies:
-
-```bash
+"$HOME/.matter/bin/matter" items list --status queue --order library_position --limit 20   # reading-list work
+"$HOME/.matter/bin/matter" items list --status inbox --order inbox_position --limit 20    # incoming feed/newsletter work
 "$HOME/.matter/bin/matter" search "query" --type items --limit 10
+"$HOME/.matter/bin/matter" items get itm_abc123 --include markdown   # full text only when needed
 ```
 
-Pull full article text only when needed for summarization, classification, or synthesis:
+## Tag work
+
+- Page through tags until `has_more: false`; the first page is not the whole set.
+- Expect rate limits during cleanup — pause and retry instead of dropping work.
+- Obvious-only tagging: leave ambiguous feed placeholders, open threads, and weakly classifiable items unchanged.
+- Canonical tag set (unless the user revises it): `software-engineering`, `frontend`, `ai`, `politics-society`, `work`, `reference`, `research-papers`, `health`, `lifestyle`, `product`, `philosophy`, `homelab`, `opinion`, plus untouched `sent to kindle`.
+- Commands: `tags list --plain`, `tags add --item <id> <tag>`, `tags remove --item <id> <tag>`, `tags rename <old> <new>`.
+
+## Matter app links
+
+API item ids like `itm_8J1dX` are not the ids in Matter's routed deep links, and `matter:item:itm_...` only launches the app. To build an iPhone article link: strip the `itm_` prefix, decode the suffix as base62 (alphabet `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`), and use `https://www.getmatter.com/d/entry/<numeric-content-id>`. Example: `itm_8J1dX` → `122745215` → `https://www.getmatter.com/d/entry/122745215`.
+
+Use the helper for deterministic conversion, resolved relative to this SKILL.md:
 
 ```bash
-"$HOME/.matter/bin/matter" items get itm_abc123 --include markdown
+python3 "$SKILL_DIR/scripts/matter_link.py" itm_8J1dX
 ```
 
-## Tag Work
+## Todoist reading tasks
 
-- Page through tags until `has_more: false`; do not assume the first page is complete.
-- Expect rate limits during tag cleanup. Pause and retry instead of dropping work.
-- Prefer obvious-only tagging. Leave ambiguous feed placeholders, open threads, or weakly classifiable items unchanged.
-- Use the established canonical tag set unless the user asks to revise it:
-  `software-engineering`, `frontend`, `ai`, `politics-society`, `work`, `reference`, `research-papers`, `health`, `lifestyle`, `product`, `philosophy`, `homelab`, `opinion`, plus untouched `sent to kindle`.
+One task per article, with:
 
-Useful commands:
+- The Matter app link in the visible title: `Read: [<article title>](https://www.getmatter.com/d/entry/<numeric-content-id>)`
+- Description lines: `matter:item:<id>` (dedupe key), `Matter content id: <numeric-content-id>`, and `Source URL: <original url>`.
+- The `read` Todoist label only — no `matter` label. Preserve existing due date/priority choices unless asked to change them.
 
-```bash
-"$HOME/.matter/bin/matter" tags list --plain
-"$HOME/.matter/bin/matter" tags add --item itm_abc123 ai
-"$HOME/.matter/bin/matter" tags remove --item itm_abc123 old-tag
-"$HOME/.matter/bin/matter" tags rename old-tag new-tag
-```
+## Automation
 
-## Matter App Links
-
-Matter API item ids such as `itm_8J1dX` are not the ids used by Matter's routed app/web deep links. `matter:item:itm_...` only launches the app and does not navigate to the article.
-
-To create an iPhone app-opening article link:
-
-1. Remove the `itm_` prefix.
-2. Decode the remaining suffix as base62 using alphabet `0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz`.
-3. Use `https://www.getmatter.com/d/entry/<numeric-content-id>`.
-
-Example:
-
-```text
-itm_8J1dX -> 122745215 -> https://www.getmatter.com/d/entry/122745215
-```
-
-Use `scripts/matter_link.py` for deterministic conversion:
-
-```bash
-python3 "${CODEX_HOME:-$HOME/.codex}/skills/matter-cli/scripts/matter_link.py" itm_8J1dX
-```
-
-## Todoist Reading Tasks
-
-When surfacing Matter queue items into Todoist:
-
-- Create one task per article.
-- Put the Matter app link in the visible task title, not only in the body:
-  `Read: [<article title>](https://www.getmatter.com/d/entry/<numeric-content-id>)`
-- Include `matter:item:<id>` in the description for dedupe.
-- Include `Matter content id: <numeric-content-id>`.
-- Include the original source URL separately as `Source URL`.
-- Apply the `read` Todoist label only. Do not add a `matter` label; the visible Matter link and `matter:item:<id>` description line are enough source provenance. Preserve existing due date/priority choices unless the user asks to change them.
-
-## Automation Notes
-
-The durable automation for this workflow lives at:
-
-```text
-${CODEX_HOME:-$HOME/.codex}/automations/matter-reading-queue/automation.toml
-${CODEX_HOME:-$HOME/.codex}/automations/matter-reading-queue/memory.md
-```
-
-When editing that automation, validate the TOML after changes:
-
-```bash
-python3 -c 'import os, pathlib, tomllib; codex_home = pathlib.Path(os.environ.get("CODEX_HOME", pathlib.Path.home() / ".codex")); tomllib.loads((codex_home / "automations/matter-reading-queue/automation.toml").read_text()); print("automation toml ok")'
-```
+The durable automation lives at `${CODEX_HOME:-$HOME/.codex}/automations/matter-reading-queue/` (`automation.toml`, `memory.md`). After editing it, validate the TOML with `python3 -c 'import tomllib, pathlib; tomllib.loads(pathlib.Path("<path>/automation.toml").read_text())'`.
