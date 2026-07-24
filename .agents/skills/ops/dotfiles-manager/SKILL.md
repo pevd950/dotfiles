@@ -5,168 +5,57 @@ description: Safely inspect, edit, commit, push, or sync the user's yadm-managed
 
 # Dotfiles Manager
 
-## Core Rule
-
 The home directory is live operational state, not a scratch repository. Work with exact paths, stage only named files, and never sweep unrelated home changes into a commit.
 
-## Safety Rules
+## Safety rules
 
-- Do not run broad `yadm status --untracked-files=all` from `$HOME` unless the user explicitly asks.
-- Prefer path-scoped commands:
-  - `yadm status --short -- <path>`
-  - `yadm status --short --untracked-files=all -- <path>`
-  - `yadm diff -- <path>`
-  - `yadm diff --cached -- <path>`
-- Stage only explicit paths with `yadm add <path> ...`.
-- Never use `yadm add -A`, broad `git add`, or broad untracked scans in `$HOME`.
+- Do not run broad `yadm status --untracked-files=all` from `$HOME` unless the user explicitly asks. Prefer path-scoped commands: `yadm status --short [--untracked-files=all] -- <path>`, `yadm diff [--cached] -- <path>`.
+- Stage only explicit paths with `yadm add <path> ...`. Never `yadm add -A`, broad `git add`, or broad untracked scans in `$HOME`.
 - Before deleting or changing home files, ask unless the user explicitly requested that exact mutation.
 - Before committing shell, app, SSH, GPG, token, credential, or auth-related config, inspect the exact diff for secrets.
-- If yadm reports `index.lock`, check for live `yadm` or `git` processes before removing or retrying:
-  - `ps -axo pid,ppid,stat,command | rg 'yadm|\\.local/share/yadm|git'`
-  - `YADM_REPO="$(yadm introspect repo)" && ls -l "$YADM_REPO/index.lock"`
+- On `index.lock`, verify there is no live yadm/git process before removing or retrying — a lock file is not automatically stale:
+  - `ps -axo pid,ppid,stat,command | rg 'yadm|\.local/share/yadm|git'`
+  - `ls -l "$(yadm introspect repo)/index.lock"`
 
-## Choose The Right Workspace
+## Choose the workspace
 
-Use the live `$HOME` yadm checkout only for small, targeted edits such as:
+Use the live `$HOME` checkout for small targeted edits: a personal skill, one AGENTS/guidance file, a known config file, an already-reviewed sync. Use the developer clone (`DOTFILES_DEV_DIR="${DOTFILES_DEV_DIR:-$HOME/Developer/dotfiles}"`) for bootstrap or install changes, CI/check scripts, restructuring, or changes that should go through PR review. After a dev-clone merge, sync live with `yadm pull --ff-only`, then run only requested follow-ups such as `yadm alt` or `yadm bootstrap`.
 
-- adding or updating a personal skill
-- updating a single AGENTS/global guidance file
-- committing a known exact config file
-- syncing an already-reviewed dotfiles change
+## Edit-and-commit loop
 
-Use the developer clone for larger work. Resolve it with:
+Edit exact paths → verify with path-scoped status/diff → validate with the narrowest relevant check (skills: read `SKILL.md` and `agents/openai.yaml`; shell/bootstrap: the repo check script if available and safe; config: the tool's non-mutating validation) → `yadm add <paths>` → review `yadm diff --cached` → commit and push → confirm with `yadm log -1 --oneline` and path-scoped status.
 
-```bash
-DOTFILES_DEV_DIR="${DOTFILES_DEV_DIR:-$HOME/Developer/dotfiles}"
-```
+## Skill changes
 
-Prefer that clone for:
+Canonical root: `SKILL_ROOT="$HOME/.agents/skills"`, organized by category (for example `development/<skill-name>/SKILL.md`). Create only essential files: `SKILL.md`, `agents/openai.yaml` when useful for UI metadata, and `scripts/`/`references/`/`assets/` only when genuinely needed. No READMEs or changelogs around skills unless asked.
 
-- bootstrap or install workflow changes
-- CI/check scripts
-- restructuring tracked dotfiles
-- changes that should go through PR review before affecting the live home
+## Cross-machine portability
 
-After a developer-clone PR merges, sync the live checkout with non-interactive commands such as `yadm pull --ff-only`, then run only the requested follow-up commands like `yadm alt` or `yadm bootstrap`.
+Write for multiple Macs and future hosts: no hardcoded project paths when a relative or environment-based description works; do not assume identical clone paths, Xcode state, shells, or app auth; prefer discover-then-act over host-specific constants; mark intentionally user-specific paths as such.
 
-## Small Live-Home Edit Workflow
+## 1Password developer baseline
 
-1. Identify the exact paths the user asked to change.
-2. Read only those files and any directly related local instructions.
-3. Edit with `apply_patch`.
-4. Verify exact-path state:
-   - `yadm status --short --untracked-files=all -- <path1> <path2>`
-5. Review the exact diff:
-   - `yadm diff -- <path1> <path2>`
-6. Validate with the narrowest relevant check:
-   - for skills: read `SKILL.md` and `agents/openai.yaml`
-   - for shell/bootstrap: run the repo check script if available and safe
-   - for config: run the tool's non-mutating validation if available
-7. Stage exact paths:
-   - `yadm add <path1> <path2>`
-8. Check staged diff:
-   - `yadm diff --cached --stat`
-   - `yadm diff --cached -- <path1> <path2>`
-9. Commit and push:
-   - `yadm commit -m "<message>"`
-   - `yadm push`
-10. Confirm:
-   - `yadm log -1 --oneline`
-   - `yadm status --short --untracked-files=all -- <path1> <path2>`
-
-## Skill Changes
-
-For personal skills, treat this as the canonical root unless the user names another root:
-
-```bash
-SKILL_ROOT="$HOME/.agents/skills"
-```
-
-Keep shared skills organized by category under that root, for example
-`$HOME/.agents/skills/development/<skill-name>/SKILL.md`.
-
-Create only essential skill files:
-
-- `SKILL.md`
-- `agents/openai.yaml` when useful for UI metadata
-- optional `scripts/`, `references/`, or `assets/` only when the skill genuinely needs them
-
-Keep `SKILL.md` concise and operational. Do not add READMEs, changelogs, or extra docs around the skill unless the user asks.
-
-## Cross-Machine Portability
-
-Write dotfiles guidance for multiple Macs and future hosts:
-
-- Avoid hardcoded project paths when a relative or environment-based description works.
-- Do not assume every host has the same repo clone paths, Xcode state, shells, or app auth.
-- Prefer "discover then act" instructions over host-specific constants.
-- If a path is intentionally user-specific, make that explicit.
-
-## 1Password Developer Baseline
-
-For 1Password, GitHub auth, SSH agent, or developer-token routing work, start
-with the non-mutating baseline before changing files:
+For 1Password, GitHub auth, SSH agent, or developer-token routing work, start with the non-mutating preflight, and use it to classify the host, not to collect secrets:
 
 ```bash
 ~/.zshrc_custom/bin/onepassword-dev-preflight
 ```
 
-Use the preflight to classify the host, not to collect secrets. It should answer:
+It answers: whether `op`, 1Password.app, `onepassword-mcp`, and the Codex `1password` MCP entry are available; whether `op account list`, `op plugin list`, `gh auth status`, and `gh api user` run without printing their output; whether `GH_TOKEN`/`GITHUB_TOKEN` env overrides are masking the baseline; whether `SSH_AUTH_SOCK`, `ssh-add`, 1Password `agent.toml`, GitHub `IdentityAgent`, and SSH auth to GitHub are usable; and which variable names quiet local env files export, without values.
 
-- whether `op`, `1Password.app`, `onepassword-mcp`, and the Codex `1password`
-  MCP entry are available
-- whether `op account list`, `op plugin list`, `gh auth status`, and
-  `gh api user` can run without printing their output
-- whether `GH_TOKEN` or `GITHUB_TOKEN` are set in the current environment,
-  because env overrides can mask the 1Password/gh baseline
-- whether `SSH_AUTH_SOCK`, `ssh-add`, 1Password `agent.toml`, GitHub
-  `IdentityAgent`, and SSH auth to GitHub are usable
-- which variable names are exported from quiet local env files, without
-  printing values
+Run the mutating `scripts/setup-1password-dev.zsh` only after the baseline shows the intended gap or the user asked for repair. Keep tracked guidance to command names, variable names, and non-secret mechanics; never commit private 1Password item paths, vault IDs, token values, host-local Craft links, or generated secret files. For remote hosts, verify inheritance by pulling the yadm commit there and re-running the preflight — do not assume local 1Password app, SSH socket, or CLI auth state exists remotely.
 
-Only run the mutating setup script after the baseline shows the intended gap or
-the user asked for repair:
+## Ask first
 
-```bash
-scripts/setup-1password-dev.zsh
-```
+Deleting, moving, or rewriting broad home-directory files; bootstrap changes that could mutate a machine; secrets, credentials, SSH/GPG config, LaunchAgents, browser/app auth, or password-manager state; installing packages or changing system defaults; responding to human review comments in dotfiles PRs; committing unrelated yadm changes you did not create.
 
-Keep public tracked guidance to command names, variable names, and non-secret
-mechanics. Do not commit private 1Password item paths, vault IDs, token values,
-host-local Craft links, or generated secret files. If a remote host is involved,
-verify inheritance by pulling the yadm commit on that host and running the same
-preflight there; do not assume the local host's 1Password app, SSH socket, or
-CLI auth state exists remotely.
+## Pitfalls
 
-## When To Ask First
+- Broad home scans can hang, surface private noise, or leave yadm locked.
+- The live checkout can hold unrelated local state; a clean-looking summary is not permission to commit it.
+- `codex/...` branch names can collide with existing flat refs in the dotfiles repo; prefer flat branch names for dotfiles PR branches.
+- A generated local machine file does not belong in dotfiles just because it is under `$HOME`.
 
-Ask before proceeding when the task involves:
+## Reporting
 
-- deleting, moving, or rewriting broad home-directory files
-- changing bootstrap behavior that could mutate a machine
-- secrets, credentials, SSH/GPG config, LaunchAgents, browser/app auth, or password-manager state
-- installing packages or changing system defaults
-- responding to human review comments in dotfiles PRs
-- committing unrelated yadm changes you did not create
-
-## Common Pitfalls
-
-- Broad home scans can hang, find private noise, or leave yadm locked.
-- The live yadm checkout can have unrelated local state; do not infer it is safe to commit from a broad clean-looking summary.
-- `codex/...` branch names can collide with existing flat refs in the dotfiles repo. Prefer flat branch names when creating dotfiles PR branches.
-- A yadm lock file is not automatically stale. Verify there is no live process before retrying or removing it.
-- Do not assume a generated local machine file belongs in dotfiles just because it is under `$HOME`.
-
-## Output Expectations
-
-When committing:
-
-- Say exactly which paths were staged.
-- Include the commit SHA.
-- Say whether push succeeded.
-- Mention any validation run.
-
-When not committing:
-
-- State what changed locally and which exact paths need review.
-- If blocked, name the blocker and the safest next action.
+When committing: exact paths staged, commit SHA, push result, validation run. When not committing: what changed locally and which exact paths need review; if blocked, the blocker and the safest next action.

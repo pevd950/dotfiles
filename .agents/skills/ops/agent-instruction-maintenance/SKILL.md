@@ -5,53 +5,27 @@ description: "Review, update, and synchronize agent instructions and configs acr
 
 # Agent Instruction Maintenance
 
-## What this skill does
-- Audits agent instructions for clarity, correctness, and consistency.
-- Validates frontmatter and minimal schemas for detected ecosystems.
-- Aligns tool-specific variants while keeping behavior consistent.
+Audit agent instructions for clarity, correctness, and cross-tool consistency; validate frontmatter; keep tool-specific variants aligned without contradictions.
 
-## When to use it
-- Trigger phrases: "agent instructions", "prompt review", "skill update", "chatmode", "subagent".
-- Use after creating or editing instructions, or when standards change.
+## Workflow
 
-## Step-by-step workflow
-0) If the prompt includes automation metadata such as `Automation:`, `Automation ID:`, `Automation memory:`, or `Last run:`, load and follow `automation-run-hygiene` when that skill is available. If it is not available, apply this inline hygiene before scanning or editing:
-   - Resolve the automation ID and memory path from the prompt, then read the memory file if it exists.
-   - Use the latest successful checkpoint from memory as the scan start; otherwise use the prompt fallback window.
-   - Exclude the current automation run from historical evidence.
-   - Before finishing, append a concise run entry to the automation memory.
-   - End with the host app's required handoff or inbox directive when the environment requires one.
-This prevents named maintenance-skill work from skipping automation memory normalization and inbox handoff rules.
-1) Discover which ecosystems exist in the repo or user config.
-2) Resolve instruction file locations from the current source of truth before opening them.
-- For named skills, prefer the path supplied by the current session's skill inventory.
-- If a remembered path is missing, re-resolve under `$HOME/.agents/skills`, provider-specific compatibility folders such as `$HOME/.claude/skills`, or the relevant plugin cache instead of assuming the old location is still canonical.
-3) Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
-4) When auditing Codex session logs for instruction or skill friction, parse JSONL records structurally and focus on actual tool outputs such as `function_call_output`. Avoid raw `rg` over whole session files as a primary signal because prompts, embedded AGENTS.md text, and prior command outputs create false positives. Treat successful commands that only read automation memories or older session excerpts as replayed context, not fresh friction, unless the read command itself failed. If possible, separate the current maintenance run from the historical sessions being analyzed.
-5) Validate minimal frontmatter for each file type (see references).
-6) Review content for clarity, scope, and actionability; remove ambiguity.
-7) Ensure intent parity across tools while avoiding contradictions.
-8) Keep instructions lean; move deep details into references.
-9) Propose updates with before/after snippets and rationale.
+1. If the prompt carries automation metadata (`Automation:`, `Automation ID:`, `Automation memory:`, `Last run:`), follow `automation-run-hygiene` for checkpoint, scan-window, and handoff mechanics.
+2. Discover which ecosystems exist in the repo or user config, and resolve instruction file locations from the current source of truth: the session's skill inventory first, then `$HOME/.agents/skills`, provider compatibility folders such as `$HOME/.claude/skills`, or the relevant plugin cache. Do not assume a remembered path is still canonical.
+3. Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
+4. When mining Codex session logs for instruction or skill friction, parse JSONL structurally and focus on real tool outputs such as `function_call_output`. Raw `rg` over whole session files false-positives on prompts, embedded AGENTS text, and replayed command output; successful reads of automation memories or older excerpts are replayed context, not fresh friction. Separate the current maintenance run from the sessions being analyzed.
+5. Validate minimal frontmatter per file type (see references), review content for clarity and scope, keep instructions lean with deep detail in references, and propose edits with before/after snippets and rationale.
 
-## Default prioritization
-- Prefer Codex-first guidance unless the user asks for tool-specific changes.
-- Prefer Skills (SKILL.md) and AGENTS.md for portable, shared behavior.
-- Apply tool-specific files only when a feature is unique to that tool.
+## Prioritization
 
-## Tool-specific references
+Codex-first unless the user asks for tool-specific changes. Prefer SKILL.md and AGENTS.md for portable shared behavior; use tool-specific files only for features unique to that tool.
+
+## References
+
 - Codex: `references/codex.md`
-- Claude Opus: `references/claude-code.md`
-- VS Code/Copilot (optional): `references/copilot-vscode.md`
-- Tool choice (commands vs skills vs agents): `references/tool-selection.md`
+- Claude Code: `references/claude-code.md`
+- VS Code/Copilot: `references/copilot-vscode.md`
+- Commands vs skills vs agents: `references/tool-selection.md`
 
-## Expected outputs / formatting
-- Summary of findings and risk areas.
-- Required fixes (schema/format) vs recommended improvements (clarity/consistency).
-- Proposed edits with brief rationale.
-- Updated files when approved.
+## Output
 
-## Example prompts
-- "Review our skills and normalize naming/trigger phrases."
-- "Validate agent frontmatter across Claude and Copilot files."
-- "Update Codex skills to match new project standards."
+Findings and risk areas; required schema/format fixes separated from recommended clarity improvements; proposed edits with rationale; updated files when approved.
