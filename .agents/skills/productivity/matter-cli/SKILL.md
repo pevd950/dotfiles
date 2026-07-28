@@ -46,7 +46,3 @@ One task per article, with:
 - The Matter app link in the visible title: `Read: [<article title>](https://www.getmatter.com/d/entry/<numeric-content-id>)`
 - Description lines: `matter:item:<id>` (dedupe key), `Matter content id: <numeric-content-id>`, and `Source URL: <original url>`.
 - The `read` Todoist label only — no `matter` label. Preserve existing due date/priority choices unless asked to change them.
-
-## Automation
-
-The durable automation lives at `${CODEX_HOME:-$HOME/.codex}/automations/matter-reading-queue/` (`automation.toml`, `memory.md`). After editing it, validate the TOML with `python3 -c 'import tomllib, pathlib; tomllib.loads(pathlib.Path("<path>/automation.toml").read_text())'`.

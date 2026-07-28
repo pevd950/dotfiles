@@ -7,7 +7,18 @@ description: Work with Tripsy travel data through the local Tripsy CLI. Use when
 
 ## Core rules
 
-- Prefer `$HOME/.local/bin/tripsy`, falling back to `command -v tripsy`. Treat the remote Tripsy MCP as optional — prefer the CLI when the MCP does not expose tools or has session/auth instability.
+- Resolve the CLI once per shell, preferring the local install:
+
+```bash
+TRIPSY_BIN="$HOME/.local/bin/tripsy"
+test -x "$TRIPSY_BIN" || TRIPSY_BIN="$(command -v tripsy)"
+if ! test -x "$TRIPSY_BIN"; then
+  echo "Tripsy CLI unavailable" >&2
+  exit 1
+fi
+```
+
+- Treat the remote Tripsy MCP as optional — prefer the CLI when the MCP does not expose tools or has session/auth instability.
 - Prove access before claiming Tripsy works: `"$TRIPSY_BIN" doctor` and `"$TRIPSY_BIN" auth status --json`.
 - Prefer `--json` for agent work; `--quiet` for raw JSON only.
 - No create/update/delete/upload/attach unless the user asked for that exact mutation.

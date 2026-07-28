@@ -3,7 +3,7 @@
 GitHub exposes PR-body reactions through the issue reactions API because every pull request is also an issue:
 
 ```bash
-gh api 'repos/{owner}/{repo}/issues/<pr>/reactions?content=%2B1' --paginate \
+gh api 'repos/{owner}/{repo}/issues/<pr>/reactions' --paginate \
   --jq '.[] | {id, user: .user.login, content, created_at}'
 ```
 
