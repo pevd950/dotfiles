@@ -14,7 +14,7 @@ description: Manage Pablo's Mela recipe library from Codex. Use for reading/sear
 
 ## Setup
 
-Preferred command: `"$HOME/.local/bin/mela" doctor --format json` — a wrapper to a pinned venv with `mela-cli==1.0.1`. If missing, recreate: `python3 -m venv "$HOME/.local/share/mela-cli-venv"`, `pip install mela-cli==1.0.1` in that venv, then create the `$HOME/.local/bin/mela` wrapper.
+Preferred command: `"$HOME/.local/bin/mela" doctor --format json` — a wrapper to a pinned venv with `mela-cli==1.0.1`. If missing, recreate: `python3 -m venv "$HOME/.local/share/mela-cli-venv"`, `"$HOME/.local/share/mela-cli-venv/bin/python" -m pip install mela-cli==1.0.1`, then create the `$HOME/.local/bin/mela` wrapper.
 
 ## Reads
 

@@ -5,7 +5,7 @@ description: "Create or refine backlog items with clear scope and acceptance cri
 
 # Backlog Planner
 
-Turn ideas into issues an agent or human can implement without private chat history. Search for duplicates and in-flight PRs before creating; read the full issue, comments, labels, related PRs, and board status before changing an existing one. Ask before bulk-creating issues unless the user explicitly requested filing them.
+Turn ideas into issues an agent or human can implement without private chat history. Search for duplicates and in-flight PRs before creating; read the full issue, comments, labels, related PRs, and board status before changing an existing one. Before any write, resolve the repository and authenticated account with `gh repo view` and `gh auth status`, then inspect the repository's labels and project fields. Follow repository policy; use the taxonomy below only where those labels and status values already exist, and never create or rename taxonomy unless asked. Ask before bulk-creating issues unless the user explicitly requested filing them.
 
 ## Issue quality bar
 
@@ -16,7 +16,7 @@ Turn ideas into issues an agent or human can implement without private chat hist
 - Validation plan matched to the changed surface: unit, integration, local server, simulator, or manual API checks.
 - Scope fits a focused PR, or the planned slices are named. Split work that spans multiple components or has unclear sequencing.
 
-## Readiness labels — one active at a time
+## Default readiness labels — one active at a time
 
 - `ai-needs-review`: body materially drafted or rewritten by AI; needs human review.
 - `needs-grooming`: human-reviewed but still missing scope, acceptance criteria, blockers, or validation detail.
@@ -28,7 +28,7 @@ Labels classify and gate readiness; execution state lives on the project board. 
 
 ## Project board status
 
-Standard flow: `Backlog` → `Next` → `Ready` → `In progress` → `In review` → `Done`. New issues start in `Backlog`; near-term but blocked or not-yet-ready priorities go to `Next`; `agent-ready` work goes to `Ready`; actively owned work to `In progress`; open-PR work to `In review`. If board tooling is unavailable, report the intended status change instead of inventing substitute labels.
+When the board defines these values, use `Backlog` → `Next` → `Ready` → `In progress` → `In review` → `Done`. New issues start in `Backlog`; near-term but blocked or not-yet-ready priorities go to `Next`; `agent-ready` work goes to `Ready`; actively owned work to `In progress`; open-PR work to `In review`. If board tooling is unavailable, report the intended status change instead of inventing substitute labels.
 
 ## GitHub as live artifact
 
