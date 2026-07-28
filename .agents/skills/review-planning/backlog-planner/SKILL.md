@@ -28,7 +28,7 @@ Labels classify and gate readiness; execution state lives on the project board. 
 
 ## Project board status
 
-When the board defines these values, use `Backlog` → `Next` → `Ready` → `In progress` → `In review` → `Done`. New issues start in `Backlog`; near-term but blocked or not-yet-ready priorities go to `Next`; `agent-ready` work goes to `Ready`; actively owned work to `In progress`; open-PR work to `In review`. If board tooling is unavailable, report the intended status change instead of inventing substitute labels.
+When the board defines these values, use `Backlog` → `Next` → `Ready` → `In progress` → `In review` → `Done`. New issues start in `Backlog`; near-term but blocked or not-yet-ready priorities go to `Next`; `agent-ready` work goes to `Ready`; actively owned work to `In progress`; open-PR work to `In review`. With different status names, map each semantic stage to the closest existing value. If no equivalent exists or board tooling is unavailable, report the intended transition instead of creating fields, statuses, or substitute labels.
 
 ## GitHub as live artifact
 

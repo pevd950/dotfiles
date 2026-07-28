@@ -12,6 +12,10 @@ description: Work with Tripsy travel data through the local Tripsy CLI. Use when
 ```bash
 TRIPSY_BIN="$HOME/.local/bin/tripsy"
 test -x "$TRIPSY_BIN" || TRIPSY_BIN="$(command -v tripsy)"
+if ! test -x "$TRIPSY_BIN"; then
+  echo "Tripsy CLI unavailable" >&2
+  exit 1
+fi
 ```
 
 - Treat the remote Tripsy MCP as optional — prefer the CLI when the MCP does not expose tools or has session/auth instability.
