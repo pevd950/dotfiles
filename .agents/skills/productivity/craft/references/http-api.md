@@ -1,17 +1,12 @@
----
-name: craft-api
-description: Use Craft through its HTTP API as a durable fallback when Craft MCP is unavailable, expired, or impractical on headless hosts. Use for reading, searching, creating, updating, moving, or deleting Craft documents, blocks, collections, comments, uploads, and connection metadata via CRAFT_API_BASE_URL and CRAFT_API_KEY.
----
+# Direct HTTP API
 
-# Craft API
-
-Prefer Craft MCP when available; this API is the durable fallback for real read/write work on headless or unauthenticated hosts. Treat it as production access to real Craft data.
+This is the complete standalone path for working with Craft when the Craft MCP plugin is unavailable, unhealthy, connected to the wrong space, or impractical on a headless host. An agent using this reference must be able to complete real Craft work without relying on plugin commands. Treat it as production access to real Craft data.
 
 ## Environment and auth
 
 Required local-only variables (from a host-local ignored secrets file or shell startup — ask the user to add them if missing; do not assume a specific path): `CRAFT_API_BASE_URL` (ends in `/api/v1`), `CRAFT_API_KEY`, and optional `CRAFT_FORMATTING_SAMPLE_URL` (private live formatting sample). Never write API keys, private Craft links, user-specific paths, or space IDs into tracked files, PR bodies, Craft demo pages, or logs.
 
-Use the bundled helper for routine calls — it centralizes auth, avoids printing secrets, requires an HTTPS base URL without userinfo, and follows only strictly same-origin redirects. Resolve it relative to this SKILL.md (`SKILL_DIR`); other skills needing Craft API access should call it instead of reimplementing HTTP:
+Use the bundled helper for routine calls — it centralizes auth, avoids printing secrets, requires an HTTPS base URL without userinfo, and follows only strictly same-origin redirects. Set `SKILL_DIR` to the directory containing the parent `SKILL.md`, not this `references/` directory. Other skills needing Craft API access should call this helper instead of reimplementing HTTP:
 
 ```shell
 python3 "$SKILL_DIR/scripts/craft_api.py" GET /connection
@@ -67,7 +62,7 @@ Upload raw bytes with the real MIME type (`--body-file ./image.png --content-typ
 
 ## Formatting
 
-For polished, rich, or highly scannable documents, read `references/craft-formatting-patterns.md` first (layout patterns, block choices, styling, and the API/MCP markdown mechanics: newline shape, tokens, toggles, highlights, indentation). If `CRAFT_FORMATTING_SAMPLE_URL` is set and live access exists, inspect that private sample for structure without copying private content or storing the URL in shared files.
+For polished, rich, or highly scannable documents, read `references/formatting.md` first (layout patterns, block choices, styling, and the API/MCP markdown mechanics: newline shape, tokens, toggles, highlights, indentation). If `CRAFT_FORMATTING_SAMPLE_URL` is set and live access exists, inspect that private sample for structure without copying private content or storing the URL in shared files.
 
 ## Tasks note
 

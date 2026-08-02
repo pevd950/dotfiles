@@ -19,7 +19,7 @@ Shared run contract for recurring automation threads and scheduled scout/router 
 
 ## Durable writes
 
-- Follow the automation prompt's write boundaries exactly. If a Craft run record is required, read the target document or collection schema before writing.
+- Follow the automation prompt's write boundaries exactly. When a provider-specific durable record is required, load the owning domain skill and read the target or schema before writing.
 - Keep dashboard/root pages compact; long run evidence goes in the run item body or the automation-specified archive.
 - Update existing rows by stable slug when a recurring issue is reinforced; never duplicate a row because another host already saw the same friction.
 - Record source gaps separately from conclusions.
@@ -38,4 +38,4 @@ Emit exactly one final directive, and only when the host app requires one. Keep 
 
 ## Belongs elsewhere
 
-Domain-specific classifiers → the domain skill or automation prompt. Connector failure classification → `connector-readiness-triage`. Project-specific workflow → the owning repo instructions. Host-specific secrets, paths, and repair notes → ignored local config, or shared Craft memory when another host needs them.
+Domain-specific classifiers → the domain skill or automation prompt. Connector failure classification → `connector-readiness-triage`. Project-specific workflow → the owning repo instructions. Host-specific secrets, paths, and repair notes → ignored local config or the owning domain's shared-memory protocol when another host needs them.

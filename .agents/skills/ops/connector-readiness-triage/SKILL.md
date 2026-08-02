@@ -36,4 +36,4 @@ Remaining gap:
 
 ## Routing
 
-Craft MCP/API behavior → `craft-api` after classification. GitHub CLI, Git transport, DNS, credential-helper, or Keychain layers → `gh-connectivity-preflight`. Notification delivery → `actionbuddy-notify` / `poke-notify`. Automation checkpoint mechanics → `automation-run-hygiene`. Host-specific setup notes → ignored local config or shared Craft memory, never this reusable skill.
+Craft plugin/API behavior → `craft` after classification. GitHub CLI, Git transport, DNS, credential-helper, or Keychain layers → `gh-connectivity-preflight`. Notification delivery → `actionbuddy-notify` / `poke-notify`. Automation checkpoint mechanics → `automation-run-hygiene`. Host-specific setup notes → ignored local config or the owning domain's shared-memory protocol, never this reusable skill.
