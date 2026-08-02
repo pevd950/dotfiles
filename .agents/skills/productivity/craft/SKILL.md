@@ -1,6 +1,6 @@
 ---
 name: craft
-description: Use Craft through the Craft MCP plugin or direct HTTP API for reading, searching, creating, updating, moving, styling, uploading, and organizing documents, blocks, collections, daily notes, tasks, and shared agent context. Use whenever a request involves Craft, a Craft link, or saving durable notes in Craft.
+description: Use Craft through the Craft MCP plugin or direct HTTP API for reading, searching, creating, updating, moving, styling, uploading, and organizing documents, blocks, collections, daily notes, and tasks. Use whenever a request involves Craft, a Craft link, or saving durable notes in Craft.
 ---
 
 # Craft
@@ -61,10 +61,6 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.
 - Treat collection-item deletion as destructive because it also removes the item's content.
-
-## Shared agent context
-
-When Craft is used as a cross-host memory bridge, read `references/shared-memory.md`. The private root link belongs in host-local ignored configuration, never in this tracked skill.
 
 ## Tasks and source ownership
 

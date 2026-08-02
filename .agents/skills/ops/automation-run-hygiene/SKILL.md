@@ -38,4 +38,4 @@ Emit exactly one final directive, and only when the host app requires one. Keep 
 
 ## Belongs elsewhere
 
-Domain-specific classifiers → the domain skill or automation prompt. Connector failure classification → `connector-readiness-triage`. Project-specific workflow → the owning repo instructions. Host-specific secrets, paths, and repair notes → ignored local config or the owning domain's shared-memory protocol when another host needs them.
+Domain-specific classifiers → the domain skill or automation prompt. Connector failure classification → `connector-readiness-triage`. Project-specific workflow → the owning repo instructions. Host-specific secrets and private routing → ignored local config. Durable non-secret context that must cross host-local Codex memory boundaries → `cross-host-context`.

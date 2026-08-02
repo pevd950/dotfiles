@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cross-Host Context"
+  short_description: "Bridge durable agent context across computers."
+  default_prompt: "Use synchronized cross-host context only to supplement Codex's built-in local memory, verify current facts in their owning systems, and keep the storage provider abstracted behind its own skill."
