@@ -57,7 +57,7 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 ## Daily notes and collections
 
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
-- In Pablo's Craft Daily Notes, place a compact `## ➕ Suggested Captures` section after `Focus` and before `Open Loops`, with a short callout and draft Todoist links when there are useful untracked actions. Omit the section when there is nothing meaningful to capture.
+- In the user's Craft Daily Notes, place a compact `## ➕ Suggested Captures` section after `Focus` and before `Open Loops`, with a short callout and draft Todoist links when there are useful untracked actions. Omit the section when there is nothing meaningful to capture.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.
 - Treat collection-item deletion as destructive because it also removes the item's content.
