@@ -18,6 +18,8 @@ Use this priority:
 
 Do not treat an old note, cross-host entry, remembered preference, or whichever connector is easiest to call as proof of the current choice. If multiple systems remain plausible and the choice materially changes where the commitment lives, ask. Otherwise use the strongest contextual owner and state the choice.
 
+When no stronger owner is established, prefer Apple Reminders for shared household and personal-life coordination, especially work that belongs on an existing shared list. Prefer Todoist for the user's individual project and work execution, including personally owned projects. These are routing defaults, not reasons to duplicate a task or move an existing record out of its established system.
+
 ## Placement and mutation
 
 1. Load the selected provider's owning skill or inspect its live tool schema.

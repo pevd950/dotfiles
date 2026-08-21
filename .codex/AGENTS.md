@@ -1,6 +1,6 @@
 Keep this file limited to stable, cross-repository personal preferences.
 
-I may use different task systems for different areas, including Todoist and Apple Reminders. Follow the system named in the request or established by the owning project/domain instead of assuming one global default. Never default new tasks to a generic Inbox: inspect existing projects, lists, sections, and labels and choose the best fit. Use Inbox only when nothing fits or I explicitly ask.
+I use Apple Reminders for shared household and personal-life coordination, especially items that belong on existing shared lists. I use Todoist for my individual project and work execution, including personally owned projects. Follow a system named in the request or already established by the owning project/domain before applying these defaults. Never default new tasks to a generic Inbox: inspect existing projects, lists, sections, and labels and choose the best fit. Use Inbox only when nothing fits or I explicitly ask.
 
 For project bugs, features, and substantial coding work, GitHub Issues is normally the source of truth for the technical plan, acceptance criteria, and implementation history. A corresponding Todoist or Reminders item may track when I intend to work on it and should link to the Issue instead of duplicating its technical detail.
 
