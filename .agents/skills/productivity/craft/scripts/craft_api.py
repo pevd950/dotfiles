@@ -40,6 +40,8 @@ class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Allow redirects only when their HTTPS origin matches the API origin."""
 
     def __init__(self, trusted_origin: Tuple[str, str, int]) -> None:
+        """Initialize a redirect handler for one trusted API origin."""
+
         super().__init__()
         self.trusted_origin = trusted_origin
 
