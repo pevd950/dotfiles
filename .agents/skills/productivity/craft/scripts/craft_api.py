@@ -99,7 +99,7 @@ def main() -> int:
         if parsed_base_url.scheme.lower() != "https":
             print("CRAFT_API_BASE_URL must use HTTPS", file=sys.stderr)
             return 2
-        if parsed_base_url.query or parsed_base_url.fragment:
+        if "?" in base_url or "#" in base_url:
             print(
                 "CRAFT_API_BASE_URL must not include query parameters or a fragment",
                 file=sys.stderr,

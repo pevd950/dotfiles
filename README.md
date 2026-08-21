@@ -131,6 +131,13 @@ Use `AGENT_SHARED_CONTEXT_URL` for the provider-neutral cross-host context root.
 Existing hosts may keep `CRAFT_SHARED_MEMORY_URL` as a compatibility alias while
 they migrate; when both are set, they must identify the same root.
 
+The configured root must contain a compact `Routing Directory`, or an equivalent
+host table such as the existing `Host Snapshot`, with one entry per host. Each
+entry records its canonical `AGENT_HOST_ALIAS` and any accepted local hostname
+aliases. Agents resolve the root first, then require the trimmed current alias or
+hostname to match exactly one entry case-insensitively before reading subject
+context or writing; missing or ambiguous matches fail closed for shared context.
+
 ## 🔀 GitHub Codespaces
 
 This repo auto-configures Codespaces. GitHub runs `setup.sh` automatically (not the full yadm bootstrap).

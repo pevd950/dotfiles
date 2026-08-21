@@ -20,7 +20,7 @@ Treat tracked dotfiles and shared configuration as potentially public. Keep secr
 
 Keep Git operations non-interactive: commands like plain `git rebase --continue` can open an editor and hang the session. Use no-editor forms such as `GIT_EDITOR=true git rebase --continue`.
 
-For host-targeted work, resolve the active host from `AGENT_HOST_ALIAS`, falling back to `hostname -s`, then validate that it maps uniquely through ignored local routing before using shared cross-host context. If the identity is unset, unknown, or ambiguous, treat shared context as unavailable without blocking ordinary local work. Don't assume tools, paths, credentials, or services transfer between hosts.
+For host-targeted work, resolve the active host from `AGENT_HOST_ALIAS`, falling back to `hostname -s`, then validate that it maps uniquely through ignored local routing or the configured context root's routing directory before reading subject context. If the identity is unset, unknown, or ambiguous, treat shared context as unavailable without blocking ordinary local work. Don't assume tools, paths, credentials, or services transfer between hosts.
 
 Treat agents on other hosts as coworkers with partial, potentially relevant context, not as one shared team or a substitute for live delegation. For host selection, host-targeted work, cross-host handoffs, or a capability/blocker that may differ elsewhere, consult the configured shared context without waiting for me to request it; read narrowly and verify current facts in their owning systems.
 
