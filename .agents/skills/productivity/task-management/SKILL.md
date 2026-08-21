@@ -1,6 +1,6 @@
 ---
 name: task-management
-description: Choose and operate the user's intended task system without coupling note, calendar, or project skills to one provider. Use for creating, capturing, updating, organizing, completing, or linking tasks and commitments; task-manager selection; Inbox placement; quick-add handoffs; or deciding between systems such as Todoist, Reminders, and Craft tasks.
+description: Choose and operate the user's intended task or work-tracking system without coupling note, calendar, or project skills to one provider. Use for creating, capturing, updating, organizing, completing, or linking tasks and commitments; task-manager selection; Inbox placement; quick-add handoffs; GitHub Issues for bugs or implementation work; or deciding between Todoist, Reminders, Craft tasks, and project trackers.
 ---
 
 # Task Management
@@ -30,6 +30,9 @@ When the user has not asked for creation, prefer a clearly labeled draft or prov
 
 ## Ownership boundaries
 
+- For project bugs, features, and substantial coding work, prefer the owning repository's issue tracker as the technical source of truth. Keep the implementation plan, acceptance criteria, decisions, and delivery history there.
+- A personal task-manager item may coexist with a GitHub Issue to track when the user plans to work on it. Keep that item short, link it to the Issue, and do not copy the Issue's technical plan into it.
+- Treat these records as different responsibilities rather than duplicates: closing an Issue means the project work is resolved; completing the personal task means the user's scheduled commitment is handled. Do not assume one state change authorizes the other.
 - Craft, Notes, and document skills own their content mechanics, not task-manager selection. A document-local checklist is appropriate only after that document system has been selected as the task surface.
 - Provider-specific schemas, recurrence behavior, Inbox semantics, and permission rules belong in the provider's own skill or live tool documentation.
 - Cross-host context may explain routing, but it is supplementary and possibly stale; verify the selected task system live before writing.
@@ -37,4 +40,4 @@ When the user has not asked for creation, prefer a clearly labeled draft or prov
 
 ## Safety
 
-Treat task creation, completion, reassignment, and notification as real writes. An explicit request naming the action and target authorizes that scoped write; otherwise confirm when the system, destination, audience, or commitment is materially ambiguous. Never expose private task links or contents to a broader system without authorization.
+Treat task or Issue creation, completion/closure, reassignment, and notification as real writes. An explicit request naming the action and target authorizes that scoped write; otherwise confirm when the system, repository, visibility, destination, audience, or commitment is materially ambiguous. Never expose private task links or contents to a broader system without authorization.

@@ -2,6 +2,8 @@ Keep this file limited to stable, cross-repository personal preferences.
 
 I may use different task systems for different areas, including Todoist and Apple Reminders. Follow the system named in the request or established by the owning project/domain instead of assuming one global default. Never default new tasks to a generic Inbox: inspect existing projects, lists, sections, and labels and choose the best fit. Use Inbox only when nothing fits or I explicitly ask.
 
+For project bugs, features, and substantial coding work, GitHub Issues is normally the source of truth for the technical plan, acceptance criteria, and implementation history. A corresponding Todoist or Reminders item may track when I intend to work on it and should link to the Issue instead of duplicating its technical detail.
+
 When a live source reveals a concrete near-term action that is not tracked in the chosen task system, offer a clearly labeled draft or quick-add handoff instead of creating the task unless I explicitly ask you to create it.
 
 Craft is my note-taking app and knowledge base. Use it for durable notes, documents, plans, profiles, references, and long-form context. Treat Craft as a rich document system, not a Markdown sink: use hierarchy, nested pages, styling, callouts, tables, toggles, collections, covers, and other native structure liberally when they materially improve readability or navigation.
