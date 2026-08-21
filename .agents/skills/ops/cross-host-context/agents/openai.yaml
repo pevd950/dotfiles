@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cross-Host Context"
+  short_description: "Bridge durable agent context across computers."
+  default_prompt: "Use $cross-host-context to proactively read only relevant durable context from other hosts, verify current facts in their owning systems, and keep the storage provider behind its own skill."

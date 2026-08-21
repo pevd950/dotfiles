@@ -107,7 +107,7 @@ that matches how the value is consumed:
 - `~/.zshenv.local`: stable agent and automation runtime configuration that
   must be visible to non-interactive zsh commands. Keep it quiet and fast:
   `export` statements only, no command substitutions, no output, no network
-  calls. Examples: `AGENT_HOST_ALIAS`, `CRAFT_SHARED_MEMORY_URL`,
+  calls. Examples: `AGENT_HOST_ALIAS`, `AGENT_SHARED_CONTEXT_URL`,
   `CRAFT_AGENT_OPS_FRICTION_LOG_BLOCK_ID`,
   `CRAFT_PLATO_FRICTION_LOG_BLOCK_ID`, `AI_INBOX_DIR`, and local model paths.
 - `~/.zshrc_custom/exports-local.zsh`: interactive shell exports, dynamic
@@ -126,6 +126,17 @@ value needs to be set on multiple hosts, include the env var names and
 verification command in each live delegation prompt rather than committing the
 private values. After verification, record only any durable routing convention
 in shared Craft context; do not use Craft as a setup queue.
+
+Use `AGENT_SHARED_CONTEXT_URL` for the provider-neutral cross-host context root.
+Existing hosts may keep `CRAFT_SHARED_MEMORY_URL` as a compatibility alias while
+they migrate; when both are set, they must identify the same root.
+
+The configured root must contain a compact `Routing Directory`, or an equivalent
+host table such as the existing `Host Snapshot`, with one entry per host. Each
+entry records its canonical `AGENT_HOST_ALIAS` and any accepted local hostname
+aliases. Agents resolve the root first, then require the trimmed current alias or
+hostname to match exactly one entry case-insensitively before reading subject
+context or writing; missing or ambiguous matches fail closed for shared context.
 
 ## 🔀 GitHub Codespaces
 

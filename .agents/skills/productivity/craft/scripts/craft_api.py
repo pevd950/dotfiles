@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+"""Small authenticated client for Craft's HTTP API."""
+
 import argparse
 import http.client
 import json
-import os
 import math
+import os
 import sys
 from typing import Optional, Tuple
 import urllib.error
@@ -15,10 +17,14 @@ MAX_TIMEOUT_SECONDS = 300.0
 
 
 class UnsafeRedirectError(Exception):
+    """Raised when Craft redirects a request outside its trusted origin."""
+
     pass
 
 
 def https_origin(url: str) -> Tuple[str, str, int]:
+    """Return a normalized HTTPS origin or raise for an unsafe URL."""
+
     parsed_url = urllib.parse.urlsplit(url)
     if parsed_url.scheme.lower() != "https" or not parsed_url.netloc:
         raise ValueError("URL must be absolute and use HTTPS")
@@ -31,7 +37,11 @@ def https_origin(url: str) -> Tuple[str, str, int]:
 
 
 class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Allow redirects only when their HTTPS origin matches the API origin."""
+
     def __init__(self, trusted_origin: Tuple[str, str, int]) -> None:
+        """Initialize a redirect handler for one trusted API origin."""
+
         super().__init__()
         self.trusted_origin = trusted_origin
 
@@ -44,6 +54,8 @@ class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
         headers,
         new_url: str,
     ) -> Optional[urllib.request.Request]:
+        """Validate a redirect before delegating request construction."""
+
         try:
             redirect_origin = https_origin(new_url)
         except ValueError as error:
@@ -56,6 +68,8 @@ class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def main() -> int:
+    """Parse CLI arguments, perform one Craft API request, and return a status."""
+
     parser = argparse.ArgumentParser(description="Call the Craft API using local env auth.")
     parser.add_argument("method", choices=["GET", "POST", "PUT", "DELETE"])
     parser.add_argument("path", help="API path, such as /documents or /blocks")
@@ -84,6 +98,15 @@ def main() -> int:
         parsed_base_url = urllib.parse.urlsplit(base_url)
         if parsed_base_url.scheme.lower() != "https":
             print("CRAFT_API_BASE_URL must use HTTPS", file=sys.stderr)
+            return 2
+        if "?" in base_url or "#" in base_url:
+            print(
+                "CRAFT_API_BASE_URL must not include query parameters or a fragment",
+                file=sys.stderr,
+            )
+            return 2
+        if not parsed_base_url.path.rstrip("/").endswith("/api/v1"):
+            print("CRAFT_API_BASE_URL must end in /api/v1", file=sys.stderr)
             return 2
         if parsed_base_url.username is not None or parsed_base_url.password is not None:
             print("CRAFT_API_BASE_URL must not include userinfo", file=sys.stderr)
@@ -142,7 +165,7 @@ def main() -> int:
 
     headers = {
         "Accept": args.accept,
-        "User-Agent": "curl/8.7.1",
+        "User-Agent": "Codex-Craft-API/1.0",
     }
     if body is not None:
         headers["Content-Type"] = args.content_type or "application/json"

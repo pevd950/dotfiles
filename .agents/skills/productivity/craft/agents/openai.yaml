@@ -1,0 +1,7 @@
+interface:
+  display_name: Craft
+  short_description: Use Craft through its MCP plugin or direct HTTP API.
+  default_prompt: Use $craft to read or update Craft through the best available transport, with rich formatting and readback verification.
+
+policy:
+  allow_implicit_invocation: true
