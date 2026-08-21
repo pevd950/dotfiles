@@ -1,6 +1,6 @@
 ---
 name: craft
-description: Use Craft through the Craft MCP plugin or direct HTTP API for reading, searching, creating, updating, moving, styling, uploading, and organizing documents, blocks, collections, daily notes, and tasks. Use whenever a request involves Craft, a Craft link, or saving durable notes in Craft.
+description: Use Craft through the Craft MCP plugin or direct HTTP API for reading, searching, creating, updating, moving, styling, uploading, and organizing Craft documents, blocks, collections, daily notes, and task blocks. Use whenever a request involves Craft, a Craft link, or saving durable notes in Craft.
 ---
 
 # Craft
@@ -57,14 +57,13 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 ## Daily notes and collections
 
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
-- In the user's Craft Daily Notes, place a compact `## ➕ Suggested Captures` section after `Focus` and before `Open Loops`, with a short callout and draft Todoist links when there are useful untracked actions. Omit the section when there is nothing meaningful to capture.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.
 - Treat collection-item deletion as destructive because it also removes the item's content.
 
-## Tasks and source ownership
+## Craft task blocks
 
-Todoist owns active tasks and commitments. Use Craft tasks only when the user explicitly requests them or when a checklist is naturally local to a Craft document. Maintain one source of truth for each kind of state and add concise backlinks instead of copying whole histories.
+This skill explains how to operate Craft task blocks, not which task system should own a commitment. Resolve that choice from the current request, user/repository instructions, or the provider-neutral `task-management` skill. When Craft is selected, confirm the intended location, preserve scheduling/repeat state on updates, and read the task back after mutation.
 
 ## Safety
 

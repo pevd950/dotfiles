@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Management"
+  short_description: "Route commitments to the right task system."
+  default_prompt: "Use $task-management to choose the right task system and preserve one source of truth."

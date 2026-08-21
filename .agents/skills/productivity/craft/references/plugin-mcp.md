@@ -17,11 +17,15 @@ The plugin read tool supports command strings such as:
 
 - `connection info`
 - `folders list [--filter <regex>]`
+- `folders explore-icons <term>`
 - `documents list [--location <location> | --folder <folderId>]`
 - `documents resolve-link <url>`
 - `search <query> [--location <location>]`
 - `blocks get <rootBlockId> [--depth <depth>] [--format json|markdown]`
 - `blocks get --date today`
+- `blocks explore-themes [--type page|fonts|code]`
+- `blocks explore-washi`
+- `blocks search-unsplash <query>`
 - `tasks list [--scope active|upcoming|inbox|logbook|document|all]`
 - `collections list [--document <rootBlockId>]`
 - `collections schema --collection <collectionId>`
@@ -43,14 +47,16 @@ The plugin write tool supports command strings such as:
 - `blocks update --id <blockId> --markdown <text>`
 - `blocks move --id <blockId> --targetId <pageId> [--position start|end]`
 - `blocks delete --id <blockId>`
-- `tasks add|update|delete ...`
+- `tasks add --markdown <text> [--location inbox|dailyNote|document] [--date <date>] [--document <rootBlockId>] [--schedule <date>] [--deadline <date>] [--state todo|done|canceled] [--repeat <value>]`
+- `tasks update --id <taskId> [--state <state>] [--markdown <text>] ...`
+- `tasks delete --id <taskId>`
 - `collections create|rename ...`
 - `collections items-add|items-update|items-delete ...`
 - `collections views-create|views-update|views-delete|views-set-active ...`
 - `comments add --comments <json>`
 - `whiteboards create ...` and `whiteboards elements add|update|delete ...`
 
-Use the interactive file-picker tool when the user needs to select or drag a local file. For unattended raw-byte uploads, use the HTTP API.
+Use the interactive file-picker tool when the user needs to select or drag a local file. Supply exactly one target compatible with the position: `pageId` for `start|end`, `date` for Daily Notes with `start|end`, or `siblingId` for `before|after`. For unattended raw-byte uploads, use the HTTP API.
 
 ## Mechanics and pitfalls
 
@@ -58,5 +64,8 @@ Use the interactive file-picker tool when the user needs to select or drag a loc
 - Pass actual newline characters in markdown, not literal backslash-n text.
 - Two leading spaces represent one Craft indentation level. Toggle children must be indented.
 - Read collection schemas before writes and use exact property names.
+- For collection item flags, use display names from the live schema; use its example command for the title column, and prefer one JSON array for bulk rows.
+- `tasks list --scope all` scans every task block in the full space; it is not merely a union of Inbox, upcoming, active, and logbook scopes.
 - Use explicit dates in `YYYY-MM-DD` form when reporting resolved relative dates.
+- Styling is a partial update except when applying a theme, which may replace theme-owned styling. Explore live themes first and read back the page styling after changes.
 - Read back every mutation through the plugin read tool. If readback fails, do not claim the write landed; verify through the API or report it as unverified.

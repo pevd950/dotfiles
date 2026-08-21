@@ -24,7 +24,7 @@ Example:
 
 | Item | Status | Owner | Next step |
 |---|---|---|---|
-| Example | Active | Pablo | Review detail card |
+| Example | Active | Owner | Review detail card |
 
 ***
 
@@ -43,7 +43,7 @@ Example:
 - **Toggles:** Use for repeated detail cards. Start with `+ Title`; child bullets need two leading spaces.
 - **Collections:** Use when rows need typed properties, state, ownership, or durable row-level detail pages. Read schema before edits.
 - **Nested pages:** Use for long runbooks, logs, source notes, and deep reference material that would make the root page too heavy.
-- **Tasks:** Use only when Craft-native task state is explicitly useful. This user normally uses Todoist for active commitments.
+- **Tasks:** Use when Craft has already been selected as the task surface or when document-local checklist state is explicitly useful. Task-system selection belongs outside this formatting reference.
 - **Code blocks:** Prefer structured `type: "code"` blocks with `rawCode` and `language` when using the API directly.
 
 ## Styling Pattern

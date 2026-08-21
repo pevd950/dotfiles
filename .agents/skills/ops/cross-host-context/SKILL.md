@@ -1,11 +1,11 @@
 ---
 name: cross-host-context
-description: Use a configured synchronized context store to bridge durable agent knowledge across hosts when local Codex memory is insufficient. Use for shared agent memory, cross-host context, work moving between computers, or durable host-local facts another host will need.
+description: Use a configured synchronized context store for durable knowledge across agent hosts. Read it proactively for host selection, host-targeted work, cross-host delegation or handoffs, work moving between computers, capability or blocker differences between hosts, and durable facts another host may know; write only high-value cross-host context.
 ---
 
 # Cross-Host Context
 
-Bridge only the gap created by Codex memory being local to each host. Codex's built-in memory remains the primary agent memory; this skill provides a small, synchronized supplement for durable context that needs to be available on other hosts.
+Bridge only the gap created by agent memory and capabilities being local to each host. Treat agents on other hosts like coworkers in a small organization: they may own related work or useful context, but they are not necessarily on the same team or following the same task.
 
 This is a context protocol, not a storage-provider skill. Resolve the configured root and backend from the current request or ignored private routing, then use the owning provider skill for reads and writes. The backend can change without rewriting this protocol.
 
@@ -19,20 +19,20 @@ Treat bridge entries as supplementary and possibly stale. Verify volatile claims
 
 ## When to use
 
-Read the bridge when work depends on another host's durable capability, constraint, decision, convention, or prior finding; when moving work between computers; or when the user explicitly asks for shared agent context.
+Read the bridge without waiting for an explicit user reminder when the request names another host; when selecting, delegating to, or handing off between hosts; when work moves between computers; when a repository or service is normally owned elsewhere; or when a missing path, tool, credential boundary, capability, blocker, decision, convention, or prior finding may differ on another host. Read only the relevant host/subject entry, and re-read when the task changes scope.
 
-Write only when the user requests cross-host retention or a cross-host workflow explicitly calls for a durable update. Good candidates are facts that another host is likely to need but that are too specific, changeable, or private for tracked `AGENTS.md` guidance.
+Write after learning a durable fact, decision, blocker, ownership change, or routing convention that at least one other host is likely to need and that does not already belong in a more authoritative shared source. Do not require the user to ask for retention when the update is private, reversible, clearly cross-host, and within the current task's scope. Ask before expanding the audience of sensitive or project-confidential information.
 
 Do not mirror Codex memory wholesale, automatically publish routine work, or use the bridge for live task status, queues, run logs, transient progress, duplicated project state, or information already expressed well in tracked instructions.
 
 ## Protocol
 
 1. Confirm the active host rather than guessing it.
-2. Resolve the private synchronized root and its storage provider from ignored local routing or an explicit link. Never hard-code private IDs, URLs, host topology, or account details in this tracked skill.
+2. Resolve the private synchronized root and its storage provider from ignored local routing or an explicit link. If routing is missing but an already-authorized private knowledge provider is available, a bounded exact-title lookup for `Shared Agent Context` is the fallback; do not search unrelated accounts or broad personal content. Never hard-code private IDs, URLs, host topology, or account details in this tracked skill.
 3. Load the provider's owning skill and use its normal access, mutation, and readback rules. Keep provider-specific commands and schemas out of this skill.
 4. Search or read narrowly for the relevant subject. Prefer an existing entry over creating a duplicate.
 5. Verify the fact against its canonical source when practical.
-6. For a write, record the subject, applicable host or scope, reviewed date, durable fact or decision, why another host needs it, and the canonical source or verification method.
+6. For a write, record the subject, applicable host or scope, reviewed date, durable fact or decision, why another host needs it, and the canonical source or verification method. Prefer a compact routing directory and current durable facts over per-host diaries.
 7. Update existing facts in place and prune stale context instead of appending corrections indefinitely.
 8. Read the changed entry back before reporting success.
 
