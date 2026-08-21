@@ -5,7 +5,7 @@ description: Choose and operate the user's intended task or work-tracking system
 
 # Task Management
 
-Select the task system and placement before using a provider-specific tool. Preserve one authoritative task record and keep provider policy out of unrelated skills.
+Select the task system and placement before using a provider-specific tool. Preserve one authoritative record for each responsibility and keep provider policy out of unrelated skills.
 
 ## Selection
 
@@ -32,14 +32,14 @@ When the user has not asked for creation, prefer a clearly labeled draft or prov
 
 ## Ownership boundaries
 
-- For project bugs, features, and substantial coding work, prefer the owning repository's issue tracker as the technical source of truth. Keep the implementation plan, acceptance criteria, decisions, and delivery history there.
+- For project bugs, features, and substantial coding work, the owning repository's issue tracker is authoritative for the implementation plan, acceptance criteria, decisions, and delivery history.
 - A personal task-manager item may coexist with a GitHub Issue to track when the user plans to work on it. Keep that item short, link it to the Issue, and do not copy the Issue's technical plan into it.
 - Treat these records as different responsibilities rather than duplicates: closing an Issue means the project work is resolved; completing the personal task means the user's scheduled commitment is handled. Do not assume one state change authorizes the other.
 - Craft, Notes, and document skills own their content mechanics, not task-manager selection. A document-local checklist is appropriate only after that document system has been selected as the task surface.
 - Provider-specific schemas, recurrence behavior, Inbox semantics, and permission rules belong in the provider's own skill or live tool documentation.
 - Cross-host context may explain routing, but it is supplementary and possibly stale; verify the selected task system live before writing.
-- Keep one authoritative task record; link to supporting notes, documents, issues, or calendar events instead of copying status histories.
+- Keep one authoritative record for each responsibility: the Issue for project state and the personal task for the user's commitment. Link supporting records instead of copying technical detail or status histories.
 
 ## Safety
 
-Treat task or Issue creation, completion/closure, reassignment, and notification as real writes. An explicit request naming the action and target authorizes that scoped write; otherwise confirm when the system, repository, visibility, destination, audience, or commitment is materially ambiguous. Never expose private task links or contents to a broader system without authorization.
+Treat task or Issue creation, completion/closure, reassignment, and notification as real writes. An explicit request naming the action and target authorizes only that scoped write. Confirm whenever the system, repository, visibility, destination, audience, or commitment is materially ambiguous. Never expose private task links or contents to a broader system without authorization.
