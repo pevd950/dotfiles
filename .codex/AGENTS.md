@@ -25,3 +25,23 @@ For host-targeted work, resolve the active host from `AGENT_HOST_ALIAS`, falling
 Treat agents on other hosts as coworkers with partial, potentially relevant context, not as one shared team or a substitute for live delegation. For host selection, host-targeted work, cross-host handoffs, or a capability/blocker that may differ elsewhere, consult the configured shared context without waiting for me to request it; read narrowly and verify current facts in their owning systems.
 
 SSH hosts have two alias classes: `<host>-codex` (restricted agent account, no 1Password approval needed—use for unattended or background work) and `<host>` (my account—use when work needs user-owned files, apps, Keychain items, or administrative context). Never silently switch identities when a route fails.
+
+## Software design
+
+Optimize for long-term changeability by reducing change amplification, cognitive load, and unknown unknowns. Working code is only the baseline.
+
+- Prefer deep modules: small, simple interfaces that provide substantial cohesive functionality and hide implementation decisions. Avoid classitis, thin wrappers, pass-through methods, and layers that merely rename another layer.
+- Do not use line count as a proxy for modularity. Split code when the pieces contain genuinely independent knowledge; keep related code together when separation would leak information or create coupled fragments.
+- Decompose by information and responsibility, not execution order. Keep each design decision in one place, and ensure each layer introduces a distinct abstraction.
+- Pull unavoidable complexity downward. Give callers sensible defaults and handle common setup, policy, edge cases, and recovery internally rather than exporting configuration, call-order requirements, flags, or exceptions.
+- Design general-purpose mechanisms around current requirements, separating reusable mechanism from application-specific policy. Do not add speculative features.
+- Make the common case obvious and simple. Define errors and special cases out of existence when practical; otherwise consolidate them according to how callers can meaningfully handle them.
+- When a feature exposes a missing abstraction, improve the abstraction instead of accumulating tactical special cases.
+- For consequential design decisions, sketch at least two materially different designs and compare interface complexity, information hiding, coupling, and common-case usability.
+- Use precise names and consistent conventions. Comments should document contracts, invariants, ownership, units, non-obvious behavior, and rationale—not narrate the code.
+
+## UI copy
+
+Do not add narrative or decorative copy to interfaces. Never invent welcome text, taglines, explanatory subtitles, helper paragraphs, card descriptions, or prose that merely restates what the layout and controls already communicate.
+
+Default to only necessary labels, values, statuses, validation and error messages, safety-critical guidance, accessibility text, and content explicitly required by the product. Keep empty states factual and action-oriented. Prefer clearer structure, labels, and interactions over explaining the interface in prose, and match the existing product’s copy density.
