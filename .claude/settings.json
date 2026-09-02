@@ -41,5 +41,7 @@
   "feedbackSurveyState": {
     "lastShownTime": 1754084405712
   },
-  "tui": "fullscreen"
+  "tui": "fullscreen",
+  "skipWorkflowUsageWarning": true,
+  "model": "claude-fable-5-1[1m]"
 }
