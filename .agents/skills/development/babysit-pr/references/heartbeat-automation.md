@@ -6,7 +6,7 @@ Heartbeat state is only a wakeup mechanism. Each heartbeat run must re-verify th
 
 At the start of every heartbeat:
 
-1. Re-run the babysitter loop's snapshot and corpus gathering (or the GitHub connector equivalent if `gh` is unavailable).
+1. Re-run the Babysit PR loop's snapshot and corpus gathering (or the GitHub connector equivalent if `gh` is unavailable).
 2. Compare the live PR URL, number, branch, and head SHA against the heartbeat prompt.
 3. If the prompt points at the wrong PR/thread, `target_thread_id` is invalid, or the PR cannot be verified live, stop and report the mismatch instead of editing, replying, or marking ready.
 4. Treat Codex app/sidebar heartbeat updates as best-effort UI state only; they do not replace live GitHub checks, comments, threads, reactions, or local branch status.

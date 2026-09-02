@@ -62,4 +62,4 @@ Secrets exposed: no
 
 ## Routing
 
-PR review/CI workflows return to `gh-pr-address-feedback`, `gh-fix-ci`, or `pr-babysitter` after the preflight passes. Dotfiles credential-helper or bootstrap fixes belong in `dotfiles-manager` and setup scripts; 1Password item/env/SSH-agent setup in the 1Password developer baseline; connector visibility questions in `connector-readiness-triage`.
+PR review/CI workflows return to `gh-pr-address-feedback`, `gh-fix-ci`, or `babysit-pr` after the preflight passes. Dotfiles credential-helper or bootstrap fixes belong in `dotfiles-manager` and setup scripts; 1Password item/env/SSH-agent setup in the 1Password developer baseline; connector visibility questions in `connector-readiness-triage`.

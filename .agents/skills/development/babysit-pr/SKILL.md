@@ -1,9 +1,9 @@
 ---
-name: pr-babysitter
+name: babysit-pr
 description: Monitor and shepherd an open GitHub pull request through CI and bot review loops until it is ready for human final review. Use when the user asks to babysit, monitor, watch, keep an eye on, or continue a PR review loop; when they expect CodeRabbit/Claude/Cursor/Copilot/Codex feedback to be handled; or when a PR should be kept moving with automations while checks and reviews run. This skill is for sustained PR readiness, not one-shot feedback fixes.
 ---
 
-# PR Babysitter
+# Babysit PR
 
 Own the long-running loop; use `gh-pr-address-feedback` inside it for each concrete comment or failing check (validate, fix, reply with evidence, resolve the thread). This skill decides when to keep waiting, enforces the readiness bar, manages automations, and never answers humans automatically. Do not merge unless the user explicitly asks for merge in the active prompt.
 
