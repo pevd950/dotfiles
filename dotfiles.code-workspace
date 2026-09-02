@@ -1,0 +1,55 @@
+{
+  "folders": [
+    {
+      "name": "Dotfiles Root",
+      "path": "/Users/pablovalero"
+    }
+  ],
+  "settings": {
+    "git.detectSubmodules": false,
+    "files.exclude": {
+      "**/.DS_Store": true,
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/venv": true,
+      "**/Library": true,
+      "**/Applications": true,
+      "**/Desktop": true,
+      "**/Documents": true,
+      "**/Downloads": true,
+      "**/Movies": true,
+      "**/Music": true,
+      "**/Pictures": true,
+      "**/Public": true,
+      "**/.Trash": true,
+      "**/.cache": true,
+      "**/.npm": true,
+      "**/.local/share": true,
+      "**/.local/state": true,
+      "**/go": true,
+      "**/src": true
+    },
+    "search.exclude": {
+      "**/Library": true,
+      "**/Applications": true,
+      "**/Desktop": true,
+      "**/Documents": true,
+      "**/Downloads": true,
+      "**/Movies": true,
+      "**/Music": true,
+      "**/Pictures": true,
+      "**/Public": true,
+      "**/.Trash": true,
+      "**/.cache": true,
+      "**/.npm": true,
+      "**/.local/share": true,
+      "**/.local/state": true,
+      "**/go": true,
+      "**/src": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+    ]
+  }
+}
