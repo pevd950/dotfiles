@@ -14,6 +14,7 @@ Turn ideas into issues an agent or human can implement without private chat hist
 - Facts separated from hypotheses; suspected root causes never presented as confirmed.
 - Dependencies and blockers modeled explicitly, with related issues and PRs linked.
 - Validation plan matched to the changed surface: unit, integration, local server, simulator, or manual API checks.
+- For visual or interaction bugs, attach the smallest decisive screenshot or video when available and authorized; include the version or build, platform, device/OS, and reproduction state. Media supplements rather than replaces the textual reproduction.
 - Scope fits a focused PR, or the planned slices are named. Split work that spans multiple components or has unclear sequencing.
 
 ## Default readiness labels — one active at a time
@@ -33,6 +34,10 @@ When the board defines these values, use `Backlog` → `Next` → `Ready` → `I
 ## GitHub as live artifact
 
 Issues and PRs are durable working memory: preserve decisions, scope changes, blockers, and validation evidence there, not only in chat. Convert new information into the right action — update body, add comment, create sub-issue, add dependency, or no-op — and keep artifacts synchronized with actual repo state.
+
+## GitHub media evidence
+
+Feature-detect `--attach` on the exact `gh issue create`, `edit`, or `comment` command before relying on it; the flag requires GitHub CLI 2.99.0 or later and is repeatable. Use `--body-file` when placement matters: reference the local media path in Markdown and pass the same path with `--attach` so `gh` uploads it and rewrites the reference in place. Give images meaningful alt text, prefer one decisive capture or a small before/after pair over a media dump, and read the resulting issue or comment back to verify the media rendered where intended. If the installed CLI lacks the flag, never publish a raw local path; report the capability gap and use an authorized fallback.
 
 ## Sub-issues
 
