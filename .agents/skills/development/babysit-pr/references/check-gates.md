@@ -22,6 +22,10 @@ Input fields:
 - `checks`: each has stable `id`, `classification` (`required`, `evidence`, `duplicate`), effective `head_sha`, `status`, optional `attempt`, `jobs`, `queued_since`, `skip_allowed`, and `reason`. A duplicate requires a recorded reason. Include missing required contexts with status `missing`; never omit them.
 - `previous`: last returned `checkpoint`, or null. Include repository/base/rules policy changes in `policy_id`; this resets stale block history.
 
+`jobs` accepts a nonnegative integer count, an API job array (normalized to its length), or null/omitted for unknown. Equivalent arrays and counts share the same checkpoint fingerprint. A matching checkpoint must contain valid `blocked_since`, `unchanged_polls`, and `last_notified_at` fields; malformed persisted state raises an actionable error rather than silently resetting escalation history. Recover the saved checkpoint before continuing.
+
+Stale evidence supplied as relevant blocks assessment even if successful. Classify genuinely obsolete runs as `duplicate` with a verified supersession rationale; do not make every historical run a gate. The pending-evidence exception applies only to current-head additional checks, not missing policy-required acceptance evidence.
+
 Statuses are normalized to `success`, `neutral`, `skipped`, `failure`, `cancelled`, `queued`, `in_progress`, or `missing`. Only verified, policy-allowed skips/neutral conclusions pass. Additional failed/cancelled/unknown checks require investigation. `diagnose` lists 15-minute zero-job queue anomalies; `notify` marks a first 30-minute/two-unchanged-observation escalation. The caller actually sends the notification and only then records `last_notified_at` (or records failure and retries). `checks_satisfied` is **not merge-ready**.
 
 Dry-run fixtures cover the incident shape: passed required validation plus an optional duplicate stuck queued; the same queue as a required check; stale-head success; optional failure; rules lookup failure; unexpected skip; head/policy changes; notification deduplication; and terminal PRs. Do not require installation of this helper or a canonical workflow in every repository.

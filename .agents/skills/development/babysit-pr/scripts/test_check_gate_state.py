@@ -13,6 +13,28 @@ def snapshot(checks, now=0, previous=None, **extra):
 
 
 class CheckGateStateTests(unittest.TestCase):
+    def test_job_arrays_and_counts_share_anomaly_and_checkpoint_semantics(self):
+        first = assess(snapshot([check(status="queued", jobs=[], queued_since=0)], now=900))
+        self.assertEqual(first["diagnose"], ["ci/provider"])
+        second = assess(snapshot([check(status="queued", jobs=0, queued_since=0)],
+                                 now=1200, previous=first["checkpoint"]))
+        self.assertEqual(second["checkpoint"]["unchanged_polls"], 1)
+
+    def test_matching_malformed_checkpoint_fails_with_actionable_error(self):
+        checks = [check(status="queued")]
+        previous = assess(snapshot(checks))["checkpoint"]
+        for field in ("blocked_since", "unchanged_polls", "last_notified_at"):
+            malformed = dict(previous)
+            del malformed[field]
+            with self.assertRaisesRegex(ValueError, "checkpoint"):
+                assess(snapshot(checks, previous=malformed))
+
+    def test_stale_additional_evidence_cannot_satisfy_current_head(self):
+        stale = dict(check("evidence"), head_sha="old")
+        self.assertEqual(assess(snapshot([stale]))["decision"], "blocked")
+        self.assertEqual(assess(snapshot([check("evidence", "queued")]))["decision"],
+                         "checks_satisfied")
+
     def test_optional_duplicate_does_not_block_but_is_diagnosed(self):
         duplicate = check("duplicate", "queued", jobs=0, queued_since=0,
                           reason="Same revision and validation already succeeded")

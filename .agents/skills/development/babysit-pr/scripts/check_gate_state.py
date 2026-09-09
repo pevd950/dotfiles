@@ -3,6 +3,7 @@
 
 import hashlib
 import json
+import math
 import sys
 
 
@@ -26,7 +27,12 @@ def assess(snapshot):
             raise ValueError("Unknown check classification")
         status = check["status"]
         current = check["head_sha"] == head
-        if (current and status == "queued" and check.get("jobs") == 0
+        jobs = check.get("jobs")
+        if isinstance(jobs, list):
+            jobs = len(jobs)
+        if jobs is not None and (type(jobs) is not int or jobs < 0):
+            raise ValueError("jobs must be a nonnegative count, array, or null")
+        if (current and status == "queued" and jobs == 0
                 and now - check.get("queued_since", now) >= 15 * 60):
             diagnose.append(check["id"])
         if kind == "duplicate":
@@ -39,14 +45,14 @@ def assess(snapshot):
         if kind == "required":
             blocked = not current or not passed
         else:
-            # Stale evidence cannot satisfy policy but also cannot diagnose this head.
-            blocked = current and not passed and status not in ("queued", "in_progress")
+            # The caller must classify verified obsolete evidence as superseded.
+            blocked = not current or (not passed and status not in ("queued", "in_progress"))
         if blocked:
             if current and status == "queued" and "queued_since" in check:
                 known_queue_starts.append(min(now, check["queued_since"]))
             blockers.append({
                 "id": check["id"], "status": status if current else "stale",
-                "attempt": check.get("attempt"), "jobs": check.get("jobs"),
+                "attempt": check.get("attempt"), "jobs": jobs,
             })
 
     if not blockers:
@@ -57,7 +63,19 @@ def assess(snapshot):
         [head, snapshot.get("policy_id"), blockers], sort_keys=True
     ).encode()).hexdigest()
     previous = snapshot.get("previous") or {}
+    if not isinstance(previous, dict):
+        raise ValueError("Invalid checkpoint: expected an object or null")
     same = previous.get("state_fingerprint") == fingerprint
+    if same:
+        for field in ("blocked_since", "unchanged_polls", "last_notified_at"):
+            if field not in previous:
+                raise ValueError(f"Invalid checkpoint: missing {field}; recover the saved checkpoint")
+            value = previous[field]
+            if field == "last_notified_at" and value is None:
+                continue
+            if (type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                    or (field == "unchanged_polls" and type(value) is not int)):
+                raise ValueError(f"Invalid checkpoint: invalid {field}; recover the saved checkpoint")
     since = previous["blocked_since"] if same else now
     if not previous and known_queue_starts:
         # A first observation of an already stalled run must not buy it 30 more minutes.
