@@ -39,7 +39,7 @@ Apply these rules regardless of transport:
 
 ## Rich documents
 
-Treat Craft as a rich document system, not a Markdown sink. Use callouts, tables, toggles, nested pages, collections, covers, themes, separators, and highlights when they materially improve scanning or navigation. Keep root pages glanceable and move long repeated detail into toggles, nested pages, or collection-item bodies.
+Keep root pages glanceable. Use native callouts, tables, toggles, pages, and collections where the content benefits; move repeated detail into item bodies or nested pages.
 
 Read `references/formatting.md` before creating or substantially restructuring a polished user-facing document.
 
@@ -47,8 +47,8 @@ Read `references/formatting.md` before creating or substantially restructuring a
 
 Before attaching a generated or local file to Craft:
 
-1. Put the final copy in its durable owning location. When `AI_INBOX_DIR` is set and no repository or other system owns the file, prefer that iCloud-backed directory.
-2. Give the file a descriptive name with a date or task slug where useful.
+1. Apply the user's durable-file location and naming policy before upload.
+2. Confirm the final file is available in that location.
 3. Do not attach temporary, chat-pasteboard, localhost, `file://`, or disposable build paths as durable references.
 4. Use the real MIME type and verify the readback is the intended visible image or file block.
 

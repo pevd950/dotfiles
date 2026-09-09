@@ -1,11 +1,11 @@
 ---
 name: babysit-pr
-description: Monitor and shepherd an open GitHub pull request through CI and bot review loops until it is ready for human final review. Use when the user asks to babysit, monitor, watch, keep an eye on, or continue a PR review loop; when they expect CodeRabbit/Claude/Cursor/Copilot/Codex feedback to be handled; or when a PR should be kept moving with automations while checks and reviews run. This skill is for sustained PR readiness, not one-shot feedback fixes.
+description: Shepherd a PR through CI and bot reviews until ready. Use for sustained babysitting or monitoring; watch-only stays read-only. Use gh-pr-address-feedback for standalone fixes.
 ---
 
 # Babysit PR
 
-Own the long-running loop; use `gh-pr-address-feedback` inside it for each concrete comment or failing check (validate, fix, reply with evidence, resolve the thread). This skill decides when to keep waiting, enforces the readiness bar, manages automations, and never answers humans automatically. Do not merge unless the user explicitly asks for merge in the active prompt.
+Own the long-running loop; use `gh-pr-address-feedback` inside it for each concrete comment or failing check (validate, fix, reply with evidence, resolve the thread). This skill decides when to keep waiting, enforces the readiness bar, manages automations, and never answers humans automatically. Merge only with explicit authorization for this PR; preserve that authorization within its scope across turns and wakeups.
 
 ## Trust boundary
 
@@ -21,7 +21,7 @@ Read live base-branch protection and effective rulesets on every iteration, alon
 
 ## Every loop iteration
 
-1. Snapshot PR state: `gh pr view <pr> --json number,url,state,closed,mergedAt,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,reviewDecision`. Terminal states end the loop. Before edits, check `git status --short` — stop and ask if unrelated uncommitted changes are present, and work only on the PR head branch unless the user asked for a read-only monitor.
+1. Snapshot PR state: `gh pr view <pr> --json number,url,state,closed,mergedAt,isDraft,headRefName,headRefOid,baseRefName,mergeStateStatus,reviewDecision`. Terminal states end the loop. Before edits, check `git status --short` — preserve unrelated changes and use an isolated checkout of the PR head for implementation. Ask only if safe isolation is unavailable or ownership is unclear. A watch/status-only request remains read-only.
 2. Gather the complete review corpus — review bodies included, since bots often put actionable findings only in review summaries or top-level comments:
    - inline diff comments, top-level issue comments, review submissions (retain author, state, body, `commit_id`), review threads via GraphQL, PR-body reactions, reactions on the latest `@codex review` request comment, and `gh pr checks <pr> --json name,state,bucket,link,workflow,startedAt,completedAt`.
 3. Process actionable bot feedback via `gh-pr-address-feedback`. After every push, restart monitoring on the new SHA — a push is not a completion event.

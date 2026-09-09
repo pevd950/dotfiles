@@ -15,7 +15,7 @@ Drive implementation with a small failing test before production code. Do not fo
 4. **Make it green** with the smallest production change. Do not broaden scope while red.
 5. **Refactor** only after green, keeping tests green after each structural step.
 6. **Expand coverage only for real risk:** invalid input, authorization, missing dependencies, concurrency and cancellation, serialization compatibility, boundary sizes and limits, provider failure, migration/rollback. No brittle snapshot or implementation tests just to increase count.
-7. **Final validation:** the focused command, then the broader suite for the touched surface. Report anything not run and why.
+7. **Final validation:** the focused command and required repository checks. Broaden the suite only when the change or remaining risk warrants it. Report anything not run and why.
 
 ## Hard rules
 

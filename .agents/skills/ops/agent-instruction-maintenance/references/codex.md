@@ -1,50 +1,29 @@
-# Codex Skill Guidance (GPT-5.2 Codex)
+# Codex instruction and skill guidance
 
-## Scope
-- Codex user skills live in `~/.agents/skills/<skill-name>/SKILL.md` or categorized subdirectories such as `~/.agents/skills/development/<skill-name>/SKILL.md`.
-- The frontmatter `name` and `description` are the only trigger inputs.
-- Keep SKILL.md concise; add deeper docs under `references/` and scripts under `scripts/`.
+Checked against official documentation on 2026-09-09. Verify current documentation before changing discovery or configuration behavior.
 
-## Related docs
-- Skills: https://developers.openai.com/codex/skills
-- Custom prompts: https://developers.openai.com/codex/custom-prompts
-- AGENTS.md: https://developers.openai.com/codex/guides/agents-md
-- Rules: https://developers.openai.com/codex/rules
+## Instruction discovery
 
-## AGENTS.md discovery (custom instructions)
-- Global: `$CODEX_HOME/AGENTS.override.md` or `AGENTS.md` (first non-empty wins).
-- Project: walk from repo root to CWD; per directory use `AGENTS.override.md`, then `AGENTS.md`, then configured fallbacks.
-- Merge order: root to CWD; later files override earlier guidance by position.
-- Size cap: stops at `project_doc_max_bytes` (default 32 KiB).
-- Configure fallbacks in `~/.codex/config.toml` via `project_doc_fallback_filenames`.
+Global guidance comes from `$CODEX_HOME/AGENTS.override.md` or `$CODEX_HOME/AGENTS.md` (first non-empty file). Project instructions accumulate from the root toward the working directory, using the override, AGENTS file, or configured fallback at each level. More specific guidance takes precedence. The configured `project_doc_max_bytes` limits combined project instruction size (32 KiB by default).
 
-## Custom prompts (slash commands)
-- Stored in `~/.codex/prompts/*.md` and require explicit invocation.
-- Frontmatter supports `description` and `argument-hint`.
-- Arguments: `$ARGUMENTS`, `$1..$9`, and `KEY=value` placeholders.
-- Restart Codex after editing prompt files.
+Keep stable preferences globally and project-specific requirements in the repository. Do not copy runtime instructions into every skill. User-authorized scope governs task procedures; skills must not silently add approval gates.
 
-## Skills (agent skills)
-- Locations are scoped and override lower precedence:
-  - Repo: `$CWD/.agents/skills`, parent repo folder, repo root `.agents/skills`
-  - User: `$HOME/.agents/skills`
-  - Admin: `/etc/codex/skills`
-  - System: bundled
-- Symlinked skills are supported.
-- Per-skill enablement via `[[skills.config]]` is experimental.
+## Skill discovery and activation
 
-## Frontmatter checklist
-- `name`: lowercase letters/numbers/hyphens only, <=64 chars.
-- `description`: single line, <=500 chars, includes when to use + trigger keywords.
-- Avoid extra frontmatter keys unless required by Codex.
+Use `.agents/skills` for canonical personal or repository skills. Codex also supports admin/system skills and symlinked folders. Same-name skills are not merged: both may appear, so inspect ownership and unique behavior before retiring a duplicate. Do not edit installed plugin caches as the source of truth.
 
-## Authoring best practices
-- Use a clear "When to use it" section with trigger phrases.
-- Keep workflow steps short and ordered; avoid long prose.
-- Put large examples or detailed formats into `references/`.
-- Avoid duplicating info across skills; link to references instead.
+`SKILL.md` requires frontmatter with a nonempty name and description. Use a concise, specific description with the primary use case first. Do not confuse local conventions with platform-enforced schema limits. `agents/openai.yaml` can supply UI metadata, tool dependencies, and `policy.allow_implicit_invocation`; inspect it alongside the description when reviewing activation.
 
-## Safety and consistency
-- Do not include secrets or tokens in any instruction file.
-- Respect project-level guidance (AGENTS.md/CLAUDE.md) when present.
-- Avoid tool-specific assumptions that Codex cannot enforce.
+Codex initially loads skill metadata, then reads full instructions when a skill is selected. Keep one job per skill and link specialized procedures from the point where they are needed. Keep permission boundaries and essential stopping conditions in the entrypoint.
+
+## Validation
+
+Run the repository instruction checker for required metadata, duplicate names, and local Markdown reference targets. Review changed behavior with [representative scenarios](behavior-cases.md). Check runtime discovery after installation: a passing static check does not prove activation. Skill changes are detected automatically; restart if they do not appear. Config changes may require a restart.
+
+## Official sources
+
+- [Build skills](https://learn.chatgpt.com/docs/build-skills)
+- [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md)
+- [Astra model guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6-astra)
+
+Read provider-specific references only when that provider is in scope.

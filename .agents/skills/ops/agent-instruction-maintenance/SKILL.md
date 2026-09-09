@@ -1,6 +1,6 @@
 ---
 name: agent-instruction-maintenance
-description: "Review, update, and synchronize agent instructions and configs across Codex and Claude (and optionally VS Code/Copilot); use when creating or refactoring agent prompts, skills, or chatmodes (trigger keywords: agent instructions, prompt review, skill update, chatmode, subagent)."
+description: Review or refactor agent instructions, skills, and prompt configuration for clarity, conflicts, and cross-tool consistency. Use for instruction maintenance, not ordinary subagent work.
 ---
 
 # Agent Instruction Maintenance
@@ -13,7 +13,8 @@ Audit agent instructions for clarity, correctness, and cross-tool consistency; v
 2. Discover which ecosystems exist in the repo or user config, and resolve instruction file locations from the current source of truth: the session's skill inventory first, then `$HOME/.agents/skills`, provider compatibility folders such as `$HOME/.claude/skills`, or the relevant plugin cache. Do not assume a remembered path is still canonical.
 3. Load local guidance (AGENTS.md, CLAUDE.md, copilot-instructions) when present.
 4. When mining Codex session logs for instruction or skill friction, parse JSONL structurally and focus on real tool outputs such as `function_call_output`. Raw `rg` over whole session files false-positives on prompts, embedded AGENTS text, and replayed command output; successful reads of automation memories or older excerpts are replayed context, not fresh friction. Separate the current maintenance run from the sessions being analyzed.
-5. Validate minimal frontmatter per file type (see references), review content for clarity and scope, keep instructions lean with deep detail in references, and propose edits with before/after snippets and rationale.
+5. Validate metadata and local links with the repository checker. Review activation, authority, and stopping conditions using [behavior cases](references/behavior-cases.md). Keep common steps in the entrypoint and specialized detail in references.
+6. For review-only requests, propose concrete changes. When edits are authorized, implement them without another approval gate, verify the diff, and report validation plus remaining runtime uncertainty.
 
 ## Prioritization
 

@@ -1,6 +1,6 @@
 ---
 name: cross-host-context
-description: Use a configured synchronized context store for durable knowledge across agent hosts. Read it proactively for host selection, host-targeted work, cross-host delegation or handoffs, work moving between computers, capability or blocker differences between hosts, and durable facts another host may know; write only high-value cross-host context.
+description: Read or update configured shared context for host selection, handoffs, and capabilities or blockers that differ across hosts. Use durable facts, not task logs.
 ---
 
 # Cross-Host Context
@@ -27,15 +27,7 @@ Do not mirror Codex memory wholesale, automatically publish routine work, or use
 
 ## Protocol
 
-1. Resolve the candidate active-host identity from `AGENT_HOST_ALIAS`, falling back to the local hostname; do not treat either value as verified yet.
-2. Resolve the private synchronized root and its storage provider from ignored local routing or an explicit link. Prefer the provider-neutral `AGENT_SHARED_CONTEXT_URL`. During migration, recognize the documented legacy `CRAFT_SHARED_MEMORY_URL` only as a Craft-backed route; if both variables are set and do not identify the same root, treat routing as ambiguous and unavailable. If routing is otherwise missing but an already-authorized private knowledge provider is available, a bounded exact-title lookup for `Shared Agent Context` is the fallback. Accept the fallback only when exactly one result matches and its provider space or account, owner, and applicable host or scope can be validated. Otherwise report that routing is unavailable and do not load or mutate the candidate. Do not search unrelated accounts or broad personal content. Never hard-code private IDs, URLs, host topology, or account details in this tracked skill.
-3. Load the provider's owning skill and use its normal access, mutation, and readback rules. Keep provider-specific commands and schemas out of this skill.
-4. Validate the candidate identity before reading subject context or writing. The root's `Routing Directory`, or an existing equivalent such as `Host Snapshot`, must contain one entry per host with a canonical alias and any accepted hostname aliases. After trimming, match the candidate case-insensitively to exactly one canonical or hostname alias. If the directory is missing or the identity is unset, unknown, or ambiguous, treat cross-host context as unavailable without blocking ordinary local work.
-5. Search or read narrowly for the relevant subject. Prefer an existing entry over creating a duplicate.
-6. Verify the fact against its canonical source when practical.
-7. For a write, record the subject, applicable host or scope, reviewed date, durable fact or decision, why another host needs it, and the canonical source or verification method. Prefer a compact routing directory and current durable facts over per-host diaries.
-8. Update existing facts in place and prune stale context instead of appending corrections indefinitely. Immediately before writing, re-read the target and compare its stable identity, available modification or version metadata, and the content used to plan the edit. Use a provider conditional version or ETag when available. If the target drifted, re-resolve and merge deliberately or stop; never overwrite a stale snapshot.
-9. Read the changed entry back and confirm the intended result before reporting success.
+Read [routing and write verification](references/routing-protocol.md) before accessing the bridge. Resolve the private root, validate a unique host identity, read narrowly, verify facts in their owning source, and re-read before and after writes. Missing or ambiguous routing leaves cross-host context unavailable without blocking local work.
 
 ## Boundaries
 

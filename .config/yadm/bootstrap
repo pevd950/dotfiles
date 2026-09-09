@@ -88,6 +88,7 @@ main() {
   setup_code_user_dir
   run_setup_script
   setup_agent_skills
+  bash "$HOME/scripts/setup-checks.sh"
 }
 
 main "$@"

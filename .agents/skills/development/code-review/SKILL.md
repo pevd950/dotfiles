@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Review code changes for correctness, security, tests, and architecture; use for code review or PR review requests (trigger keywords: code review, review changes, PR review, security review)."
+description: Review code or PR diffs for correctness, security, tests, and architecture. Report actionable findings; use feedback skills when asked to implement fixes.
 ---
 
 # Code Review

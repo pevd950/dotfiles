@@ -18,11 +18,11 @@ Use this priority:
 
 Do not treat an old note, cross-host entry, remembered preference, or whichever connector is easiest to call as proof of the current choice. If multiple systems remain plausible and the choice materially changes where the commitment lives, ask. Otherwise use the strongest contextual owner and state the choice.
 
-When no stronger owner is established, prefer Apple Reminders for shared household and personal-life coordination, especially work that belongs on an existing shared list. Prefer Todoist for the user's individual project and work execution, including personally owned projects. These are routing defaults, not reasons to duplicate a task or move an existing record out of its established system.
+Apply current user routing defaults when no stronger owner is established; do not copy provider preferences into this skill or move an existing record merely to match a default.
 
 ## Placement and mutation
 
-1. Load the selected provider's owning skill or inspect its live tool schema.
+1. Load the selected provider's owning skill or inspect its live tool schema. Link source material in the selected provider's documented field and format, applying user preferences rather than copying source content. For private sources, include only the brief context needed by the authorized audience.
 2. Before creating, inspect existing projects, lists, sections, labels/tags, and nearby related tasks when available. Never default to a generic Inbox when a better destination is evident.
 3. Search for an existing task before creating a duplicate.
 4. Preserve recurrence, due/deadline semantics, priority, assignment, parent/child structure, and labels when updating.
@@ -38,7 +38,6 @@ When the user has not asked for creation, prefer a clearly labeled draft or prov
 - Craft, Notes, and document skills own their content mechanics, not task-manager selection. A document-local checklist is appropriate only after that document system has been selected as the task surface.
 - Provider-specific schemas, recurrence behavior, Inbox semantics, and permission rules belong in the provider's own skill or live tool documentation.
 - Cross-host context may explain routing, but it is supplementary and possibly stale; verify the selected task system live before writing.
-- Keep one authoritative record for each responsibility: the Issue for project state and the personal task for the user's commitment. Link supporting records instead of copying technical detail or status histories.
 
 ## Safety
 
