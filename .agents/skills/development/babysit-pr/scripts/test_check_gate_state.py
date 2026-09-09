@@ -13,6 +13,12 @@ def snapshot(checks, now=0, previous=None, **extra):
 
 
 class CheckGateStateTests(unittest.TestCase):
+    def test_falsey_invalid_checkpoints_are_rejected(self):
+        for previous in ([], 0, False, ""):
+            with self.subTest(previous=previous):
+                with self.assertRaisesRegex(ValueError, "Invalid checkpoint"):
+                    assess(snapshot([check(status="queued")], previous=previous))
+
     def test_job_arrays_and_counts_share_anomaly_and_checkpoint_semantics(self):
         first = assess(snapshot([check(status="queued", jobs=[], queued_since=0)], now=900))
         self.assertEqual(first["diagnose"], ["ci/provider"])

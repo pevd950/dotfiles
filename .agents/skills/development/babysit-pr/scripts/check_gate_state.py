@@ -62,7 +62,9 @@ def assess(snapshot):
     fingerprint = hashlib.sha256(json.dumps(
         [head, snapshot.get("policy_id"), blockers], sort_keys=True
     ).encode()).hexdigest()
-    previous = snapshot.get("previous") or {}
+    previous = snapshot.get("previous")
+    if previous is None:
+        previous = {}
     if not isinstance(previous, dict):
         raise ValueError("Invalid checkpoint: expected an object or null")
     same = previous.get("state_fingerprint") == fingerprint
