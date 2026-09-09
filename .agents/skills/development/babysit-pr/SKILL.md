@@ -55,7 +55,7 @@ Report ready only when all hold, re-fetching `headRefOid` after gathering the co
 - Applicable reviewers have genuine current-head clean verdicts, or explicitly permitted non-actionable skips; green status or acknowledgement alone is not a review verdict.
 - When Codex review applies: no unresolved actionable findings, no active `eyes` reactions on the PR body or latest request comment, and a head-bound no-issues signal per the reference.
 - Every addressed bot finding has a reply with commit SHA and validation evidence.
-- For user-facing visual or interaction changes whose validation plan or reviewer requires visual proof, the PR has sanitized screenshot/video evidence tied to the current head, tested scenario, build, platform, device, and OS. Media from before a subsequent visual change is stale readiness evidence.
+- For user-facing visual or interaction changes whose validation plan or reviewer requires visual proof, the PR has sanitized screenshot/video evidence tied to the current head, tested scenario, build, platform, device, and OS. Media from before a subsequent visual change is stale readiness evidence. Follow [GitHub media evidence](references/github-media-evidence.md) for supported uploads, saved-body readback, and verified signed-in rendering with repository access. An anonymous private-access denial is not a rendering failure; if authorized rendering cannot be checked, report that validation gap.
 - Working tree clean after push.
 
 If any item is ambiguous, keep monitoring or ask — do not overstate readiness. When ready, ping the user with the PR link, latest SHA, checks/review summary, and local validation evidence.
