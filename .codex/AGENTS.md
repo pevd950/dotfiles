@@ -23,6 +23,8 @@ Craft is my note-taking app and knowledge base: durable notes, documents, plans,
 
 When an authorized GitHub issue, pull request, or comment would be materially clearer with visual evidence, attach the smallest useful screenshot or video beside the claim it supports. Prefer before/after evidence for visual changes. Give images meaningful alt text and identify the tested commit or build, scenario, platform, device, and OS when relevant. Before upload, inspect media for secrets, private data, notifications, account identifiers, and unrelated UI. The upload is external publication under the same authorization rules as the GitHub write.
 
+Prefer native GitHub attachments uploaded to the intended repository with supported `gh --attach`; use browser upload when CLI capability, authentication, or host support is unavailable. Do not use undocumented upload endpoints, token-bearing raw URLs, or commit screenshots solely to transport evidence. Existing tracked assets may use verified, access-appropriate links. Read back the saved body and verify actual signed-in rendering with repository access; anonymous checks are only for already-public assets. Private access denial does not prove missing media or an authorized rendering failure; never expose private assets to verify them. See the babysit-pr skill’s `references/github-media-evidence.md` for upload and recovery details.
+
 ## Generated files
 
 When `AI_INBOX_DIR` is set, put user-facing generated files there unless they belong in the current repository or another durable system. Use descriptive filenames with dates or task slugs. If it is unset, follow the owning workspace's artifact convention rather than inventing a machine-specific path.
