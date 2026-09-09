@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Validate tracked skill YAML and relative Markdown links; never scan private files.
 
-Requires PyYAML (CI installs python3-yaml). This checks structure, not semantics
+Run scripts/setup-checks.sh to install the declared validation dependencies. This checks structure, not semantics
 or runtime activation. Code examples, external URLs and fragments are excluded.
 """
 from pathlib import Path
-import re
+import os
 import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
 import yaml
+from markdown_it import MarkdownIt
 
 
 class UniqueKeysLoader(yaml.SafeLoader):
@@ -50,29 +51,20 @@ def metadata(text):
 
 
 def local_links(text):
-    # Ignore fenced and inline code: examples are not document dependencies.
-    prose = []
-    fence = None
-    for line in text.splitlines():
-        match = re.match(r'^\s*(`{3,}|~{3,})', line)
-        if match:
-            marker = match[1]
-            if fence is None:
-                fence = marker
-            elif marker[0] == fence[0] and len(marker) >= len(fence):
-                fence = None
-            continue
-        if fence is None:
-            prose.append(re.sub(r'`+[^`]*`+', '', line))
-    text = '\n'.join(prose)
-    targets = re.findall(r'\]\((<[^>]+>|[^\s)]+)(?:\s+"[^"]*")?\)', text)
-    targets += re.findall(r'^\s*\[[^\]]+\]:\s*(<[^>]+>|\S+)', text, re.M)
-    for target in targets:
-        target = target.strip('<>')
+    """Extract CommonMark destinations, excluding code, external URLs and fragments."""
+    env = {}
+    tokens = MarkdownIt('commonmark').parse(text, env)
+    targets = [ref['href'] for ref in env.get('references', {}).values()]
+    pending = list(tokens)
+    while pending:
+        token = pending.pop(0)
+        if token.type in ('link_open', 'image'):
+            targets.append(token.attrGet('href' if token.type == 'link_open' else 'src'))
+        pending[0:0] = token.children or []
+    for target in dict.fromkeys(targets):
         parsed = urlsplit(target)
-        if parsed.scheme or parsed.netloc or not parsed.path:
-            continue
-        yield unquote(parsed.path)
+        if not parsed.scheme and not parsed.netloc and parsed.path:
+            yield unquote(parsed.path)
 
 
 def validate(root, paths, tracked_paths=None):
@@ -80,18 +72,24 @@ def validate(root, paths, tracked_paths=None):
     names = {}
     tracked = {p.resolve() for p in (paths if tracked_paths is None else tracked_paths)}
     for path in paths:
+        try:
+            path.resolve(strict=True).relative_to(root.resolve())
+            text = path.read_text() if path.suffix in ('.md', '.yaml') else ''
+        except (ValueError, OSError, RuntimeError) as exc:
+            errors.append(f'{path.relative_to(root)}: unavailable or outside checkout ({type(exc).__name__})')
+            continue
         if path.name == 'SKILL.md':
             try:
-                data = metadata(path.read_text())
+                data = metadata(text)
                 name = data['name']
                 if name in names:
                     errors.append(f'{path.relative_to(root)}: duplicate skill name {name} ({names[name]})')
-                names[name] = path.relative_to(root)
+                names.setdefault(name, path.relative_to(root))
             except (ValueError, TypeError, yaml.YAMLError) as exc:
                 errors.append(f'{path.relative_to(root)}: {exc}')
         if path.name == 'openai.yaml' and path.parent.name == 'agents':
             try:
-                data = yaml.load(path.read_text(), Loader=UniqueKeysLoader)
+                data = yaml.load(text, Loader=UniqueKeysLoader)
                 if not isinstance(data, dict):
                     raise ValueError('skill UI metadata must be a mapping')
                 policy = data.get('policy', {})
@@ -103,17 +101,35 @@ def validate(root, paths, tracked_paths=None):
                 errors.append(f'{path.relative_to(root)}: {exc}')
         if path.suffix != '.md':
             continue
-        for target in local_links(path.read_text()):
+        for target in local_links(text):
             resolved = (path.parent / target).resolve()
             # Directory references are valid when they contain tracked files.
-            if resolved not in tracked and not any(resolved in p.parents for p in tracked):
+            if not resolved.is_relative_to(root.resolve()) or not resolved.exists() or (resolved not in tracked and not any(resolved in p.parents for p in tracked)):
                 errors.append(f'{path.relative_to(root)}: untracked or missing link target {target}')
     return errors
 
 
+def tracked_files(root):
+    """Read the exact clone or yadm index without invoking yadm auto-alt writes."""
+    if (root / '.git').exists():
+        command = ['git', '-C', str(root)]
+    else:
+        env = os.environ.copy()
+        count = int(env.get('GIT_CONFIG_COUNT', '0'))
+        env.update({'GIT_CONFIG_COUNT': str(count + 1),
+                    f'GIT_CONFIG_KEY_{count}': 'yadm.auto-alt',
+                    f'GIT_CONFIG_VALUE_{count}': 'false'})
+        repo = subprocess.check_output(['yadm', 'introspect', 'repo'], env=env, text=True).strip()
+        command = ['git', '--git-dir=' + repo]
+        worktree = subprocess.check_output(command + ['config', 'core.worktree'], text=True).strip()
+        if Path(worktree).resolve() != root.resolve():
+            raise ValueError('yadm worktree does not match instruction root')
+    return subprocess.check_output(command + ['ls-files', '-z']).decode().split('\0')
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
-    tracked = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-z']).decode().split('\0')
+    tracked = tracked_files(root)
     paths = [root / p for p in tracked if p and (
         p.startswith('.agents/skills/') or p in ('AGENTS.md', '.codex/AGENTS.md', 'superassistant/AGENTS.md')
     )]

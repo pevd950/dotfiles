@@ -4,7 +4,7 @@ Checked against official documentation on 2026-09-09. Verify current documentati
 
 ## Instruction discovery
 
-Global guidance comes from `$CODEX_HOME/AGENTS.override.md` or `AGENTS.md` (first non-empty file). Project instructions accumulate from the root toward the working directory, using the override, AGENTS file, or configured fallback at each level. More specific guidance takes precedence. The configured `project_doc_max_bytes` limits combined project instruction size (32 KiB by default).
+Global guidance comes from `$CODEX_HOME/AGENTS.override.md` or `$CODEX_HOME/AGENTS.md` (first non-empty file). Project instructions accumulate from the root toward the working directory, using the override, AGENTS file, or configured fallback at each level. More specific guidance takes precedence. The configured `project_doc_max_bytes` limits combined project instruction size (32 KiB by default).
 
 Keep stable preferences globally and project-specific requirements in the repository. Do not copy runtime instructions into every skill. User-authorized scope governs task procedures; skills must not silently add approval gates.
 

@@ -1,8 +1,10 @@
 import tempfile
 from pathlib import Path
 import unittest
+import subprocess
+from unittest.mock import patch
 
-from check_instructions import local_links, metadata, validate
+from check_instructions import local_links, metadata, validate, tracked_files
 
 
 class InstructionChecks(unittest.TestCase):
@@ -15,8 +17,8 @@ class InstructionChecks(unittest.TestCase):
                 metadata(text)
 
     def test_links_ignore_examples_and_external_sources(self):
-        text = '[local](references/a.md#section) [web](https://example.com) [anchor](#here)\n```md\n[example](missing.md)\n```\n`[code](fake.md)`\n[ref]: <reference%20file.md>\n'
-        self.assertEqual(list(local_links(text)), ['references/a.md', 'reference file.md'])
+        text = '[local](references/a.md#section) [web](https://example.com) [anchor](#here)\n```md\n[example](missing.md)\n```\n`[code](fake.md)`\n\n[ref]: <reference%20file.md>\n'
+        self.assertEqual(list(local_links(text)), ['reference file.md', 'references/a.md'])
 
     def test_duplicate_names_and_untracked_targets_fail(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -59,6 +61,64 @@ class InstructionChecks(unittest.TestCase):
             target = root / 'check.py'
             target.write_text('# Checker')
             self.assertEqual(validate(root, [p], [p, target]), [])
+
+class ReviewRegressions(unittest.TestCase):
+    def test_commonmark_titles_parentheses_and_code(self):
+        text = "[one](missing.md 'details') [two](guide(v2).md \"title\") [three](last.md (title))"
+        self.assertEqual(list(local_links(text)), ['missing.md', 'guide(v2).md', 'last.md'])
+        self.assertEqual(list(local_links('    [code](ignored.md)\n')), [])
+
+    def test_external_symlink_is_rejected_before_read(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            root = base / 'repo'
+            root.mkdir()
+            secret = base / 'outside.md'
+            secret.write_text('PRIVATE SENTINEL')
+            link = root / 'SKILL.md'
+            link.symlink_to(secret)
+            with patch.object(Path, 'read_text', side_effect=AssertionError('must not read')):
+                errors = validate(root, [link])
+            self.assertEqual(len(errors), 1)
+            self.assertNotIn('PRIVATE SENTINEL', str(errors))
+
+    def test_third_duplicate_names_original(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            paths = []
+            for name in ('first', 'second', 'third'):
+                p = root / name / 'SKILL.md'
+                p.parent.mkdir()
+                p.write_text('---\nname: same\ndescription: example\n---\n')
+                paths.append(p)
+            errors = validate(root, paths)
+            self.assertEqual(len(errors), 2)
+            self.assertTrue(all('(first/SKILL.md)' in e for e in errors))
+
+    def test_clone_and_yadm_index_discovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve() / 'worktree'
+            repo = Path(folder).resolve() / 'repo.git'
+            root.mkdir()
+            subprocess.run(['git', 'init', '-q', '--separate-git-dir', str(repo), str(root)], check=True)
+            (root / 'AGENTS.md').write_text('Instructions')
+            subprocess.run(['git', '-C', str(root), 'add', 'AGENTS.md'], check=True)
+            self.assertIn('AGENTS.md', tracked_files(root))
+            (root / '.git').unlink()
+            subprocess.run(['git', '--git-dir='+str(repo), 'config', 'core.worktree', str(root)], check=True)
+            real = subprocess.check_output
+            def discovery(command, **kwargs):
+                if command == ['yadm', 'introspect', 'repo']:
+                    env = kwargs['env']
+                    count = int(env['GIT_CONFIG_COUNT']) - 1
+                    self.assertEqual(env[f'GIT_CONFIG_VALUE_{count}'], 'false')
+                    return str(repo) + '\n'
+                return real(command, **kwargs)
+            with patch('check_instructions.subprocess.check_output', side_effect=discovery):
+                self.assertIn('AGENTS.md', tracked_files(root))
+                with self.assertRaises(ValueError):
+                    tracked_files(root / 'wrong')
+
 
 if __name__ == '__main__':
     unittest.main()

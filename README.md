@@ -199,3 +199,18 @@ hostname -s  # Should match Brewfile##os.Darwin,hostname.XXX
 ```bash
 rm ~/.Brewfile && yadm alt
 ```
+
+## Validation
+
+Bootstrap installs checker dependencies into the ignored `.venv-checks` environment.
+For a developer clone or an existing installation, run:
+
+```sh
+bash scripts/setup-checks.sh
+./scripts/check.sh
+```
+
+Python 3.9+ with venv support, ShellCheck, and Zsh are required (Debian/Ubuntu:
+`python3-venv shellcheck zsh`). Dependency installation is explicit; validation
+itself does not install packages. `DOTFILES_CHECK_PYTHON` can select an existing
+interpreter containing the dependencies in `scripts/requirements-checks.txt`.

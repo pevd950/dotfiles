@@ -9,3 +9,4 @@
 superassistant/AGENTS.local.md
 __pycache__/
 *.py[cod]
+.venv-checks/

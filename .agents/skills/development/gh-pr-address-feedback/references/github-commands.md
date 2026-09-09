@@ -20,7 +20,7 @@ gh pr comment <pr> --body-file /tmp/pr-visual-evidence.md \
 ## gh CLI pitfalls
 
 - 404 on `/pulls/comments/<id>/replies`: use `/pulls/<pr>/comments` with `in_reply_to`. 422 about `position`/`commit_id`: wrong endpoint, missing `in_reply_to`, or `-f` instead of `-F`.
-- `gh pr checks` exit codes are status signals when a table prints — current versions may return `1` for failed and `8` for pending/failing. Classify the rows; repeated exit `8` with the same pending rows is not progress.
+- `gh pr checks` exit codes are status signals when a table prints — exit code `8` means pending; inspect the rows to classify failures. Classify the rows; repeated exit `8` with the same pending rows is not progress.
 - Unsupported `--json` fields vary by `gh` version: trim the field list and retry with the smallest supported set.
 - If `--attach` is absent, do not post raw local paths or silently omit requested visual proof; report that GitHub CLI 2.99.0 or later is required and use an authorized fallback.
 - `Merge already in progress` / HTTP 405: stop issuing merge commands; switch to status polling and reporting.

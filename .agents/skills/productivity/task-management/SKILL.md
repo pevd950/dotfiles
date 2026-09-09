@@ -22,7 +22,7 @@ Apply current user routing defaults when no stronger owner is established; do no
 
 ## Placement and mutation
 
-1. Load the selected provider's owning skill or inspect its live tool schema. Link source material instead of copying it: URLs in Reminders notes, Markdown links in Todoist descriptions. For private sources, include only the brief context needed by the authorized audience.
+1. Load the selected provider's owning skill or inspect its live tool schema. Link source material in the selected provider's documented field and format, applying user preferences rather than copying source content. For private sources, include only the brief context needed by the authorized audience.
 2. Before creating, inspect existing projects, lists, sections, labels/tags, and nearby related tasks when available. Never default to a generic Inbox when a better destination is evident.
 3. Search for an existing task before creating a duplicate.
 4. Preserve recurrence, due/deadline semantics, priority, assignment, parent/child structure, and labels when updating.

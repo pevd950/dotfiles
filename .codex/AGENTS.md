@@ -13,6 +13,7 @@ Do not expose private information to third parties without authorization. Treat 
 - Craft is my knowledge base. Use native structure when it improves readability; see the [Craft skill](../.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
 - Apple Reminders is the default for shared household and personal-life coordination, especially existing shared lists. Todoist is for individual project/work execution. An explicitly named system or established project/domain owner takes precedence.
 - GitHub Issues own technical plans, acceptance criteria, and implementation history for bugs, features, and substantial coding work. Personal tasks may track when I work on an Issue; link to it instead of duplicating its plan.
+- Put source URLs in Reminders notes and Markdown source links in Todoist descriptions.
 - Keep one source of truth per responsibility and verify live state there. Use descriptive, stable cross-device links, including labeled `craftdocs://` links where supported.
 - Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
 - Offer unrequested follow-ups as labeled drafts or quick-add handoffs; create them only when asked. Use [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, linking, and updates.
