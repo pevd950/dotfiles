@@ -34,3 +34,7 @@ done
 
 python3 -m unittest discover \
   -s .agents/skills/development/babysit-pr/scripts -p 'test_*.py'
+
+# Requires PyYAML (python3-yaml in CI).
+python3 scripts/check_instructions.py
+python3 -m unittest discover -s scripts -p "test_*.py"

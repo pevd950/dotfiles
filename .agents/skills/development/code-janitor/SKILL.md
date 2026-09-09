@@ -1,6 +1,6 @@
 ---
 name: code-janitor
-description: "Clean up codebases by removing dead code, simplifying logic, and reducing tech debt; use when asked to refactor for simplicity, delete unused code, or tidy dependencies (trigger keywords: cleanup, refactor, tech debt, simplify, remove unused)."
+description: Remove dead code and simplify existing implementations or dependencies when asked for cleanup or refactoring.
 ---
 
 # Code Janitor

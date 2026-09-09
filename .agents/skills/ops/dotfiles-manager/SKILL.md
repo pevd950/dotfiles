@@ -1,6 +1,6 @@
 ---
 name: dotfiles-manager
-description: Safely inspect, edit, commit, push, or sync the user's yadm-managed dotfiles. Use when working on files under the home-directory dotfiles checkout, `~/.agents/skills`, global AGENTS guidance, shell/app config, bootstrap scripts, or when the user asks for yadm, dotfiles, cross-machine config, or live-home repo changes. Prioritize exact-path yadm operations and avoid broad `$HOME` scans.
+description: Inspect or change yadm-managed dotfiles, global instructions, and personal skills. Use for dotfiles PRs and sync; preserve unrelated live home state.
 ---
 
 # Dotfiles Manager
@@ -11,7 +11,7 @@ The home directory is live operational state, not a scratch repository. Work wit
 
 - Do not run broad `yadm status --untracked-files=all` from `$HOME` unless the user explicitly asks. Prefer path-scoped commands: `yadm status --short [--untracked-files=all] -- <path>`, `yadm diff [--cached] -- <path>`.
 - Stage only explicit paths with `yadm add <path> ...`. Never `yadm add -A`, broad `git add`, or broad untracked scans in `$HOME`.
-- Before deleting or changing home files, ask unless the user explicitly requested that exact mutation.
+- Apply requested scoped edits without renewed approval. Isolate PR work from live home files; preserve unrelated changes.
 - Before committing shell, app, SSH, GPG, token, credential, or auth-related config, inspect the exact diff for secrets.
 - On `index.lock`, verify there is no live yadm/git process before removing or retrying — a lock file is not automatically stale:
   - `ps -axo pid,ppid,stat,command | rg 'yadm|\.local/share/yadm|git'`
@@ -33,21 +33,13 @@ Canonical root: `SKILL_ROOT="$HOME/.agents/skills"`, organized by category (for 
 
 Write for multiple Macs and future hosts: no hardcoded project paths when a relative or environment-based description works; do not assume identical clone paths, Xcode state, shells, or app auth; prefer discover-then-act over host-specific constants; mark intentionally user-specific paths as such.
 
-## 1Password developer baseline
+## Developer authentication
 
-For 1Password, GitHub auth, SSH agent, or developer-token routing work, start with the non-mutating preflight, and use it to classify the host, not to collect secrets:
+For auth, SSH-agent, or token routing work, read [the developer baseline](references/developer-auth.md) and start with its non-mutating preflight. Keep credential repair separately authorized.
 
-```bash
-~/.zshrc_custom/bin/onepassword-dev-preflight
-```
+## Authority boundaries
 
-It answers: whether `op`, 1Password.app, `onepassword-mcp`, and the Codex `1password` MCP entry are available; whether `op account list`, `op plugin list`, `gh auth status`, and `gh api user` run without printing their output; whether `GH_TOKEN`/`GITHUB_TOKEN` env overrides are masking the baseline; whether `SSH_AUTH_SOCK`, `ssh-add`, 1Password `agent.toml`, GitHub `IdentityAgent`, and SSH auth to GitHub are usable; and which variable names quiet local env files export, without values.
-
-Run the mutating `scripts/setup-1password-dev.zsh` only after the baseline shows the intended gap or the user asked for repair. Keep tracked guidance to command names, variable names, and non-secret mechanics; never commit private 1Password item paths, vault IDs, token values, host-local Craft links, or generated secret files. For remote hosts, verify inheritance by pulling the yadm commit there and re-running the preflight — do not assume local 1Password app, SSH socket, or CLI auth state exists remotely.
-
-## Ask first
-
-Deleting, moving, or rewriting broad home-directory files; bootstrap changes that could mutate a machine; secrets, credentials, SSH/GPG config, LaunchAgents, browser/app auth, or password-manager state; installing packages or changing system defaults; responding to human review comments in dotfiles PRs; committing unrelated yadm changes you did not create.
+Confirm destructive home changes, live bootstrap execution, credential/security changes, package installation, system defaults, and human review replies unless already explicitly authorized for that action and target. Preparing a scoped patch for review does not execute it on the machine. Never commit unrelated changes without authorization.
 
 ## Pitfalls
 

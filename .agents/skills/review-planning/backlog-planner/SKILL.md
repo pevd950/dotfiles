@@ -1,6 +1,6 @@
 ---
 name: backlog-planner
-description: "Create or refine backlog items with clear scope and acceptance criteria using the gh CLI; use when planning work, writing tickets, or breaking down epics (trigger keywords: backlog, issue, ticket, epic, roadmap)."
+description: Create or refine issues, tickets, and epics with clear scope and acceptance criteria. Use for backlog planning and work breakdown.
 ---
 
 # Backlog Planner
