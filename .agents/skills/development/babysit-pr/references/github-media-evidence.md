@@ -10,14 +10,20 @@ Check local `gh --version` and the intended command’s `--help`. Native `--atta
 
 Use `--body-file` for multiline Markdown. Repeat `--attach` for different files. Local references matching attached files are rewritten in place and preserve their Markdown alt text; otherwise files are appended. The `path#alt text` form sets alt text only for appended images. Videos have no alt text and need a standalone paragraph to render a player.
 
-For an already-authorized PR edit, replace the repository and PR placeholders, and run from the directory containing the sanitized media and body file:
+For an already-authorized PR edit, replace the repository and PR placeholders. Run from the directory containing the sanitized media. First fetch the saved description into an unused local body file (stop if the fetch fails):
+
+```sh
+gh pr view PR_NUMBER --repo OWNER/REPO --json body --jq .body > body.md
+```
+
+Edit that complete body to insert evidence beside its claim, preserving existing scope, validation details, and generated sections. `--body-file` replaces the entire description. Immediately before saving, reread the live body and reconcile any intervening edits, then upload:
 
 ```sh
 gh pr edit PR_NUMBER --repo OWNER/REPO --body-file body.md \
   --attach ./before.png --attach ./after.png --attach ./interaction.mp4
 ```
 
-Example `body.md` media placement (replace the test-context placeholders):
+Example fragment to insert into the complete `body.md`, not a replacement description (replace the test-context placeholders):
 
 ```markdown
 Tested COMMIT_OR_BUILD: SCENARIO on PLATFORM / DEVICE / OS.
