@@ -61,7 +61,14 @@ format='[$ssh_symbol$hostname ](bold red)'
 # [git_status]
 
 [custom.yadm]
-command = "yadm status --porcelain 2>/dev/null | sed 's/^ M/!/' | sed 's/^A/+/' | sed 's/^ D/-/' | sed 's/^??/?/' | tr -d '\\n'"
-when = "[ \"$PWD\" = \"$HOME\" ] && [ -n \"$(yadm status --porcelain 2>/dev/null)\" ]"
+# Keep prompt evaluation read-only: yadm status can run auto-alt/auto-perms.
+# Show tracked filenames and status; skip untracked files and submodule inspection.
+command = '''
+repo=$(yadm introspect repo 2>/dev/null) || exit 0
+git --no-optional-locks --git-dir="$repo" --work-tree="$HOME" status --porcelain=v1 --untracked-files=no --ignore-submodules=all 2>/dev/null |
+  awk '{ status = substr($0, 1, 2); gsub(/ /, "", status); printf "%s%s %s", (NR > 1 ? ", " : ""), status, substr($0, 4) }'
+'''
+when = '[ "$PWD" = "$HOME" ] && command -v yadm >/dev/null 2>&1'
+shell = ["sh"]
 format = "[yadm:$output](bold yellow) "
 disabled = false
