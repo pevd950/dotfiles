@@ -70,5 +70,5 @@ git --no-optional-locks --git-dir="$repo" --work-tree="$HOME" status --porcelain
 '''
 when = '[ "$PWD" = "$HOME" ] && command -v yadm >/dev/null 2>&1'
 shell = ["sh"]
-format = "[yadm:$output](bold yellow) "
+format = "([yadm:$output](bold yellow) )"
 disabled = false
