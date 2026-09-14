@@ -43,4 +43,4 @@ Use the same root order as the index. The reference binds a relative file path, 
 - This is not the central multi-host collector/reviewer. Host transport restrictions, cross-host copied-session reconciliation, inventory/memory ingestion, review persistence and notification remain separate work.
 - The index does not replace contextual analysis. User corrections, successful but wasteful operations, expected denials and already-fixed guidance require bounded detail and comparison with current owner assets.
 
-Keep the implementation draft until the remaining issue acceptance and a bounded manual comparison are reviewed. Synthetic validation lives in `scripts/test_scan_codex_sessions.py`; no live transcripts belong in fixtures.
+Review readiness applies only to the implemented bounded collector. Do not treat it as a completed collector or deploy it as the central reviewer until the remaining issue acceptance and a bounded manual comparison are reviewed. Synthetic validation lives in `scripts/test_scan_codex_sessions.py`; no live transcripts belong in fixtures.
