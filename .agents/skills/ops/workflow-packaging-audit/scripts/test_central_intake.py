@@ -126,6 +126,53 @@ class IntakeTests(unittest.TestCase):
         self.write(self.bundle)
         self.assertTrue(self.run_intake()["hosts"]["alpha"]["eligible"])
 
+    def test_nonadvancing_generation_and_archive_status(self):
+        for index, mutate in enumerate((
+                lambda b: b.update(generated_at=LOW),
+                lambda b: b["archive_metadata"].update(status="snapshot_read"),
+                lambda b: b["archive_metadata"].update(status="unavailable"))):
+            bundle = copy.deepcopy(self.bundle)
+            mutate(bundle)
+            self.write(bundle)
+            self.assertFalse(self.run_intake("nonadvancing-" + str(index))["hosts"]["alpha"]["eligible"])
+
+    def test_limits_coverage_and_closed_event_metadata(self):
+        for index, mutate in enumerate((
+                lambda b: b["limits"].pop("max_files"),
+                lambda b: b["coverage"].update(records_read=0),
+                lambda b: b["coverage"].update(files_read=2, files_discovered=1),
+                lambda b: b["sessions"][0]["events"][0].update(signals=["private text"]),
+                lambda b: b["sessions"][0]["events"][0].update(pairing="private text"),
+                lambda b: b["sessions"][0]["events"][0].update(correlation_id="private text"),
+                lambda b: b["sessions"][0]["events"][0].update(status={"exit_code_source": "private text"}))):
+            bundle = copy.deepcopy(self.bundle)
+            mutate(bundle)
+            self.write(bundle)
+            self.assertEqual(self.run_intake("invalid-" + str(index))["hosts"]["alpha"]["status"], "invalid_or_denied")
+
+    def test_root_gap_is_partial_but_root_event_reference_is_invalid(self):
+        self.bundle["source_gaps"].append({"reason": "root_unavailable", "root_index": 0, "relative_path": "."})
+        self.write(self.bundle)
+        run = self.run_intake("gap")
+        self.assertEqual(run["hosts"]["alpha"]["status"], "partial")
+        self.assertEqual(len(run["events"]), 1)
+        self.bundle["sessions"][0]["events"][0]["source_ref"]["relative_path"] = "."
+        self.write(self.bundle)
+        self.assertEqual(self.run_intake("badref")["hosts"]["alpha"]["status"], "invalid_or_denied")
+
+    def test_collector_host_label_and_invalid_ledger_containers(self):
+        host = ".opaque:" + "a" * 150
+        self.bundle["source_host"] = host
+        self.hosts[host] = self.hosts.pop("alpha")
+        self.write(self.bundle)
+        self.assertTrue(self.run_intake()["hosts"][host]["eligible"])
+        for invalid in ([], {"schema": "central-intake.v1", "runs": [], "acknowledged_collector_windows": {}},
+                        {"schema": "central-intake.v1", "runs": {}, "acknowledged_collector_windows": []}):
+            path = self.state / "ledger.json"
+            path.write_text(json.dumps(invalid))
+            with self.assertRaises(ValueError):
+                self.run_intake("invalidledger")
+
     def test_copies_merge_preserving_occurrences_and_host_provenance(self):
         event = self.bundle["sessions"][0]["events"][0]
         self.bundle["sessions"][0]["events"].append(copy.deepcopy(event))

@@ -150,7 +150,7 @@ def validate(bundle, host, expected):
         raise ValueError("Wrong collector schema or host")
     fields(bundle, "schema source_host generated_at window roots limits coverage source_gaps truncation archive_metadata complete_within_supported_scope limitations sessions")
     fields(bundle["window"], "after through")
-    stamp(bundle["generated_at"])
+    generated_at = stamp(bundle["generated_at"])
     if window(bundle["window"]) != expected:
         raise ValueError("Collector window mismatch")
     for key in ("sessions", "roots", "source_gaps", "truncation", "limitations"):
@@ -160,8 +160,8 @@ def validate(bundle, host, expected):
         raise ValueError("Invalid roots")
     strings(bundle["limitations"])
     strings(bundle["truncation"])
-    fields(bundle["limits"], "max_files max_scan_records max_bytes max_line_bytes max_events max_sessions max_pending_calls max_directory_entries max_archive_bytes max_archive_rows max_archive_query_steps")
-    if not bundle["limits"] or any(type(v) is not int or v <= 0 for v in bundle["limits"].values()):
+    limits = set("max_files max_scan_records max_bytes max_line_bytes max_events max_sessions max_pending_calls max_directory_entries max_archive_bytes max_archive_rows max_archive_query_steps".split())
+    if not isinstance(bundle["limits"], dict) or set(bundle["limits"]) != limits or any(type(v) is not int or v <= 0 for v in bundle["limits"].values()):
         raise ValueError("Invalid collector limits")
     archive = bundle["archive_metadata"]
     fields(archive, "status rows_read selected_rollouts")
@@ -174,13 +174,18 @@ def validate(bundle, host, expected):
         if gap.get("relative_path") is not None and not isinstance(gap["relative_path"], str):
             raise ValueError("Invalid source gap path")
         if "root_index" in gap:
-            source_file({"root_index": gap["root_index"], "relative_path": gap.get("relative_path") or "root"}, len(bundle["roots"]))
+            relative = gap.get("relative_path")
+            source_file({"root_index": gap["root_index"], "relative_path": "root" if relative in (None, ".") else relative}, len(bundle["roots"]))
     coverage = bundle.get("coverage")
     if not isinstance(coverage, dict) or not coverage or any(type(v) is not int or v < 0 for v in coverage.values()):
         raise ValueError("Invalid coverage")
     required = set("files_discovered files_read directory_entries bytes_read records_read malformed_records incomplete_trailing_records duplicate_records untimestamped_events out_of_window_events excluded_session_files excluded_sidecar_files unsupported_records emitted_events pending_calls_evicted sessions_included".split())
     if set(coverage) != required:
         raise ValueError("Unsupported coverage counters")
+    if (coverage["records_read"] < coverage["emitted_events"]
+            or coverage["files_read"] > coverage["files_discovered"]
+            or coverage["sessions_included"] > coverage["emitted_events"]):
+        raise ValueError("Inconsistent coverage counters")
     if type(bundle.get("complete_within_supported_scope")) is not bool:
         raise ValueError("Invalid completeness")
     seen = set()
@@ -211,9 +216,15 @@ def validate(bundle, host, expected):
                     raise ValueError("Invalid event metadata collection")
             if "signals" in event:
                 strings(event["signals"])
+                if not set(event["signals"]) <= {"correction_candidate", "friction_candidate", "denial_candidate"}:
+                    raise ValueError("Unknown event signal")
             for key in ("correlation_id", "pairing"):
                 if key in event and not isinstance(event[key], str):
                     raise ValueError("Invalid event metadata scalar")
+            if "pairing" in event and event["pairing"] not in ("missing_call_id", "call_not_found_in_bounded_scan"):
+                raise ValueError("Unknown pairing status")
+            if "correlation_id" in event and not HEX.fullmatch(event["correlation_id"]):
+                raise ValueError("Invalid correlation digest")
             when = stamp(event["timestamp"])
             if when > expected["through"]:
                 raise ValueError("Future event")
@@ -222,6 +233,8 @@ def validate(bundle, host, expected):
                 for key, kind in (("exit_code", int), ("exit_code_source", str), ("is_error", bool)):
                     if key in event["status"] and type(event["status"][key]) is not kind:
                         raise ValueError("Invalid result status")
+                if "exit_code_source" in event["status"] and event["status"]["exit_code_source"] != "output_text_candidate":
+                    raise ValueError("Unknown exit code source")
             reasons = event.get("selection_reasons")
             if not isinstance(reasons, list) or not reasons or not set(reasons) <= {"record_activity_in_window", "session_archived_in_window"}:
                 raise ValueError("Invalid selection")
@@ -247,7 +260,10 @@ def validate(bundle, host, expected):
     if coverage["sessions_included"] != len(seen) or coverage["emitted_events"] != total:
         raise ValueError("Coverage counts disagree with input")
     errors = any(coverage.get(k, 0) for k in ("malformed_records", "incomplete_trailing_records", "pending_calls_evicted"))
-    return bundle["complete_within_supported_scope"] and not bundle["source_gaps"] and not bundle["truncation"] and not errors
+    # Archive snapshots cannot prove freshness even if their gap was removed.
+    return (bundle["complete_within_supported_scope"] and not bundle["source_gaps"]
+            and not bundle["truncation"] and not errors and archive["status"] == "disabled"
+            and expected["through"] <= generated_at)
 
 
 def persist(fd, ledger):
@@ -283,7 +299,9 @@ def locked(path):
                 ledger = decode(read_at(fd, "ledger.json", MAX_LEDGER))
             except FileNotFoundError:
                 ledger = {"schema": "central-intake.v1", "runs": {}, "acknowledged_collector_windows": {}}
-            if ledger.get("schema") != "central-intake.v1":
+            if (not isinstance(ledger, dict) or ledger.get("schema") != "central-intake.v1"
+                    or not isinstance(ledger.get("runs"), dict)
+                    or not isinstance(ledger.get("acknowledged_collector_windows"), dict)):
                 raise ValueError("Unsupported ledger")
             yield fd, ledger
         finally:
@@ -299,7 +317,9 @@ def intake(state, run_id, hosts):
         result = {"hosts": {}, "events": {}, "all_sources_complete": False,
                   "unsupported": ["full archive history and freshness", "memory", "inventory", "automation", "repository context"]}
         for host, spec in sorted(hosts.items()):
-            label(host)
+            metadata_label(host)
+            if host is None:
+                raise ValueError("Host label required")
             expected = window(spec["window"])
             status = spec["status"]
             if status not in ("available", "offline", "unavailable"):
@@ -324,7 +344,10 @@ def intake(state, run_id, hosts):
                     occurrences[sha] = occurrences.get(sha, 0) + 1
                     identity = digest([session["id"], sha, occurrences[sha]])
                     record = result["events"].setdefault(identity, {"session": session["id"], "raw_sha256": sha, "occurrence": occurrences[sha], "provenance": []})
-                    record["provenance"].append({"host": host, "source_ref": event["source_ref"], "bundle_sha256": entry["input_sha256"]})
+                    refs = [("primary", event["source_ref"])] + [("mirror", ref) for ref in event.get("mirror_source_refs", [])]
+                    for role, ref in refs:
+                        record["provenance"].append({"host": host, "source_ref": ref, "role": role,
+                                                     "bundle_sha256": entry["input_sha256"]})
         result["digest"] = digest(result)
         previous = ledger["runs"].get(run_id)
         if previous is not None:

@@ -3,6 +3,7 @@ import copy
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 import central_intake as intake
 import test_scan_codex_sessions as fixtures
@@ -69,6 +70,51 @@ class IntakeBoundaryTests(unittest.TestCase):
         bundle["generated_at"] = "0001-01-01T00:00:00+23:00"
         result = self.submit(state, bundle)
         self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
+
+    def test_window_after_generation_cannot_advance(self):
+        state, bundle = self.prepare()
+        bundle["generated_at"] = bundle["window"]["after"]
+        result = self.submit(state, bundle)
+        self.assertFalse(result["hosts"]["alpha"]["eligible"])
+        with self.assertRaises(ValueError):
+            intake.acknowledge(state, "sample", result["digest"], "alpha", bundle["window"]["after"])
+
+    def test_missing_root_preserves_other_root_evidence(self):
+        state, _ = self.prepare()
+        original = fixtures.scanner.os.scandir
+
+        def denied_archive(path):
+            if str(path) == str(self.archive.resolve()):
+                raise PermissionError("synthetic denied root")
+            return original(path)
+
+        with patch.object(fixtures.scanner.os, "scandir", side_effect=denied_archive):
+            bundle = self.collect(source_host="alpha")
+        self.assertTrue(any(gap.get("relative_path") == "." for gap in bundle["source_gaps"]))
+        result = self.submit(state, bundle)
+        self.assertEqual(result["hosts"]["alpha"]["status"], "partial")
+        self.assertEqual(len(result["events"]), 1)
+
+    def test_removed_archive_freshness_gap_cannot_advance(self):
+        state, bundle = self.prepare()
+        bundle["archive_metadata"]["status"] = "snapshot_read"
+        self.assertEqual(bundle["source_gaps"], [])
+        result = self.submit(state, bundle)
+        self.assertFalse(result["hosts"]["alpha"]["eligible"])
+
+    def test_mirror_references_survive_merged_provenance(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.user("same"),
+                    {"type": "event_msg", "timestamp": fixtures.NOW,
+                     "payload": {"type": "user_message", "message": "same"}}])
+        bundle = self.collect(source_host="alpha")
+        result = self.submit(state, bundle)
+        self.assertEqual(len(result["events"]), 1)
+        provenance = next(iter(result["events"].values()))["provenance"]
+        refs = [entry["source_ref"] for entry in provenance]
+        event = bundle["sessions"][0]["events"][0]
+        self.assertIn(event["source_ref"], refs)
+        self.assertIn(event["mirror_source_refs"][0], refs)
 
     def test_archive_selection_does_not_admit_future_event(self):
         state, bundle = self.prepare()
