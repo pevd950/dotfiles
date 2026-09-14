@@ -83,7 +83,7 @@ class IntakeTests(unittest.TestCase):
 
     def test_partial_and_malformed_are_nonadvancing(self):
         for mutate in (
-                lambda b: b["source_gaps"].append({"reason": "denied"}),
+                lambda b: b["source_gaps"].append({"reason": "file_unreadable"}),
                 lambda b: b["truncation"].append("max_events"),
                 lambda b: b.update(source_host="wrong"),
                 lambda b: b.update(sessions=[{}]),
@@ -99,7 +99,7 @@ class IntakeTests(unittest.TestCase):
 
     def test_changed_run_rejected(self):
         self.run_intake()
-        self.bundle["source_gaps"].append({"reason": "partial"})
+        self.bundle["source_gaps"].append({"reason": "incomplete_trailing_record"})
         self.write(self.bundle)
         before = (self.state / "ledger.json").read_bytes()
         with self.assertRaises(ValueError):
@@ -151,7 +151,7 @@ class IntakeTests(unittest.TestCase):
             self.assertEqual(self.run_intake("invalid-" + str(index))["hosts"]["alpha"]["status"], "invalid_or_denied")
 
     def test_root_gap_is_partial_but_root_event_reference_is_invalid(self):
-        self.bundle["source_gaps"].append({"reason": "root_unavailable", "root_index": 0, "relative_path": "."})
+        self.bundle["source_gaps"].append({"reason": "directory_unreadable", "root_index": 0, "relative_path": "."})
         self.write(self.bundle)
         run = self.run_intake("gap")
         self.assertEqual(run["hosts"]["alpha"]["status"], "partial")
@@ -188,6 +188,44 @@ class IntakeTests(unittest.TestCase):
         run = self.run_intake()
         self.assertEqual(len(run["events"]), 2)
         self.assertTrue(all(len(e["provenance"]) == 2 for e in run["events"].values()))
+
+    def test_reversed_mirror_primary_merges_and_keeps_repetitions(self):
+        event = self.bundle["sessions"][0]["events"][0]
+        mirror = {**event["source_ref"], "sha256": "f" * 64, "byte_offset": 999}
+        event["mirror_source_refs"] = [mirror]
+        self.bundle["sessions"][0]["events"].append(copy.deepcopy(event))
+        self.bundle["coverage"].update(emitted_events=2, records_read=5)
+        self.write(self.bundle)
+        other = copy.deepcopy(self.bundle)
+        other["source_host"] = "beta"
+        for copied in other["sessions"][0]["events"]:
+            copied["source_ref"], copied["mirror_source_refs"] = copied["mirror_source_refs"][0], [copied["source_ref"]]
+        path = self.root / "beta.json"
+        path.write_text(json.dumps(other))
+        path.chmod(0o600)
+        self.hosts["beta"] = {**self.hosts["alpha"], "path": str(path)}
+        run = self.run_intake()
+        self.assertEqual(len(run["events"]), 2)
+        self.assertTrue(all(len(e["provenance"]) == 4 for e in run["events"].values()))
+        self.assertTrue(all(len(e["raw_sha256s"]) == 2 for e in run["events"].values()))
+
+    def test_closed_narratives_archive_contract_and_provenance_membership(self):
+        for index, mutate in enumerate((
+                lambda b: b["limitations"].append("private narrative"),
+                lambda b: b["truncation"].append("private narrative"),
+                lambda b: b["source_gaps"].append({"reason": "private narrative"}),
+                lambda b: b["sessions"][0].update(id="Please include this private transcript body"),
+                lambda b: b["archive_metadata"].update(rows_read=1),
+                lambda b: b["sessions"][0].update(archived_at=1788220801),
+                lambda b: b["sessions"][0]["events"][0]["source_ref"].update(relative_path="other.jsonl"),
+                lambda b: b["sessions"][0]["events"][0].update(mirror_source_refs=[{**b["sessions"][0]["events"][0]["source_ref"], "relative_path": "other.jsonl"}]),
+                lambda b: b["sessions"][0]["events"][0].update(call={"name": None, "timestamp": LOW, "before_window": True, "source_ref": {**b["sessions"][0]["events"][0]["source_ref"], "relative_path": "other.jsonl"}}))):
+            bundle = copy.deepcopy(self.bundle)
+            mutate(bundle)
+            self.write(bundle)
+            entry = self.run_intake("contract-" + str(index))["hosts"]["alpha"]
+            self.assertEqual(entry["status"], "invalid_or_denied")
+            self.assertNotIn("bundle", entry)
 
     def test_denial_symlink_fifo_and_modes(self):
         for name, setup in (("missing", lambda p: None), ("symlink", lambda p: p.symlink_to(self.path)),

@@ -15,6 +15,27 @@ MAX_INPUT = 8 * 1024 * 1024
 MAX_LEDGER = 32 * 1024 * 1024
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z")
 HEX = re.compile(r"[a-f0-9]{64}\Z")
+# Closed vocabulary of the paired collector v2 contract, not arbitrary narratives.
+LIMITATIONS = {
+    "bounded rescan; no persistent incremental offsets or checkpoint acknowledgment",
+    "archive metadata database not integrated; window selects record activity only",
+    "archive state is a current snapshot, not full archive/unarchive history; stale snapshot freshness cannot be proven",
+    "signals are candidates; authority and outcome require contextual review",
+    "unsupported record kinds are counted, not interpreted",
+}
+TRUNCATIONS = set("max_directory_entries remaining_roots max_files max_bytes max_scan_records max_sessions max_events max_pending_calls".split())
+GAPS = set("""directory_depth_limit directory_unreadable symlink_skipped entry_unreadable
+root_missing_or_not_directory path_outside_root oversized_record_file_stopped
+incomplete_trailing_record malformed_record invalid_session_metadata session_identity_changed
+unknown_session_source missing_session_metadata record_decode_failed event_timestamp_missing_or_invalid
+file_unreadable archive_selected_rollout_not_reached_in_bounded_scan archive_database_rollout_identity_mismatch
+archive_database_outside_allowed_roots archive_database_requires_quiescent_snapshot archive_database_byte_limit
+archive_database_changed_during_snapshot archive_database_unsupported_schema archive_database_row_limit
+archive_database_invalid_or_duplicate_identity archive_database_invalid_archived_flag
+archive_database_unarchived_timestamp_inconsistent archive_database_missing_or_invalid_archive_time
+archive_database_archive_time_after_window archive_database_invalid_rollout_path
+archive_database_rollout_outside_allowed_roots archive_database_rollout_missing_or_unsafe
+archive_snapshot_freshness_unverified archive_database_unreadable_invalid_or_query_limit""".split())
 
 
 def encode(value):
@@ -160,6 +181,8 @@ def validate(bundle, host, expected):
         raise ValueError("Invalid roots")
     strings(bundle["limitations"])
     strings(bundle["truncation"])
+    if not set(bundle["limitations"]) <= LIMITATIONS or not set(bundle["truncation"]) <= TRUNCATIONS:
+        raise ValueError("Unknown collector narrative")
     limits = set("max_files max_scan_records max_bytes max_line_bytes max_events max_sessions max_pending_calls max_directory_entries max_archive_bytes max_archive_rows max_archive_query_steps".split())
     if not isinstance(bundle["limits"], dict) or set(bundle["limits"]) != limits or any(type(v) is not int or v <= 0 for v in bundle["limits"].values()):
         raise ValueError("Invalid collector limits")
@@ -167,9 +190,11 @@ def validate(bundle, host, expected):
     fields(archive, "status rows_read selected_rollouts")
     if archive.get("status") not in ("disabled", "unavailable", "snapshot_read") or any(type(archive.get(k)) is not int or archive[k] < 0 for k in ("rows_read", "selected_rollouts")):
         raise ValueError("Invalid archive metadata")
+    if archive["status"] == "disabled" and (archive["rows_read"] or archive["selected_rollouts"]):
+        raise ValueError("Disabled archive has activity")
     for gap in bundle["source_gaps"]:
         fields(gap, "reason root_index relative_path")
-        if not isinstance(gap.get("reason"), str):
+        if not isinstance(gap.get("reason"), str) or gap["reason"] not in GAPS:
             raise ValueError("Invalid source gap")
         if gap.get("relative_path") is not None and not isinstance(gap["relative_path"], str):
             raise ValueError("Invalid source gap path")
@@ -195,6 +220,7 @@ def validate(bundle, host, expected):
         sid = session["id"]
         if not isinstance(sid, str) or not sid or sid in seen or not isinstance(session["events"], list):
             raise ValueError("Invalid session")
+        metadata_label(sid)
         seen.add(sid)
         if session.get("source_class") not in ("primary", "subagent", "unknown", "approval_sidecar"):
             raise ValueError("Invalid source class")
@@ -202,8 +228,15 @@ def validate(bundle, host, expected):
             raise ValueError("Invalid session provenance")
         for source in session["source_files"]:
             source_file(source, len(bundle["roots"]))
+        files = {(source["root_index"], source["relative_path"]) for source in session["source_files"]}
+        def session_reference(ref):
+            reference(ref, len(bundle["roots"]))
+            if (ref["root_index"], ref["relative_path"]) not in files:
+                raise ValueError("Reference outside session provenance")
         if "archived_at" in session and type(session["archived_at"]) is not int:
             raise ValueError("Invalid archive timestamp")
+        if "archived_at" in session and archive["status"] != "snapshot_read":
+            raise ValueError("Archive selection requires snapshot metadata")
         for event in session["events"]:
             total += 1
             fields(event, "kind name status signals timestamp source_ref mirror_source_refs correlation_id pairing selection_reasons call")
@@ -241,22 +274,24 @@ def validate(bundle, host, expected):
             if "record_activity_in_window" in reasons and not expected["after"] < when <= expected["through"]:
                 raise ValueError("Event outside window")
             if "session_archived_in_window" in reasons:
+                if archive["status"] != "snapshot_read":
+                    raise ValueError("Archive event requires snapshot metadata")
                 archived_at = session.get("archived_at")
                 if type(archived_at) is not int or not 0 < archived_at <= 253402300799:
                     raise ValueError("Invalid archive timestamp")
                 archived_when = dt.datetime.fromtimestamp(archived_at, dt.timezone.utc).isoformat()
                 if not expected["after"] < archived_when <= expected["through"]:
                     raise ValueError("Archive selection outside window")
-            reference(event["source_ref"], len(bundle["roots"]))
+            session_reference(event["source_ref"])
             for ref in event.get("mirror_source_refs", []):
-                reference(ref, len(bundle["roots"]))
+                session_reference(ref)
             if "call" in event:
                 fields(event["call"], "name timestamp source_ref before_window")
                 metadata_label(event["call"].get("name"))
                 stamp(event["call"]["timestamp"])
                 if type(event["call"].get("before_window")) is not bool:
                     raise ValueError("Invalid call window marker")
-                reference(event["call"]["source_ref"], len(bundle["roots"]))
+                session_reference(event["call"]["source_ref"])
     if coverage["sessions_included"] != len(seen) or coverage["emitted_events"] != total:
         raise ValueError("Coverage counts disagree with input")
     errors = any(coverage.get(k, 0) for k in ("malformed_records", "incomplete_trailing_records", "pending_calls_evicted"))
@@ -340,10 +375,10 @@ def intake(state, run_id, hosts):
             for session in bundle["sessions"]:
                 occurrences = {}
                 for event in session["events"]:
-                    sha = event["source_ref"]["sha256"]
-                    occurrences[sha] = occurrences.get(sha, 0) + 1
-                    identity = digest([session["id"], sha, occurrences[sha]])
-                    record = result["events"].setdefault(identity, {"session": session["id"], "raw_sha256": sha, "occurrence": occurrences[sha], "provenance": []})
+                    hashes = tuple(sorted({ref["sha256"] for ref in [event["source_ref"], *event.get("mirror_source_refs", [])]}))
+                    occurrences[hashes] = occurrences.get(hashes, 0) + 1
+                    identity = digest([session["id"], hashes, occurrences[hashes]])
+                    record = result["events"].setdefault(identity, {"session": session["id"], "raw_sha256s": list(hashes), "occurrence": occurrences[hashes], "provenance": []})
                     refs = [("primary", event["source_ref"])] + [("mirror", ref) for ref in event.get("mirror_source_refs", [])]
                     for role, ref in refs:
                         record["provenance"].append({"host": host, "source_ref": ref, "role": role,

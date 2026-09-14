@@ -79,6 +79,60 @@ class IntakeBoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             intake.acknowledge(state, "sample", result["digest"], "alpha", bundle["window"]["after"])
 
+    def test_collector_narratives_cannot_persist_transcript_text(self):
+        state, original = self.prepare()
+        for key in ("limitations", "truncation"):
+            with self.subTest(key=key):
+                bundle = copy.deepcopy(original)
+                bundle[key] = ["SYNTHETIC UNEXPECTED PRIVATE TRANSCRIPT"]
+                result = self.submit(state, bundle, run=key)
+                self.assertFalse(result["hosts"]["alpha"]["eligible"])
+                self.assertNotIn(b"SYNTHETIC UNEXPECTED PRIVATE TRANSCRIPT", intake.read_private(state / "ledger.json"))
+
+    def test_disabled_archive_cannot_select_pre_window_event(self):
+        state, bundle = self.prepare()
+        session = bundle["sessions"][0]
+        session["archived_at"] = int(fixtures.UPPER.timestamp())
+        session["events"][0].update(timestamp=fixtures.OLD, selection_reasons=["session_archived_in_window"])
+        result = self.submit(state, bundle)
+        self.assertFalse(result["hosts"]["alpha"]["eligible"])
+
+    def test_reference_paths_must_belong_to_session(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.item("function_call", name="exec_command", call_id="one"),
+                    fixtures.item("function_call_output", call_id="one", output="exit code 0")])
+        original = self.collect(source_host="alpha")
+        for kind in ("primary", "mirror", "call"):
+            with self.subTest(kind=kind):
+                bundle = copy.deepcopy(original)
+                event = next(e for e in bundle["sessions"][0]["events"] if e["kind"] == "tool_result")
+                bad = {**event["source_ref"], "relative_path": "unrelated.jsonl"}
+                if kind == "primary":
+                    event["source_ref"] = bad
+                elif kind == "mirror":
+                    event["mirror_source_refs"] = [bad]
+                else:
+                    event["call"]["source_ref"] = bad
+                result = self.submit(state, bundle, run=kind)
+                self.assertFalse(result["hosts"]["alpha"]["eligible"])
+
+    def test_real_opposite_discovery_orders_merge_mirrored_event(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.user("same")])
+        self.write([fixtures.meta(), {"type": "event_msg", "timestamp": fixtures.NOW,
+                    "payload": {"type": "user_message", "message": "same"}}], directory=self.archive)
+        manifests = {}
+        for host, roots in (("alpha", [self.active, self.archive]), ("beta", [self.archive, self.active])):
+            bundle = fixtures.scanner.collect(roots, fixtures.LOWER, fixtures.UPPER, source_host=host)
+            path = self.root / (host + ".json")
+            fixtures.scanner._write_private(path, bundle)
+            manifests[host] = {"status": "available", "window": bundle["window"], "path": str(path)}
+        result = intake.intake(state, "mirrored", manifests)
+        self.assertEqual(len(result["events"]), 1)
+        provenance = next(iter(result["events"].values()))["provenance"]
+        self.assertEqual({ref["host"] for ref in provenance}, {"alpha", "beta"})
+        self.assertEqual(len(provenance), 4)
+
     def test_missing_root_preserves_other_root_evidence(self):
         state, _ = self.prepare()
         original = fixtures.scanner.os.scandir
