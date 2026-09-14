@@ -21,7 +21,7 @@ from typing import Any
 CALLS = {"function_call", "custom_tool_call", "tool_call"}
 RESULTS = {"function_call_output", "custom_tool_call_output", "tool_result"}
 SIDECARS = {"guardian", "approval", "approval_reviewer", "authorization", "sidecar"}
-CORRECTION = re.compile(r"\b(?:no(?=[,\s.!])|not that|incorrect|wrong|correction|actually|instead|already approved|asked me again)\b", re.I)
+CORRECTION = re.compile(r"\b(?:no(?=$|[,\s.!?:;])|not that|incorrect|wrong|correction|actually|instead|already approved|asked me again)\b", re.I)
 FRICTION = re.compile(r"\b(?:retry|retried|failed|failure|error|timeout|workaround|denied)\b", re.I)
 DENIAL = re.compile(r"\b(?:permission denied|not permitted|approval required|authorization required|denied)\b", re.I)
 EXIT = re.compile(r"(?:exit(?:ed)?(?: with)?(?: code)?|Process exited with code)\s*[:=]?\s*(-?\d+)", re.I)

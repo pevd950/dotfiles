@@ -15,6 +15,14 @@ class BoundaryTests(unittest.TestCase):
     collect = fixtures.ScannerTests.collect
     events = fixtures.ScannerTests.events
 
+    def test_no_correction_boundaries(self):
+        for text in ("No", "no", "NO", "No?", "No:", "No;", "No,", "No.", "No!", "No thanks"):
+            with self.subTest(text=text):
+                self.assertIn("correction_candidate", scanner._event(user(text))[0]["signals"])
+        for text in ("Nobody", "Nothing", "Nope", "Normal", "Noted"):
+            with self.subTest(text=text):
+                self.assertNotIn("correction_candidate", scanner._event(user(text))[0]["signals"])
+
     def test_complete_final_record_without_newline_is_collected_and_readable(self):
         for directory in (self.active, self.archive):
             with self.subTest(directory=directory.name):
