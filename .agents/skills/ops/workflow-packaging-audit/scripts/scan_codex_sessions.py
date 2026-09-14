@@ -1,174 +1,467 @@
 #!/usr/bin/env python3
-"""Collect privacy-safe structural evidence from Codex session JSONL files.
+"""Bounded metadata-only Codex index; opt-in detail remains private.
 
-The collector is deliberately metadata-first: full prompts, arguments, and
-tool output are never emitted by default.  It accepts both active and archived
-roots and tolerates interrupted JSONL writes.
+This is a bounded rescan, not a durable incremental collector. Do not advance
+an audit checkpoint until source gaps, limits and unreviewed evidence are resolved.
 """
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 import datetime as dt
 import hashlib
 import json
-import re
+import os
 from pathlib import Path
-from typing import Any, Iterator
+import re
+import stat
+import tempfile
+from typing import Any
 
-TOOL_KEYS = {"tool_call", "custom_tool_call", "tool_result", "custom_tool_call_output"}
-SIDE_RE = re.compile(r"guardian|approval|authorize|sidecar", re.I)
-REPLAY_RE = re.compile(r"quoted evidence|replayed context|replay", re.I)
-SECRET_RE = re.compile(r"(sk-[A-Za-z0-9_-]+|gh[pousr]_[A-Za-z0-9_]+|Bearer\s+\S+|password\s*[:=]\s*\S+|secret\s*[:=]\s*\S+)", re.I)
-CORRECTION_RE = re.compile(r"\b(no[, ]|not that|incorrect|wrong|correction|actually|instead)\b", re.I)
-FRICTION_RE = re.compile(r"\b(retr(y|ied)|retry|failed|failure|error|timeout|workaround|wrong outcome|denied)\b", re.I)
+CALLS = {"function_call", "custom_tool_call", "tool_call"}
+RESULTS = {"function_call_output", "custom_tool_call_output", "tool_result"}
+SIDECARS = {"guardian", "approval", "approval_reviewer", "authorization", "sidecar"}
+CORRECTION = re.compile(r"\b(?:no(?=[,\s.!])|not that|incorrect|wrong|correction|actually|instead|already approved|asked me again)\b", re.I)
+FRICTION = re.compile(r"\b(?:retry|retried|failed|failure|error|timeout|workaround|denied)\b", re.I)
+DENIAL = re.compile(r"\b(?:permission denied|not permitted|approval required|authorization required|denied)\b", re.I)
+EXIT = re.compile(r"(?:exit(?:ed)?(?: with)?(?: code)?|Process exited with code)\s*[:=]?\s*(-?\d+)", re.I)
+# Defense in depth for opt-in detail, not publication clearance for private prose.
+SECRET = re.compile(r"\b(?:sk-[\w-]+|gh[pousr]_[\w]+|Bearer\s+\S+)|\b(?:password|secret|token|api[_-]?key)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)", re.I)
+URL = re.compile(r"(?:https?://|craftdocs://|op://)\S+", re.I)
+EMAIL = re.compile(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b")
+PRIVATE_KEY = re.compile(r"-----BEGIN [^-]*PRIVATE KEY-----.*?(?:-----END [^-]*PRIVATE KEY-----|\Z)", re.S)
+
+
+def _hash(value: str | bytes) -> str:
+    return hashlib.sha256(value.encode() if isinstance(value, str) else value).hexdigest()
 
 
 def _time(value: Any) -> dt.datetime | None:
-    if isinstance(value, (int, float)):
-        return dt.datetime.fromtimestamp(value, dt.timezone.utc)
-    if isinstance(value, str):
-        try:
-            return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
+    try:
+        if isinstance(value, str):
+            parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed.astimezone(dt.timezone.utc) if parsed.tzinfo else None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return dt.datetime.fromtimestamp(value, dt.timezone.utc)
+    except (ValueError, OverflowError, OSError):
+        pass
     return None
 
 
-def _walk(value: Any) -> Iterator[dict[str, Any]]:
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from _walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk(child)
-
-
-def _session_id(path: Path, records: list[dict[str, Any]]) -> str:
-    for record in records:
-        for key in ("session_id", "conversation_id", "thread_id", "id"):
-            if isinstance(record.get(key), str) and record[key]:
-                return record[key]
-    return path.stem
-
-
-def _record_time(record: dict[str, Any]) -> dt.datetime | None:
-    for key in ("timestamp", "created_at", "updated_at", "time"):
-        if key in record and (parsed := _time(record[key])):
-            return parsed
-    return None
-
-
-def _safe_text(value: Any, limit: int = 240) -> str | None:
+def _label(value: Any) -> str | None:
     if not isinstance(value, str):
         return None
-    value = SECRET_RE.sub("[REDACTED]", value)
-    return value[:limit] + ("…" if len(value) > limit else "")
+    if re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value) and not SECRET.search(value):
+        return value
+    return "opaque:" + _hash(value)[:20]
+
+
+def _source_class(source: Any) -> str:
+    """Inspect only source discriminants, never prompts or tool output."""
+    tags: set[str] = set()
+    def visit(value: Any, depth: int = 0) -> None:
+        if depth > 8:
+            return
+        if isinstance(value, str):
+            tags.add(value.lower())
+        elif isinstance(value, dict):
+            tags.update(str(key).lower() for key in value)
+            for child in value.values():
+                if isinstance(child, (dict, str)):
+                    visit(child, depth + 1)
+    visit(source)
+    if tags & SIDECARS:
+        return "approval_sidecar"
+    if "subagent" in tags or "spawn" in tags:
+        return "subagent"
+    return "primary" if tags & {"cli", "vscode", "exec", "app_server", "app-server"} else "unknown"
+
+
+def _text(item: dict[str, Any]) -> str:
+    value = item.get("content", item.get("text", item.get("message", item.get("output", ""))))
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(part["text"] for part in value if isinstance(part, dict) and isinstance(part.get("text"), str))
+    if isinstance(value, dict):
+        return _text(value)
+    return ""
+
+
+def _tool_output(item: dict[str, Any]) -> dict[str, Any]:
+    value = item.get("output")
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (ValueError, RecursionError):
+            pass
+    return value if isinstance(value, dict) else item
+
+
+def _event(record: dict[str, Any]) -> tuple[dict[str, Any], Any] | None:
+    """Decode supported envelopes once; embedded/replayed JSON is never walked."""
+    item = record.get("payload") if record.get("type") in ("response_item", "event_msg") else record
+    if not isinstance(item, dict):
+        return None
+    kind = item.get("type")
+    if not isinstance(kind, str):
+        return None
+    if kind in CALLS:
+        return {"kind": "tool_call", "name": _label(item.get("name", item.get("tool")))}, item.get("call_id", item.get("id"))
+    if kind in RESULTS:
+        structured = _tool_output(item)
+        status: dict[str, Any] = {}
+        exit_code = structured.get("exit_code")
+        if isinstance(exit_code, int) and not isinstance(exit_code, bool):
+            status["exit_code"] = exit_code
+        elif match := EXIT.search(_text(structured)):
+            status["exit_code"] = int(match.group(1))
+            status["exit_code_source"] = "output_text_candidate"
+        if isinstance(structured.get("isError"), bool):
+            status["is_error"] = structured["isError"]
+        signals = [name for name, regex in (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)) if regex.search(_text(structured))]
+        return {"kind": "tool_result", "status": status, "signals": signals}, item.get("call_id")
+    role = item.get("role") if kind == "message" else {"user_message": "user", "agent_message": "assistant"}.get(kind)
+    if role in ("user", "assistant"):
+        text = _text(item)
+        signals = ["correction_candidate"] if role == "user" and CORRECTION.search(text) else []
+        if FRICTION.search(text):
+            signals.append("friction_candidate")
+        return {"kind": role + "_message", "signals": signals}, None
+    return None
+
+
+def _open_source(root: Path, relative: str):
+    """Open a regular file below root without following any symlink component."""
+    parts = Path(relative).parts
+    if not parts or Path(relative).is_absolute() or ".." in parts:
+        raise ValueError("Invalid relative source path")
+    directory_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in parts[:-1]:
+            child_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory_fd)
+            os.close(directory_fd)
+            directory_fd = child_fd
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            os.close(fd)
+            raise ValueError("Source must be a regular file")
+        return os.fdopen(fd, "rb")
+    finally:
+        os.close(directory_fd)
 
 
 def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             upper_bound: dt.datetime | None = None, exclude: set[str] | None = None,
-            max_sessions: int = 500, max_records: int = 5000,
-            detail: bool = False) -> dict[str, Any]:
+            *, source_host: str = "local", max_files: int = 1000,
+            max_scan_records: int = 100000, max_bytes: int = 64 * 1024 * 1024,
+            max_line_bytes: int = 1024 * 1024, max_events: int = 5000,
+            max_sessions: int = 500, max_pending_calls: int = 5000,
+            max_directory_entries: int = 10000) -> dict[str, Any]:
+    limits = dict(max_files=max_files, max_scan_records=max_scan_records, max_bytes=max_bytes,
+                  max_line_bytes=max_line_bytes, max_events=max_events, max_sessions=max_sessions,
+                  max_pending_calls=max_pending_calls, max_directory_entries=max_directory_entries)
+    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in limits.values()):
+        raise ValueError("All limits must be positive integers")
+    if any(boundary is not None and boundary.tzinfo is None for boundary in (checkpoint, upper_bound)):
+        raise ValueError("Window boundaries require an explicit timezone")
+    if checkpoint and upper_bound and checkpoint >= upper_bound:
+        raise ValueError("Checkpoint must precede upper bound")
     exclude = exclude or set()
-    candidates: dict[str, tuple[Path, list[dict[str, Any]], int]] = {}
-    malformed = 0
-    for root in source_roots:
-        if not root.exists():
-            continue
-        for path in sorted(root.rglob("*.jsonl")):
-            records: list[dict[str, Any]] = []
-            try:
-                with path.open(encoding="utf-8") as handle:
-                    for line in handle:
-                        try:
-                            item = json.loads(line)
-                            if isinstance(item, dict):
-                                records.append(item)
-                        except json.JSONDecodeError:
-                            malformed += 1
-            except OSError:
-                continue
-            if not records:
-                continue
-            sid = _session_id(path, records)
-            # Archive moves and resumed sessions naturally coalesce by ID.
-            old = candidates.get(sid)
-            candidates[sid] = (path, (old[1] if old else []) + records, len(records))
+    counts = dict(files_discovered=0, files_read=0, directory_entries=0, bytes_read=0,
+                  records_read=0, malformed_records=0, incomplete_trailing_records=0,
+                  duplicate_records=0, untimestamped_events=0, out_of_window_events=0,
+                  excluded_session_files=0, excluded_sidecar_files=0, unsupported_records=0,
+                  emitted_events=0, pending_calls_evicted=0)
+    gaps: list[dict[str, Any]] = []
+    truncated: set[str] = set()
+    seen_records: set[tuple[str, str]] = set()
+    sessions: dict[str, dict[str, Any]] = {}
+    source_files: dict[str, list[dict[str, Any]]] = {}
+    calls: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
+    unresolved: list[tuple[dict[str, Any], tuple[str, str]]] = []
+    stop = False
 
-    sessions = []
-    coverage = {"sessions_seen": len(candidates), "sessions_included": 0,
-                "records_scanned": 0, "tool_events": 0, "malformed_lines": malformed,
-                "excluded_sidecars": 0, "excluded_replay": 0, "excluded_sessions": 0}
-    for sid, (path, records, _) in sorted(candidates.items()):
-        if sid in exclude:
-            coverage["excluded_sessions"] += 1
+    def gap(reason: str, root_index: int, relative_path: str | None = None) -> None:
+        # Exception strings may contain source text, credentials or private paths.
+        gaps.append({"reason": reason, "root_index": root_index, "relative_path": relative_path})
+
+    def files(root: Path, index: int, directory: Path | None = None, depth: int = 0):
+        directory = directory or root
+        if depth > 64:
+            gap("directory_depth_limit", index)
+            return
+        entries = []
+        try:
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    if counts["directory_entries"] >= max_directory_entries:
+                        truncated.add("max_directory_entries")
+                        break
+                    counts["directory_entries"] += 1
+                    entries.append(entry)
+        except OSError:
+            gap("directory_unreadable", index, str(directory.relative_to(root)))
+            return
+        for entry in sorted(entries, key=lambda entry: entry.name):
+            path = Path(entry.path)
+            try:
+                if entry.is_symlink():
+                    gap("symlink_skipped", index, str(path.relative_to(root)))
+                elif entry.is_dir(follow_symlinks=False):
+                    yield from files(root, index, path, depth + 1)
+                elif entry.is_file(follow_symlinks=False) and path.suffix == ".jsonl":
+                    yield path
+            except OSError:
+                gap("entry_unreadable", index, str(path.relative_to(root)))
+
+    for root_index, requested_root in enumerate(source_roots):
+        root = requested_root.resolve()
+        if not root.is_dir():
+            gap("root_missing_or_not_directory", root_index)
             continue
-        if SIDE_RE.search(str(path)) or SIDE_RE.search(sid):
-            coverage["excluded_sidecars"] += 1
-            continue
-        events = []
-        for record in records:
-            when = _record_time(record)
-            if checkpoint and when and when <= checkpoint:
-                continue
-            if upper_bound and when and when > upper_bound:
-                continue
-            if REPLAY_RE.search(json.dumps(record, ensure_ascii=False)):
-                coverage["excluded_replay"] += 1
-                continue
-            for item in _walk(record):
-                kind = item.get("type") or item.get("record_type")
-                role = item.get("role")
-                text = item.get("text") or item.get("content") or item.get("message")
-                semantic = isinstance(text, str) and (role in {"user", "assistant"} or CORRECTION_RE.search(text) or FRICTION_RE.search(text))
-                if kind in TOOL_KEYS or any(key in item for key in TOOL_KEYS) or semantic:
-                    name = item.get("name") or item.get("tool") or item.get("function")
-                    event = {"kind": kind or "tool_event", "name": str(name) if name else None,
-                             "timestamp": when.isoformat() if when else None}
-                    if semantic:
-                        event["kind"] = "user_message" if role == "user" else "workflow_note"
-                        event["categories"] = (["user_correction"] if CORRECTION_RE.search(text) else []) + (["tool_friction"] if FRICTION_RE.search(text) else [])
-                        event["preview"] = _safe_text(text)
-                    elif kind in {"tool_result", "custom_tool_call_output"}:
-                        event["categories"] = ["tool_friction"] if FRICTION_RE.search(json.dumps(item, default=str)) else []
-                        event["preview"] = _safe_text(text)
-                    if detail:
-                        event["record_hash"] = hashlib.sha256(
-                            json.dumps(item, sort_keys=True, default=str).encode()).hexdigest()[:16]
-                    events.append(event)
-        if not events:
-            continue
-        coverage["sessions_included"] += 1
-        coverage["records_scanned"] += len(records)
-        coverage["tool_events"] += len(events)
-        sessions.append({"id": sid, "source": str(path.parent), "events": events[:max_records]})
-        if len(sessions) >= max_sessions:
+        if stop:
+            truncated.add("remaining_roots")
             break
-    return {"schema": "codex-evidence-index.v1", "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "provenance": {"roots": [str(root) for root in source_roots], "checkpoint": checkpoint.isoformat() if checkpoint else None,
-                           "upper_bound": upper_bound.isoformat() if upper_bound else None},
-            "coverage": coverage, "sessions": sessions}
+        for path in files(root, root_index):
+            if counts["files_discovered"] >= max_files:
+                truncated.add("max_files"); stop = True; break
+            counts["files_discovered"] += 1
+            relative = str(path.relative_to(root))
+            sid = None
+            source_class = "unknown"
+            try:
+                if not path.resolve().is_relative_to(root):
+                    gap("path_outside_root", root_index, relative); continue
+                with _open_source(root, relative) as handle:
+                    counts["files_read"] += 1
+                    while True:
+                        remaining = max_bytes - counts["bytes_read"]
+                        if remaining <= 0 or counts["records_read"] >= max_scan_records:
+                            truncated.add("max_bytes" if remaining <= 0 else "max_scan_records")
+                            stop = True; break
+                        offset = handle.tell()
+                        raw = handle.readline(min(max_line_bytes + 1, remaining))
+                        if not raw:
+                            break
+                        counts["bytes_read"] += len(raw)
+                        if len(raw) > max_line_bytes:
+                            gap("oversized_record_file_stopped", root_index, relative)
+                            break
+                        if not raw.endswith(b"\n"):
+                            if len(raw) == remaining:
+                                truncated.add("max_bytes"); stop = True
+                            else:
+                                counts["incomplete_trailing_records"] += 1
+                                gap("incomplete_trailing_record", root_index, relative)
+                            break
+                        counts["records_read"] += 1
+                        try:
+                            record = json.loads(raw)
+                        except (ValueError, UnicodeDecodeError, RecursionError):
+                            counts["malformed_records"] += 1
+                            gap("malformed_record", root_index, relative)
+                            continue
+                        if not isinstance(record, dict):
+                            counts["unsupported_records"] += 1; continue
+                        if record.get("type") == "session_meta":
+                            meta = record.get("payload")
+                            if not isinstance(meta, dict) or not isinstance(meta.get("id"), str):
+                                gap("invalid_session_metadata", root_index, relative); break
+                            if sid is not None and sid != meta["id"]:
+                                gap("session_identity_changed", root_index, relative); break
+                            sid = meta["id"]
+                            source_class = _source_class(meta.get("source"))
+                            if sid in exclude:
+                                counts["excluded_session_files"] += 1; break
+                            if source_class == "approval_sidecar":
+                                counts["excluded_sidecar_files"] += 1; break
+                            if source_class == "unknown":
+                                gap("unknown_session_source", root_index, relative)
+                            provenance = {"root_index": root_index, "relative_path": relative}
+                            if provenance not in source_files.setdefault(sid, []):
+                                source_files[sid].append(provenance)
+                            continue
+                        if sid is None:
+                            gap("missing_session_metadata", root_index, relative); break
+                        canonical_hash = _hash(json.dumps(record, sort_keys=True, separators=(",", ":")))
+                        identity = (sid, canonical_hash)
+                        if identity in seen_records:
+                            counts["duplicate_records"] += 1; continue
+                        seen_records.add(identity)
+                        decoded = _event(record)
+                        if decoded is None:
+                            counts["unsupported_records"] += 1; continue
+                        event, call_id = decoded
+                        when = _time(record.get("timestamp"))
+                        if when is None:
+                            counts["untimestamped_events"] += 1
+                            gap("event_timestamp_missing_or_invalid", root_index, relative); continue
+                        if upper_bound and when > upper_bound:
+                            counts["out_of_window_events"] += 1; continue
+                        ref = {"root_index": root_index, "relative_path": relative,
+                               "byte_offset": offset, "byte_length": len(raw), "sha256": _hash(raw)}
+                        event.update(timestamp=when.isoformat(), source_ref=ref)
+                        pair_key = (sid, call_id) if isinstance(call_id, str) else None
+                        prior = bool(checkpoint and when <= checkpoint)
+                        if pair_key and event["kind"] == "tool_call":
+                            calls[pair_key] = {"name": event["name"], "timestamp": event["timestamp"],
+                                               "source_ref": ref, "before_window": prior}
+                            calls.move_to_end(pair_key)
+                            if len(calls) > max_pending_calls:
+                                calls.popitem(last=False)
+                                counts["pending_calls_evicted"] += 1
+                        if prior:
+                            counts["out_of_window_events"] += 1; continue
+                        if len(sessions) >= max_sessions and sid not in sessions:
+                            truncated.add("max_sessions"); stop = True; break
+                        if counts["emitted_events"] >= max_events:
+                            truncated.add("max_events"); stop = True; break
+                        if pair_key:
+                            event["correlation_id"] = _hash(source_host + "\0" + sid + "\0" + call_id)
+                        if event["kind"] == "tool_result":
+                            if pair_key in calls:
+                                event["call"] = calls[pair_key]
+                            elif pair_key:
+                                unresolved.append((event, pair_key))
+                            else:
+                                event["pairing"] = "missing_call_id"
+                        session = sessions.setdefault(sid, {"id": _label(sid), "source_class": source_class, "events": []})
+                        session["events"].append(event)
+                        counts["emitted_events"] += 1
+            except (OSError, ValueError):
+                gap("file_unreadable", root_index, relative)
+            if stop:
+                break
+    for event, key in unresolved:
+        if key in calls:
+            event["call"] = calls[key]
+        else:
+            event["pairing"] = "call_not_found_in_bounded_scan"
+    if counts["pending_calls_evicted"]:
+        truncated.add("max_pending_calls")
+    counts["sessions_included"] = len(sessions)
+    for sid, session in sessions.items():
+        session["source_files"] = source_files[sid]
+    return {"schema": "codex-evidence-index.v2", "source_host": _label(source_host),
+            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "window": {"after": checkpoint.isoformat() if checkpoint else None, "through": upper_bound.isoformat() if upper_bound else None},
+            "roots": [str(root.resolve()) for root in source_roots], "limits": limits,
+            "coverage": counts, "source_gaps": gaps, "truncation": sorted(truncated),
+            "complete_within_supported_scope": not gaps and not truncated,
+            "limitations": ["bounded rescan; no persistent incremental offsets or checkpoint acknowledgment",
+                            "archive metadata database not integrated; window selects record activity only",
+                            "signals are candidates; authority and outcome require contextual review",
+                            "unsupported record kinds are counted, not interpreted"],
+            "sessions": sorted(sessions.values(), key=lambda session: session["id"] or "")}
+
+
+def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 1024 * 1024,
+           max_chars: int = 4000) -> dict[str, Any]:
+    """Read exactly one hash-bound reference under an approved root, without scanning."""
+    if not 1 <= max_bytes <= 1024 * 1024 or not 1 <= max_chars <= 16000:
+        raise ValueError("Detail limits exceed allowed bounds")
+    index, offset, length = (ref.get(key) for key in ("root_index", "byte_offset", "byte_length"))
+    if any(not isinstance(value, int) or isinstance(value, bool) for value in (index, offset, length)):
+        raise ValueError("Invalid source reference")
+    if not 0 <= index < len(source_roots) or offset < 0 or not 0 < length <= max_bytes:
+        raise ValueError("Source reference exceeds bounds")
+    relative = ref.get("relative_path")
+    if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
+        raise ValueError("Source reference must be relative to an approved root")
+    root = source_roots[index].resolve()
+    path = root / relative
+    if not path.resolve().is_relative_to(root) or path.suffix != ".jsonl":
+        raise ValueError("Source reference outside approved roots")
+    if any(part.is_symlink() for part in [path, *list(path.parents)[:len(Path(relative).parts) - 1]]):
+        raise ValueError("Symlink source references are not supported")
+    with _open_source(root, relative) as handle:
+        if offset:
+            handle.seek(offset - 1)
+            if handle.read(1) != b"\n":
+                raise ValueError("Reference does not start at a record boundary")
+        handle.seek(offset)
+        raw = handle.read(length)
+    if len(raw) != length or not raw.endswith(b"\n") or raw.count(b"\n") != 1 or _hash(raw) != ref.get("sha256"):
+        raise ValueError("Source changed or reference is not one complete record")
+    record = json.loads(raw)
+    item = record.get("payload", record)
+    if not isinstance(item, dict):
+        raise ValueError("Unsupported detail record")
+    kind = item.get("type")
+    text = _text(_tool_output(item)) if kind in tuple(RESULTS) else _text(item)
+    if kind in tuple(CALLS):
+        value = item.get("arguments", item.get("input", ""))
+        text = value if isinstance(value, str) else json.dumps(value)
+    text = EMAIL.sub("[EMAIL]", URL.sub("[URL]", SECRET.sub("[REDACTED]", PRIVATE_KEY.sub("[PRIVATE KEY]", text))))
+    return {"source_ref": ref, "privacy": "private opt-in excerpt; heuristic redaction is not publication clearance",
+            "text": text[:max_chars], "truncated": len(text) > max_chars}
+
+
+def _positive(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return parsed
+
+
+def _boundary(value: str) -> dt.datetime:
+    parsed = _time(value)
+    if parsed is None:
+        raise argparse.ArgumentTypeError("requires an ISO timestamp with timezone")
+    return parsed
+
+
+def _write_private(path: Path, result: dict[str, Any]) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("Output and its directory must not be symlinks")
+    parent = path.parent.stat()
+    if parent.st_uid != os.getuid() or stat.S_IMODE(parent.st_mode) & 0o077:
+        raise ValueError("Output directory must be owned by this user with mode 0700")
+    fd, temporary = tempfile.mkstemp(prefix=".evidence-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(result, handle, indent=2)
+            handle.write("\n")
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", action="append", type=Path, required=True)
-    parser.add_argument("--checkpoint", type=dt.datetime.fromisoformat)
-    parser.add_argument("--upper-bound", type=dt.datetime.fromisoformat)
+    parser.add_argument("--source-host", required=True)
+    parser.add_argument("--checkpoint", type=_boundary)
+    parser.add_argument("--upper-bound", type=_boundary)
     parser.add_argument("--exclude-session", action="append", default=[])
-    parser.add_argument("--max-sessions", type=int, default=500)
-    parser.add_argument("--max-records", type=int, default=5000)
-    parser.add_argument("--detail", action="store_true", help="include bounded record hashes")
-    parser.add_argument("--authorized", action="store_true", help="explicitly authorize history access")
-    parser.add_argument("--output", type=Path, required=True)
+    for name, default in (("max-files", 1000), ("max-scan-records", 100000), ("max-bytes", 64 * 1024 * 1024),
+                          ("max-line-bytes", 1024 * 1024), ("max-events", 5000), ("max-sessions", 500),
+                          ("max-pending-calls", 5000), ("max-directory-entries", 10000)):
+        parser.add_argument("--" + name, type=_positive, default=default)
+    parser.add_argument("--detail-ref", type=Path, help="private JSON source_ref object; read only this record")
+    parser.add_argument("--detail-max-chars", type=_positive, default=4000)
+    parser.add_argument("--authorized", action="store_true")
+    parser.add_argument("--output", type=Path, required=True, help="private output; parent must have mode 0700")
     args = parser.parse_args()
     if not args.authorized:
-        parser.error("history scanning requires explicit --authorized invocation")
-    result = collect(args.source_root, args.checkpoint, args.upper_bound, set(args.exclude_session),
-                     args.max_sessions, args.max_records, args.detail)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        parser.error("history access requires explicit --authorized invocation")
+    try:
+        if args.detail_ref:
+            with args.detail_ref.open("rb") as handle:
+                raw_ref = handle.read(16385)
+            if len(raw_ref) > 16384:
+                raise ValueError("Detail reference exceeds bounds")
+            result = detail(args.source_root, json.loads(raw_ref), max_chars=args.detail_max_chars)
+        else:
+            names = ("max_files", "max_scan_records", "max_bytes", "max_line_bytes", "max_events", "max_sessions", "max_pending_calls", "max_directory_entries")
+            result = collect(args.source_root, args.checkpoint, args.upper_bound, set(args.exclude_session),
+                             source_host=args.source_host, **{name: getattr(args, name) for name in names})
+        _write_private(args.output, result)
+    except (ValueError, OSError, TypeError, RecursionError):
+        parser.exit(2, "Collector failed: invalid arguments, unsafe output, changed detail source, or inaccessible path.\n")
 
 
 if __name__ == "__main__":
