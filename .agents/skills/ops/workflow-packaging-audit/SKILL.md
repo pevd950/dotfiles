@@ -13,7 +13,7 @@ Order: recent Codex sessions and task summaries → Codex memories and rollout s
 
 Scan window: last 30 days by default, or all available history (say so). Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`; prefer structural JSONL reads over broad raw text search, pairing tool calls with tool outputs.
 
-For an explicitly authorized bounded session scan, use [the collector interface](references/collector.md). The collector is a partial implementation: it does not yet persist incremental offsets or integrate archive-transition metadata. Report these gaps and do not treat a limited scan as a complete audit.
+For an explicitly authorized bounded session scan, use [the collector interface](references/collector.md), including its optional archive-state snapshot adapter when database access is authorized. The adapter rejects live WAL databases; the collector does not yet persist incremental offsets or reconstruct full archive/unarchive history. Report these gaps and do not treat a limited scan as a complete audit.
 
 ## Candidate rules
 
