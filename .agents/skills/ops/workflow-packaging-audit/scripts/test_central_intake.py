@@ -123,8 +123,70 @@ class IntakeTests(unittest.TestCase):
 
     def test_null_tool_label_remains_supported(self):
         self.bundle["sessions"][0]["events"][0].update(kind="tool_call", name=None)
+        self.bundle["sessions"][0]["events"][0].pop("signals")
         self.write(self.bundle)
         self.assertTrue(self.run_intake()["hosts"]["alpha"]["eligible"])
+
+    def test_declared_budgets_prevent_ack_without_discarding_evidence(self):
+        for index, (counter, limit) in enumerate((("records_read", "max_scan_records"), ("bytes_read", "max_bytes"),
+                ("files_discovered", "max_files"), ("directory_entries", "max_directory_entries"),
+                ("emitted_events", "max_events"), ("sessions_included", "max_sessions"))):
+            bundle = copy.deepcopy(self.bundle)
+            if counter in ("emitted_events", "sessions_included"):
+                # All nonzero fixture counts are within positive minimum limits;
+                # duplicate complete sessions to create a genuine over-budget index.
+                extra = copy.deepcopy(bundle["sessions"][0])
+                extra["id"] = "second"
+                bundle["sessions"].append(extra)
+                bundle["coverage"].update(emitted_events=2, sessions_included=2)
+                bundle["limits"][limit] = 1
+            else:
+                bundle["coverage"][counter] = bundle["limits"][limit] + 1
+            self.write(bundle)
+            entry = self.run_intake("budget-" + str(index))["hosts"]["alpha"]
+            self.assertEqual(entry["status"], "partial")
+            self.assertIn("bundle", entry)
+
+    def test_result_shapes_and_call_timing(self):
+        event = self.bundle["sessions"][0]["events"][0]
+        event.update(kind="tool_result", status={"exit_code": 0}, pairing="missing_call_id")
+        self.write(self.bundle)
+        self.assertTrue(self.run_intake("missing-call")["hosts"]["alpha"]["eligible"])
+        event.pop("pairing")
+        event.update(correlation_id="a" * 64, call={"name": None, "timestamp": LOW, "before_window": True, "source_ref": copy.deepcopy(event["source_ref"])})
+        self.write(self.bundle)
+        self.assertTrue(self.run_intake("paired")["hosts"]["alpha"]["eligible"])
+        for index, mutate in enumerate((lambda e: e["call"].update(timestamp=NEXT),
+                lambda e: e["call"].update(before_window=False), lambda e: e.pop("status"),
+                lambda e: e.update(name="forbidden"), lambda e: e.update(kind="user_message"))):
+            bundle = copy.deepcopy(self.bundle)
+            mutate(bundle["sessions"][0]["events"][0])
+            self.write(bundle)
+            self.assertEqual(self.run_intake("shape-" + str(index))["hosts"]["alpha"]["status"], "invalid_or_denied")
+
+    def test_uncertain_directory_sync_is_retried_for_intake_and_ack(self):
+        original = intake.os.fsync
+        attempts = []
+        def fail_directory(fd):
+            import stat
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                attempts.append(fd)
+                raise OSError("synthetic directory sync failure")
+            return original(fd)
+        with patch.object(intake.os, "fsync", side_effect=fail_directory):
+            with self.assertRaises(OSError):
+                self.run_intake()
+            with self.assertRaises(OSError):
+                self.run_intake()
+        self.assertEqual(len(attempts), 2)
+        run = self.run_intake()
+        with patch.object(intake.os, "fsync", side_effect=fail_directory):
+            with self.assertRaises(OSError):
+                self.ack(run)
+            with self.assertRaises(OSError):
+                self.ack(run)
+        self.assertEqual(len(attempts), 4)
+        self.ack(run)
 
     def test_nonadvancing_generation_and_archive_status(self):
         for index, mutate in enumerate((

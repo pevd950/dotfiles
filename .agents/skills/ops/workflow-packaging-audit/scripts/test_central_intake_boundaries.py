@@ -1,5 +1,7 @@
 """Independent intake contract cases using synthetic collector output."""
 import copy
+import os
+import stat
 import subprocess
 import sys
 import unittest
@@ -78,6 +80,39 @@ class IntakeBoundaryTests(unittest.TestCase):
         self.assertFalse(result["hosts"]["alpha"]["eligible"])
         with self.assertRaises(ValueError):
             intake.acknowledge(state, "sample", result["digest"], "alpha", bundle["window"]["after"])
+
+    def test_same_run_retries_directory_sync_after_committed_error(self):
+        state, bundle = self.prepare()
+        real_sync = os.fsync
+
+        def fail_directory(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError("synthetic directory sync failure")
+            return real_sync(fd)
+
+        with patch.object(intake.os, "fsync", side_effect=fail_directory):
+            with self.assertRaises(OSError):
+                self.submit(state, bundle)
+            self.assertTrue((state / "ledger.json").exists())
+            with self.assertRaises(OSError):
+                self.submit(state, bundle)
+        self.assertTrue(self.submit(state, bundle)["hosts"]["alpha"]["eligible"])
+
+    def test_same_ack_retries_directory_sync_after_committed_error(self):
+        state, bundle = self.prepare()
+        run = self.submit(state, bundle)
+        real_sync = os.fsync
+
+        def fail_directory(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError("synthetic directory sync failure")
+            return real_sync(fd)
+
+        with patch.object(intake.os, "fsync", side_effect=fail_directory):
+            for attempt in range(2):
+                with self.subTest(attempt=attempt), self.assertRaises(OSError):
+                    intake.acknowledge(state, "sample", run["digest"], "alpha", bundle["window"]["after"])
+        intake.acknowledge(state, "sample", run["digest"], "alpha", bundle["window"]["after"])
 
     def test_collector_narratives_cannot_persist_transcript_text(self):
         state, original = self.prepare()

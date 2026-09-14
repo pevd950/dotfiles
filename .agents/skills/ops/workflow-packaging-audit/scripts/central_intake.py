@@ -207,6 +207,11 @@ def validate(bundle, host, expected):
     required = set("files_discovered files_read directory_entries bytes_read records_read malformed_records incomplete_trailing_records duplicate_records untimestamped_events out_of_window_events excluded_session_files excluded_sidecar_files unsupported_records emitted_events pending_calls_evicted sessions_included".split())
     if set(coverage) != required:
         raise ValueError("Unsupported coverage counters")
+    bounded = {"records_read": "max_scan_records", "bytes_read": "max_bytes",
+               "files_discovered": "max_files", "files_read": "max_files",
+               "directory_entries": "max_directory_entries", "sessions_included": "max_sessions",
+               "emitted_events": "max_events"}
+    within_limits = all(coverage[counter] <= bundle["limits"][limit] for counter, limit in bounded.items())
     if (coverage["records_read"] < coverage["emitted_events"]
             or coverage["files_read"] > coverage["files_discovered"]
             or coverage["sessions_included"] > coverage["emitted_events"]):
@@ -242,6 +247,21 @@ def validate(bundle, host, expected):
             fields(event, "kind name status signals timestamp source_ref mirror_source_refs correlation_id pairing selection_reasons call")
             if event.get("kind") not in ("tool_call", "tool_result", "user_message", "assistant_message"):
                 raise ValueError("Invalid event")
+            common = {"kind", "timestamp", "source_ref", "selection_reasons"}
+            required_fields, optional = {
+                "tool_call": ({"name"}, {"correlation_id"}),
+                "tool_result": ({"status", "signals"}, {"correlation_id", "call", "pairing"}),
+                "user_message": ({"signals"}, {"mirror_source_refs"}),
+                "assistant_message": ({"signals"}, {"mirror_source_refs"}),
+            }[event["kind"]]
+            if not common | required_fields <= set(event) or set(event) - common - required_fields - optional:
+                raise ValueError("Fields do not match event kind")
+            if event["kind"] == "tool_result":
+                if ("call" in event) == ("pairing" in event):
+                    raise ValueError("Result needs one pairing outcome")
+                needs_correlation = event.get("pairing") != "missing_call_id"
+                if needs_correlation != ("correlation_id" in event):
+                    raise ValueError("Result correlation does not match pairing")
             if "name" in event:
                 metadata_label(event["name"])
             for key in ("signals", "mirror_source_refs"):
@@ -288,9 +308,11 @@ def validate(bundle, host, expected):
             if "call" in event:
                 fields(event["call"], "name timestamp source_ref before_window")
                 metadata_label(event["call"].get("name"))
-                stamp(event["call"]["timestamp"])
+                call_when = stamp(event["call"]["timestamp"])
                 if type(event["call"].get("before_window")) is not bool:
                     raise ValueError("Invalid call window marker")
+                if call_when > when or event["call"]["before_window"] != (call_when <= expected["after"]):
+                    raise ValueError("Inconsistent paired call time")
                 session_reference(event["call"]["source_ref"])
     if coverage["sessions_included"] != len(seen) or coverage["emitted_events"] != total:
         raise ValueError("Coverage counts disagree with input")
@@ -298,7 +320,7 @@ def validate(bundle, host, expected):
     # Archive snapshots cannot prove freshness even if their gap was removed.
     return (bundle["complete_within_supported_scope"] and not bundle["source_gaps"]
             and not bundle["truncation"] and not errors and archive["status"] == "disabled"
-            and expected["through"] <= generated_at)
+            and expected["through"] <= generated_at and within_limits)
 
 
 def persist(fd, ledger):
@@ -388,6 +410,7 @@ def intake(state, run_id, hosts):
         if previous is not None:
             if previous != result:
                 raise ValueError("Run identity already binds different input; use a new run")
+            os.fsync(fd)
             return result
         ledger["runs"][run_id] = result
         persist(fd, ledger)
@@ -405,6 +428,7 @@ def acknowledge(state, run_id, run_digest, host, previous):
             raise ValueError("Acknowledgment requires complete input and matching window")
         target = {"through": entry["window"]["through"], "run": run_id, "digest": run_digest}
         if current == target:
+            os.fsync(fd)
             return
         if current is not None and current["through"] != prior:
             raise ValueError("Previous checkpoint mismatch")
