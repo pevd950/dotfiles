@@ -260,17 +260,18 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                         if len(raw) > max_line_bytes:
                             gap("oversized_record_file_stopped", root_index, relative)
                             break
-                        if not raw.endswith(b"\n"):
-                            if len(raw) == remaining:
-                                truncated.add("max_bytes"); stop = True
-                            else:
-                                counts["incomplete_trailing_records"] += 1
-                                gap("incomplete_trailing_record", root_index, relative)
-                            break
+                        eof_terminated = not raw.endswith(b"\n")
+                        if eof_terminated and len(raw) == remaining:
+                            # Reaching the byte cap is not evidence of EOF.
+                            truncated.add("max_bytes"); stop = True; break
                         counts["records_read"] += 1
                         try:
                             record = json.loads(raw)
                         except (ValueError, UnicodeDecodeError, RecursionError):
+                            if eof_terminated:
+                                counts["incomplete_trailing_records"] += 1
+                                gap("incomplete_trailing_record", root_index, relative)
+                                break
                             counts["malformed_records"] += 1
                             gap("malformed_record", root_index, relative)
                             continue
@@ -449,7 +450,10 @@ def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 10
                 raise ValueError("Reference does not start at a record boundary")
         handle.seek(offset)
         raw = handle.read(length)
-    if len(raw) != length or not raw.endswith(b"\n") or raw.count(b"\n") != 1 or _hash(raw) != ref.get("sha256"):
+        at_eof = os.fstat(handle.fileno()).st_size == offset + length
+    complete_boundary = ((raw.endswith(b"\n") and raw.count(b"\n") == 1)
+                         or (at_eof and b"\n" not in raw))
+    if len(raw) != length or not complete_boundary or _hash(raw) != ref.get("sha256"):
         raise ValueError("Source changed or reference is not one complete record")
     record = json.loads(raw)
     if not isinstance(record, dict):

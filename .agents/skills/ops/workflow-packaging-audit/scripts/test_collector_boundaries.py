@@ -14,6 +14,31 @@ class BoundaryTests(unittest.TestCase):
     write = fixtures.ScannerTests.write
     collect = fixtures.ScannerTests.collect
     events = fixtures.ScannerTests.events
+
+    def test_complete_final_record_without_newline_is_collected_and_readable(self):
+        for directory in (self.active, self.archive):
+            with self.subTest(directory=directory.name):
+                path = self.write([meta(directory.name)], directory=directory,
+                                  tail=json.dumps(user(directory.name)).encode())
+                result = self.collect()
+                session = next(s for s in result["sessions"] if s["id"] == directory.name)
+                self.assertEqual(len(session["events"]), 1)
+                self.assertEqual(result["coverage"]["incomplete_trailing_records"], 0)
+                self.assertFalse(result["source_gaps"])
+                ref = session["events"][0]["source_ref"]
+                self.assertEqual(scanner.detail([self.active, self.archive], ref)["text"], directory.name)
+                with path.open("ab") as handle:
+                    handle.write(b"\n")
+                with self.assertRaises(ValueError):
+                    scanner.detail([self.active, self.archive], ref)
+
+    def test_eof_record_is_not_assumed_complete_at_byte_cap(self):
+        path = self.write([meta()], tail=json.dumps(user("last")).encode())
+        result = self.collect(max_bytes=path.stat().st_size - 1)
+        self.assertEqual(self.events(result), [])
+        self.assertIn("max_bytes", result["truncation"])
+        self.assertLessEqual(result["coverage"]["bytes_read"], path.stat().st_size - 1)
+
     def test_nonobject_detail_references_and_records(self):
         for value in (None, [], 3, "text"):
             with self.subTest(value=value), self.assertRaises(ValueError):
