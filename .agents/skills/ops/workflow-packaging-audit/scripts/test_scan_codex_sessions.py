@@ -1,9 +1,11 @@
 """Synthetic-only fixtures shaped like actual Codex JSONL envelopes."""
 import importlib.util
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 import stat
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -67,6 +69,188 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(events[1]["name"], "record_and_replay")
         self.assertEqual(events[1]["correlation_id"], events[2]["correlation_id"])
         self.assertEqual(events[2]["status"]["exit_code"], 0)
+
+    def database(self, rows, wal=False):
+        path = self.root / "state.sqlite"
+        connection = sqlite3.connect(path)
+        if wal:
+            connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("CREATE TABLE threads (id TEXT, rollout_path TEXT, archived INTEGER, archived_at INTEGER)")
+        connection.executemany("INSERT INTO threads VALUES (?, ?, ?, ?)", rows)
+        connection.commit()
+        self.addCleanup(connection.close)
+        return path, connection
+
+    def with_database(self, path, **kwargs):
+        return self.collect(archive_db=path, archive_db_roots=[self.root], **kwargs)
+
+    def test_snapshot_archive_union_old_detail_and_read_only(self):
+        archived = self.write([meta(), user("old private text", OLD)], directory=self.archive)
+        self.write([meta("active"), user("new private text")], name="active.jsonl")
+        database, connection = self.database([("session-one", str(archived), 1, int(scanner._time(NOW).timestamp()))])
+        before = database.read_bytes(), connection.total_changes, set(self.root.iterdir())
+        result = self.with_database(database)
+        self.assertEqual(len(self.events(result)), 2)
+        old = next(event for event in self.events(result) if "session_archived_in_window" in event["selection_reasons"])
+        self.assertEqual(old["selection_reasons"], ["session_archived_in_window"])
+        self.assertEqual(scanner.detail([self.active, self.archive], old["source_ref"])["text"], "old private text")
+        self.assertNotIn("private text", json.dumps(result))
+        self.assertEqual(before, (database.read_bytes(), connection.total_changes, set(self.root.iterdir())))
+        self.assertIn("archive_snapshot_freshness_unverified", [gap["reason"] for gap in result["source_gaps"]])
+
+    def test_wal_fails_closed_without_modifying_any_source(self):
+        database, connection = self.database([], wal=True)
+        paths = [database, Path(str(database) + "-wal"), Path(str(database) + "-shm")]
+        before = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths}
+        result = self.with_database(database)
+        self.assertEqual(result["archive_metadata"]["status"], "unavailable")
+        self.assertIn("archive_database_requires_quiescent_snapshot", [gap["reason"] for gap in result["source_gaps"]])
+        self.assertEqual(before, {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in paths})
+
+    def test_sidecars_including_dangling_symlinks_are_rejected_without_following(self):
+        database, _ = self.database([])
+        for suffix in ("-wal", "-shm", "-journal"):
+            with self.subTest(suffix=suffix):
+                sidecar = Path(str(database) + suffix)
+                sidecar.symlink_to(self.root / "does-not-exist")
+                result = self.with_database(database)
+                self.assertEqual(result["archive_metadata"]["status"], "unavailable")
+                self.assertTrue(sidecar.is_symlink())
+                self.assertFalse((self.root / "does-not-exist").exists())
+                sidecar.unlink()
+
+    def test_wal_header_without_sidecars_is_not_assumed_checkpointed(self):
+        database, connection = self.database([], wal=True)
+        connection.close()
+        self.assertFalse(Path(str(database) + "-wal").exists())
+        before = database.read_bytes(), set(self.root.iterdir())
+        result = self.with_database(database)
+        self.assertEqual(result["archive_metadata"]["status"], "unavailable")
+        self.assertEqual(before, (database.read_bytes(), set(self.root.iterdir())))
+
+    def test_snapshot_rejects_observed_mutation_or_appearing_sidecar(self):
+        database, _ = self.database([])
+        original_open = scanner._open_source
+        for mutation in ("timestamp", "sidecar"):
+            with self.subTest(mutation=mutation):
+                opened = 0
+
+                @contextmanager
+                def changing_open(root, relative):
+                    nonlocal opened
+                    if relative == database.name:
+                        opened += 1
+                        if opened == 2:
+                            if mutation == "timestamp":
+                                value = database.stat()
+                                os.utime(database, ns=(value.st_atime_ns, value.st_mtime_ns + 1000000))
+                            else:
+                                Path(str(database) + "-wal").write_bytes(b"")
+                    with original_open(root, relative) as handle:
+                        yield handle
+
+                with patch.object(scanner, "_open_source", changing_open):
+                    result = self.with_database(database)
+                self.assertEqual(result["archive_metadata"]["status"], "unavailable")
+                self.assertIn("archive_database_changed_during_snapshot", [gap["reason"] for gap in result["source_gaps"]])
+
+    def test_archive_boundaries_null_unarchived_and_missing_paths(self):
+        rows = []
+        for sid, archived, timestamp in (("lower", 1, int(LOWER.timestamp())), ("upper", 1, int(UPPER.timestamp())),
+                                         ("future", 1, int(UPPER.timestamp()) + 1), ("null", 1, None), ("unarchived", 0, None)):
+            path = self.write([meta(sid), user("old", OLD)], name=sid + ".jsonl")
+            rows.append((sid, str(path), archived, timestamp))
+        rows.append(("missing", str(self.active / "missing.jsonl"), 1, int(UPPER.timestamp())))
+        database, _ = self.database(rows)
+        result = self.with_database(database)
+        self.assertEqual([session["id"] for session in result["sessions"]], ["upper"])
+        gaps = [gap["reason"] for gap in result["source_gaps"]]
+        self.assertIn("archive_database_missing_or_invalid_archive_time", gaps)
+        self.assertIn("archive_database_archive_time_after_window", gaps)
+        self.assertIn("archive_database_rollout_missing_or_unsafe", gaps)
+
+    def test_archive_limits_schema_and_database_allowlist(self):
+        path = self.write([meta(), user("old", OLD)])
+        database, connection = self.database([("session-one", str(path), 1, int(UPPER.timestamp()))])
+        result = self.collect(archive_db=database)
+        self.assertEqual(self.events(result), [])
+        self.assertEqual(result["source_gaps"][0]["reason"], "archive_database_outside_allowed_roots")
+        result = self.with_database(database, max_archive_bytes=1)
+        self.assertEqual(result["source_gaps"][0]["reason"], "archive_database_byte_limit")
+        connection.execute("INSERT INTO threads VALUES ('second', ?, 1, ?)", (str(path), int(UPPER.timestamp())))
+        connection.commit()
+        result = self.with_database(database, max_archive_rows=1)
+        self.assertIn("archive_database_row_limit", [gap["reason"] for gap in result["source_gaps"]])
+        connection.execute("DROP TABLE threads")
+        connection.execute("CREATE VIEW threads AS SELECT 'secret' AS id")
+        connection.commit()
+        result = self.with_database(database)
+        self.assertEqual(result["source_gaps"][0]["reason"], "archive_database_unsupported_schema")
+
+    def test_archive_unsafe_and_mismatched_rollout_paths(self):
+        path = self.write([meta("actual"), user("old", OLD)])
+        link = self.archive / "link.jsonl"
+        link.symlink_to(path)
+        database, _ = self.database([("mismatch", str(path), 1, int(UPPER.timestamp())),
+                                      ("link", str(link), 1, int(UPPER.timestamp())),
+                                      ("outside", str(self.root / "outside.jsonl"), 1, int(UPPER.timestamp()))])
+        result = self.with_database(database)
+        self.assertEqual(self.events(result), [])
+        gaps = [gap["reason"] for gap in result["source_gaps"]]
+        self.assertIn("archive_database_rollout_identity_mismatch", gaps)
+        self.assertIn("archive_database_rollout_missing_or_unsafe", gaps)
+        self.assertIn("archive_database_rollout_outside_allowed_roots", gaps)
+
+    def test_archive_selection_respects_current_session_and_event_cap(self):
+        path = self.write([meta(), user("old one", OLD), user("old two", OLD)])
+        database, _ = self.database([("session-one", str(path), 1, int(UPPER.timestamp()))])
+        self.assertEqual(self.events(self.with_database(database, exclude={"session-one"})), [])
+        result = self.with_database(database, max_events=1)
+        self.assertEqual(len(self.events(result)), 1)
+        self.assertIn("max_events", result["truncation"])
+
+    def test_archive_copy_of_previously_seen_old_records_is_selected(self):
+        records = [meta(), user("old", OLD)]
+        self.write(records)
+        path = self.write(records, directory=self.archive)
+        database, _ = self.database([("session-one", str(path), 1, int(UPPER.timestamp()))])
+        result = self.with_database(database)
+        self.assertEqual(len(self.events(result)), 1)
+        self.assertEqual(self.events(result)[0]["selection_reasons"], ["session_archived_in_window"])
+
+    def test_archive_query_limit_and_symlink_database_fail_closed(self):
+        database, connection = self.database([])
+        connection.executemany("INSERT INTO threads VALUES (?, '', 0, NULL)", [(str(index),) for index in range(200)])
+        connection.commit()
+        result = self.with_database(database, max_archive_query_steps=100)
+        self.assertIn("archive_database_unreadable_invalid_or_query_limit", [gap["reason"] for gap in result["source_gaps"]])
+        self.assertEqual(result["archive_metadata"]["selected_rollouts"], 0)
+        link = self.root / "linked.sqlite"
+        link.symlink_to(database)
+        result = self.with_database(link)
+        self.assertEqual(result["archive_metadata"]["status"], "unavailable")
+
+    def test_copied_archived_mirrors_and_pairs_preserve_occurrences_and_union(self):
+        records = [meta(), user("old", OLD),
+                   {"timestamp": OLD, "type": "event_msg", "payload": {"type": "user_message", "message": "old"}},
+                   item("function_call", OLD, name="exec_command", call_id="old-call", arguments="{}"),
+                   item("function_call_output", OLD, call_id="old-call", output="exit code 0"),
+                   user("repeated", NOW), user("repeated", NOW)]
+        self.write(records)
+        path = self.write(records, directory=self.archive)
+        database, _ = self.database([("session-one", str(path), 1, int(UPPER.timestamp()))])
+        events = self.events(self.with_database(database))
+        self.assertEqual(len(events), 5)
+        result = next(event for event in events if event["kind"] == "tool_result")
+        self.assertEqual(result["call"]["name"], "exec_command")
+        self.assertTrue(result["call"]["before_window"])
+        old_message = next(event for event in events if event["kind"] == "user_message" and event["timestamp"] == scanner._time(OLD).isoformat())
+        self.assertEqual(len(old_message["mirror_source_refs"]), 1)
+        for event in events:
+            self.assertIn("session_archived_in_window", event["selection_reasons"])
+        recent = [event for event in events if event["timestamp"] == scanner._time(NOW).isoformat()]
+        self.assertEqual(len(recent), 2)
+        self.assertTrue(all("record_activity_in_window" in event["selection_reasons"] for event in recent))
 
     def test_old_creation_recent_activity_and_upper_boundary(self):
         self.write([meta(), user("old", BEFORE), user("recent"), user("future", AFTER)])

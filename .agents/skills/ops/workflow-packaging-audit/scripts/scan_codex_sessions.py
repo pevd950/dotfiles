@@ -17,6 +17,11 @@ import re
 import stat
 import tempfile
 from typing import Any
+import importlib.util
+
+_archive_spec = importlib.util.spec_from_file_location("archive_metadata", Path(__file__).with_name("archive_metadata.py"))
+_archive_module = importlib.util.module_from_spec(_archive_spec)
+_archive_spec.loader.exec_module(_archive_module)
 
 CALLS = {"function_call", "custom_tool_call", "tool_call"}
 RESULTS = {"function_call_output", "custom_tool_call_output", "tool_result"}
@@ -166,10 +171,14 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             max_scan_records: int = 100000, max_bytes: int = 64 * 1024 * 1024,
             max_line_bytes: int = 1024 * 1024, max_events: int = 5000,
             max_sessions: int = 500, max_pending_calls: int = 5000,
-            max_directory_entries: int = 10000) -> dict[str, Any]:
+            max_directory_entries: int = 10000, archive_db: Path | None = None,
+            archive_db_roots: list[Path] | None = None, max_archive_bytes: int = 64 * 1024 * 1024,
+            max_archive_rows: int = 10000, max_archive_query_steps: int = 1000000) -> dict[str, Any]:
     limits = dict(max_files=max_files, max_scan_records=max_scan_records, max_bytes=max_bytes,
                   max_line_bytes=max_line_bytes, max_events=max_events, max_sessions=max_sessions,
-                  max_pending_calls=max_pending_calls, max_directory_entries=max_directory_entries)
+                  max_pending_calls=max_pending_calls, max_directory_entries=max_directory_entries,
+                  max_archive_bytes=max_archive_bytes, max_archive_rows=max_archive_rows,
+                  max_archive_query_steps=max_archive_query_steps)
     if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in limits.values()):
         raise ValueError("All limits must be positive integers")
     if any(boundary is not None and boundary.tzinfo is None for boundary in (checkpoint, upper_bound)):
@@ -185,12 +194,21 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
     gaps: list[dict[str, Any]] = []
     truncated: set[str] = set()
     seen_records: set[tuple[str, str, int]] = set()
+    record_events: dict[tuple[str, str, int], dict[str, Any]] = {}
+    emitted_event_ids: set[int] = set()
     sessions: dict[str, dict[str, Any]] = {}
     source_files: dict[str, list[dict[str, Any]]] = {}
     calls: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
     pairing_events: list[tuple[dt.datetime, str, str, dict[str, Any], bool]] = []
     message_mirrors: dict[tuple[str, str, str, str | None], list[tuple[dt.datetime, str, dict[str, Any]]]] = {}
     stop = False
+    archive = (_archive_module.read_archive_metadata(archive_db, archive_db_roots or [], source_roots,
+               checkpoint, upper_bound, _open_source, max_bytes=max_archive_bytes,
+               max_rows=max_archive_rows, max_query_steps=max_archive_query_steps)
+               if archive_db else {"status": "disabled", "rows_read": 0, "gaps": [], "selected": {}})
+    archive_seen = set()
+    for reason in archive["gaps"]:
+        gaps.append({"reason": reason})
 
     def gap(reason: str, root_index: int, relative_path: str | None = None) -> None:
         # Exception strings may contain source text, credentials or private paths.
@@ -239,6 +257,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             counts["files_discovered"] += 1
             relative = str(path.relative_to(root))
             sid = None
+            archive_selection = archive["selected"].get((root_index, relative))
             source_class = "unknown"
             current_turn = None
             file_occurrences: dict[tuple[str, str], int] = {}
@@ -284,6 +303,11 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             if sid is not None and sid != meta["id"]:
                                 gap("session_identity_changed", root_index, relative); break
                             sid = meta["id"]
+                            if archive_selection:
+                                archive_seen.add((root_index, relative))
+                                if archive_selection["id"] != sid:
+                                    gap("archive_database_rollout_identity_mismatch", root_index, relative)
+                                    archive_selection = None
                             source_class = _source_class(meta.get("source"))
                             if sid in exclude:
                                 counts["excluded_session_files"] += 1; break
@@ -310,12 +334,17 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                         ordinal = file_occurrences.get(occurrence_key, 0) + 1
                         file_occurrences[occurrence_key] = ordinal
                         identity = (sid, canonical_hash, ordinal)
+                        reused_event = record_events.get(identity)
                         if identity in seen_records:
-                            counts["duplicate_records"] += 1; continue
+                            counts["duplicate_records"] += 1
+                            if not archive_selection:
+                                continue
                         seen_records.add(identity)
                         if decoded is None:
                             counts["unsupported_records"] += 1; continue
                         event, call_id = decoded
+                        if reused_event is not None:
+                            event = reused_event
                         when = _time(record.get("timestamp"))
                         if when is None:
                             counts["untimestamped_events"] += 1
@@ -324,7 +353,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             counts["out_of_window_events"] += 1; continue
                         ref = {"root_index": root_index, "relative_path": relative,
                                "byte_offset": offset, "byte_length": len(raw), "sha256": _hash(raw)}
-                        if event["kind"] in ("user_message", "assistant_message") and record.get("type") in ("event_msg", "response_item"):
+                        if reused_event is None and event["kind"] in ("user_message", "assistant_message") and record.get("type") in ("event_msg", "response_item"):
                             # Match opposite envelopes one-for-one. Same-envelope
                             # occurrences always remain separate logical messages.
                             try:
@@ -347,15 +376,25 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                                 _, _, original = mirrors.pop(match_index)
                                 original.setdefault("mirror_source_refs", []).append(ref)
                                 counts["duplicate_records"] += 1
-                                continue
-                            mirrors.append((when, envelope, event))
-                        event.update(timestamp=when.isoformat(), source_ref=ref)
+                                event = original
+                                reused_event = original
+                            else:
+                                mirrors.append((when, envelope, event))
+                        record_events[identity] = event
+                        if reused_event is None:
+                            event.update(timestamp=when.isoformat(), source_ref=ref)
                         pair_key = (sid, call_id) if isinstance(call_id, str) else None
                         prior = bool(checkpoint and when <= checkpoint)
-                        if pair_key and event["kind"] in ("tool_call", "tool_result"):
+                        if reused_event is None and pair_key and event["kind"] in ("tool_call", "tool_result"):
                             pairing_events.append((when, sid, call_id, event, prior))
-                        if prior:
+                        if prior and not archive_selection:
                             counts["out_of_window_events"] += 1; continue
+                        if id(event) in emitted_event_ids:
+                            if archive_selection:
+                                if "session_archived_in_window" not in event["selection_reasons"]:
+                                    event["selection_reasons"].append("session_archived_in_window")
+                                sessions[sid]["archived_at"] = archive_selection["archived_at"]
+                            continue
                         if len(sessions) >= max_sessions and sid not in sessions:
                             truncated.add("max_sessions"); stop = True; break
                         if counts["emitted_events"] >= max_events:
@@ -366,7 +405,12 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             if not pair_key:
                                 event["pairing"] = "missing_call_id"
                         session = sessions.setdefault(sid, {"id": _label(sid), "source_class": source_class, "events": []})
+                        event["selection_reasons"] = (["record_activity_in_window"] if not prior else [])
+                        if archive_selection:
+                            event["selection_reasons"].append("session_archived_in_window")
+                            session["archived_at"] = archive_selection["archived_at"]
                         session["events"].append(event)
+                        emitted_event_ids.add(id(event))
                         counts["emitted_events"] += 1
             except (OSError, ValueError):
                 gap("file_unreadable", root_index, relative)
@@ -385,7 +429,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                     "source_ref": event["source_ref"], "before_window": prior}
             tied = tied_results.pop(key, None)
             if tied is not None and tied[0] == when:
-                if not tied[2]:
+                if "selection_reasons" in tied[1]:
                     tied[1].pop("pairing", None)
                     tied[1]["call"] = call
                 continue
@@ -398,11 +442,13 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             call = calls.pop(key, None)
             if call is None:
                 tied_results[key] = (when, event, prior)
-            if not prior:
+            if "selection_reasons" in event:
                 if call is not None:
                     event["call"] = call
                 else:
                     event["pairing"] = "call_not_found_in_bounded_scan"
+    for index, relative in archive["selected"].keys() - archive_seen:
+        gap("archive_selected_rollout_not_reached_in_bounded_scan", index, relative)
     if counts["pending_calls_evicted"]:
         truncated.add("max_pending_calls")
     counts["sessions_included"] = len(sessions)
@@ -414,9 +460,12 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             "window": {"after": checkpoint.isoformat() if checkpoint else None, "through": upper_bound.isoformat() if upper_bound else None},
             "roots": [str(root.resolve()) for root in source_roots], "limits": limits,
             "coverage": counts, "source_gaps": gaps, "truncation": sorted(truncated),
+            "archive_metadata": {"status": archive["status"], "rows_read": archive["rows_read"],
+                                 "selected_rollouts": len(archive["selected"])},
             "complete_within_supported_scope": not gaps and not truncated,
             "limitations": ["bounded rescan; no persistent incremental offsets or checkpoint acknowledgment",
-                            "archive metadata database not integrated; window selects record activity only",
+                            ("archive metadata database not integrated; window selects record activity only" if not archive_db else
+                             "archive state is a current snapshot, not full archive/unarchive history; stale snapshot freshness cannot be proven"),
                             "signals are candidates; authority and outcome require contextual review",
                             "unsupported record kinds are counted, not interpreted"],
             "sessions": sorted(sessions.values(), key=lambda session: session["id"] or "")}
@@ -510,9 +559,13 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=_boundary)
     parser.add_argument("--upper-bound", type=_boundary)
     parser.add_argument("--exclude-session", action="append", default=[])
+    parser.add_argument("--archive-db", type=Path, help="optional approved standalone Codex state snapshot (WAL unsupported)")
+    parser.add_argument("--archive-db-root", action="append", type=Path, default=[], help="approved database directory")
     for name, default in (("max-files", 1000), ("max-scan-records", 100000), ("max-bytes", 64 * 1024 * 1024),
                           ("max-line-bytes", 1024 * 1024), ("max-events", 5000), ("max-sessions", 500),
-                          ("max-pending-calls", 5000), ("max-directory-entries", 10000)):
+                          ("max-pending-calls", 5000), ("max-directory-entries", 10000),
+                          ("max-archive-bytes", 64 * 1024 * 1024), ("max-archive-rows", 10000),
+                          ("max-archive-query-steps", 1000000)):
         parser.add_argument("--" + name, type=_positive, default=default)
     parser.add_argument("--detail-ref", type=Path, help="private JSON source_ref object; read only this record")
     parser.add_argument("--detail-max-chars", type=_positive, default=4000)
@@ -535,6 +588,9 @@ def main() -> None:
         else:
             names = ("max_files", "max_scan_records", "max_bytes", "max_line_bytes", "max_events", "max_sessions", "max_pending_calls", "max_directory_entries")
             result = collect(args.source_root, args.checkpoint, args.upper_bound, set(args.exclude_session),
+                             archive_db=args.archive_db, archive_db_roots=args.archive_db_root,
+                             max_archive_bytes=args.max_archive_bytes, max_archive_rows=args.max_archive_rows,
+                             max_archive_query_steps=args.max_archive_query_steps,
                              source_host=args.source_host, **{name: getattr(args, name) for name in names})
         _write_private(args.output, result)
     except (ValueError, OSError, TypeError, RecursionError):
