@@ -15,6 +15,8 @@ Scan window: last 30 days by default, or all available history (say so). Scan bo
 
 For an explicitly authorized bounded session scan, use [the collector interface](references/collector.md), including its optional archive-state snapshot adapter when database access is authorized. The adapter rejects live WAL databases; the collector does not yet persist incremental offsets or reconstruct full archive/unarchive history. Report these gaps and do not treat a limited scan as a complete audit.
 
+For authorized local intake of already-collected per-host indexes, use [central intake](references/central-intake.md). It records collector-window acknowledgments, not per-session offsets or all-source audit completion. It does not fetch remote evidence, run a model review, or replace existing schedules.
+
 ## Candidate rules
 
 Package only when the workflow occurred at least twice (or clearly recurs and is costly to repeat), has stable inputs, a repeatable procedure, a clear output or stopping condition, materially improves speed, quality, consistency, or reliability, and is not already adequately covered.
