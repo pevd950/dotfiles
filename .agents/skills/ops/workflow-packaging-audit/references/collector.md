@@ -7,7 +7,8 @@
 Run only for an authorized history review. Supply each approved active/archive root, a source-host label, the current session ID to exclude, and a private output path. Keep host routes and evidence outside tracked files. The output directory must be owned by the current user with mode `0700`; a new directory is created with that mode. Output files use mode `0600`. The CLI does not print evidence to stdout.
 
 ```sh
-python3 scripts/scan_codex_sessions.py \
+SKILL_DIR="$HOME/.agents/skills/ops/workflow-packaging-audit"
+python3 "$SKILL_DIR/scripts/scan_codex_sessions.py" \
   --authorized --source-host example-host \
   --source-root /approved/sessions --source-root /approved/archived_sessions \
   --checkpoint 2026-09-01T00:00:00Z --upper-bound 2026-09-08T00:00:00Z \
@@ -20,6 +21,8 @@ The lower bound is exclusive and upper bound inclusive. Selection uses record ti
 
 Files are streamed; oversized records stop that file with a gap. An incomplete trailing record is left unconsumed for the next rescan. Identical records across copied/archived files are deduplicated within a session, while source-file provenance is retained. All source gaps, truncation reasons, skipped sidecars, unsupported records and evicted call contexts are reported. A result at the cap can conservatively report truncation even when that cap coincides with EOF.
 
+Repeated identical records within one file retain their occurrence count; copies of those occurrences in other files are collapsed. Opposite message envelopes with the same nonempty text, role and available turn identity are matched one-for-one within one second, without crossing the lower window boundary. This is a mirror heuristic, not proof of recurrence: absent turn identifiers leave ambiguity, and same-envelope repetitions remain separate. Matched mirror references remain available for inspection. Merged events and call/result pairing use timestamp order. Pairing metadata is bounded by scan limits; `--max-pending-calls` applies to unmatched calls, not already completed pairs.
+
 The default index omits prompts, arguments, output text, previews and session titles. It still contains private metadata such as file paths, session identifiers and tool names. Store and share it accordingly. Do not infer success from a text-extracted exit code or classify a denial without inspecting authorization and surrounding context.
 
 ## Targeted detail
@@ -27,7 +30,8 @@ The default index omits prompts, arguments, output text, previews and session ti
 Save one event's `source_ref` object as private JSON, then request just that record:
 
 ```sh
-python3 scripts/scan_codex_sessions.py \
+SKILL_DIR="$HOME/.agents/skills/ops/workflow-packaging-audit"
+python3 "$SKILL_DIR/scripts/scan_codex_sessions.py" \
   --authorized --source-host example-host \
   --source-root /approved/sessions --source-root /approved/archived_sessions \
   --detail-ref /private/audit/reference.json --detail-max-chars 4000 \

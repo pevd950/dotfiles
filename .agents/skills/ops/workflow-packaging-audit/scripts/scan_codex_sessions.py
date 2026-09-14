@@ -74,7 +74,7 @@ def _source_class(source: Any) -> str:
         return "approval_sidecar"
     if "subagent" in tags or "spawn" in tags:
         return "subagent"
-    return "primary" if tags & {"cli", "vscode", "exec", "app_server", "app-server"} else "unknown"
+    return "primary" if tags & {"cli", "vscode", "exec", "app_server", "app-server", "mcp"} else "unknown"
 
 
 def _text(item: dict[str, Any]) -> str:
@@ -98,6 +98,15 @@ def _tool_output(item: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else item
 
 
+def _tool_text(item: dict[str, Any]) -> str:
+    """Preserve arbitrary tool JSON when no recognized text wrapper exists."""
+    text = _text(_tool_output(item))
+    if text:
+        return text
+    output = item.get("output", "")
+    return output if isinstance(output, str) else json.dumps(output)
+
+
 def _event(record: dict[str, Any]) -> tuple[dict[str, Any], Any] | None:
     """Decode supported envelopes once; embedded/replayed JSON is never walked."""
     item = record.get("payload") if record.get("type") in ("response_item", "event_msg") else record
@@ -114,12 +123,12 @@ def _event(record: dict[str, Any]) -> tuple[dict[str, Any], Any] | None:
         exit_code = structured.get("exit_code")
         if isinstance(exit_code, int) and not isinstance(exit_code, bool):
             status["exit_code"] = exit_code
-        elif match := EXIT.search(_text(structured)):
+        elif match := EXIT.search(_tool_text(item)):
             status["exit_code"] = int(match.group(1))
             status["exit_code_source"] = "output_text_candidate"
         if isinstance(structured.get("isError"), bool):
             status["is_error"] = structured["isError"]
-        signals = [name for name, regex in (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)) if regex.search(_text(structured))]
+        signals = [name for name, regex in (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)) if regex.search(_tool_text(item))]
         return {"kind": "tool_result", "status": status, "signals": signals}, item.get("call_id")
     role = item.get("role") if kind == "message" else {"user_message": "user", "agent_message": "assistant"}.get(kind)
     if role in ("user", "assistant"):
@@ -175,11 +184,12 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                   emitted_events=0, pending_calls_evicted=0)
     gaps: list[dict[str, Any]] = []
     truncated: set[str] = set()
-    seen_records: set[tuple[str, str]] = set()
+    seen_records: set[tuple[str, str, int]] = set()
     sessions: dict[str, dict[str, Any]] = {}
     source_files: dict[str, list[dict[str, Any]]] = {}
     calls: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
-    unresolved: list[tuple[dict[str, Any], tuple[str, str]]] = []
+    pairing_events: list[tuple[dt.datetime, str, str, dict[str, Any], bool]] = []
+    message_mirrors: dict[tuple[str, str, str, str | None], list[tuple[dt.datetime, str, dict[str, Any]]]] = {}
     stop = False
 
     def gap(reason: str, root_index: int, relative_path: str | None = None) -> None:
@@ -216,13 +226,13 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                 gap("entry_unreadable", index, str(path.relative_to(root)))
 
     for root_index, requested_root in enumerate(source_roots):
+        if stop:
+            truncated.add("remaining_roots")
+            break
         root = requested_root.resolve()
         if not root.is_dir():
             gap("root_missing_or_not_directory", root_index)
             continue
-        if stop:
-            truncated.add("remaining_roots")
-            break
         for path in files(root, root_index):
             if counts["files_discovered"] >= max_files:
                 truncated.add("max_files"); stop = True; break
@@ -230,6 +240,8 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             relative = str(path.relative_to(root))
             sid = None
             source_class = "unknown"
+            current_turn = None
+            file_occurrences: dict[tuple[str, str], int] = {}
             try:
                 if not path.resolve().is_relative_to(root):
                     gap("path_outside_root", root_index, relative); continue
@@ -284,12 +296,22 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             continue
                         if sid is None:
                             gap("missing_session_metadata", root_index, relative); break
-                        canonical_hash = _hash(json.dumps(record, sort_keys=True, separators=(",", ":")))
-                        identity = (sid, canonical_hash)
+                        if record.get("type") == "turn_context" and isinstance(record.get("payload"), dict):
+                            current_turn = record["payload"].get("turn_id")
+                        try:
+                            canonical_hash = _hash(json.dumps(record, sort_keys=True, separators=(",", ":")))
+                            decoded = _event(record)
+                        except (ValueError, TypeError, RecursionError):
+                            counts["malformed_records"] += 1
+                            gap("record_decode_failed", root_index, relative)
+                            continue
+                        occurrence_key = (sid, canonical_hash)
+                        ordinal = file_occurrences.get(occurrence_key, 0) + 1
+                        file_occurrences[occurrence_key] = ordinal
+                        identity = (sid, canonical_hash, ordinal)
                         if identity in seen_records:
                             counts["duplicate_records"] += 1; continue
                         seen_records.add(identity)
-                        decoded = _event(record)
                         if decoded is None:
                             counts["unsupported_records"] += 1; continue
                         event, call_id = decoded
@@ -301,16 +323,36 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             counts["out_of_window_events"] += 1; continue
                         ref = {"root_index": root_index, "relative_path": relative,
                                "byte_offset": offset, "byte_length": len(raw), "sha256": _hash(raw)}
+                        if event["kind"] in ("user_message", "assistant_message") and record.get("type") in ("event_msg", "response_item"):
+                            # Match opposite envelopes one-for-one. Same-envelope
+                            # occurrences always remain separate logical messages.
+                            try:
+                                payload = record["payload"]
+                                message_text = _text(payload)
+                                turn_id = payload.get("turn_id", record.get("turn_id", current_turn))
+                                message_key = (sid, event["kind"], _hash(message_text),
+                                               _hash(str(turn_id)) if turn_id is not None else None)
+                            except (ValueError, TypeError, RecursionError):
+                                counts["malformed_records"] += 1
+                                gap("record_decode_failed", root_index, relative)
+                                continue
+                            mirrors = message_mirrors.setdefault(message_key, [])
+                            envelope = record["type"]
+                            match_index = next((i for i, (stamp, other, _) in enumerate(mirrors)
+                                                if message_text and other != envelope
+                                                and bool(checkpoint and when <= checkpoint) == bool(checkpoint and stamp <= checkpoint)
+                                                and abs((when - stamp).total_seconds()) <= 1), None)
+                            if match_index is not None:
+                                _, _, original = mirrors.pop(match_index)
+                                original.setdefault("mirror_source_refs", []).append(ref)
+                                counts["duplicate_records"] += 1
+                                continue
+                            mirrors.append((when, envelope, event))
                         event.update(timestamp=when.isoformat(), source_ref=ref)
                         pair_key = (sid, call_id) if isinstance(call_id, str) else None
                         prior = bool(checkpoint and when <= checkpoint)
-                        if pair_key and event["kind"] == "tool_call":
-                            calls[pair_key] = {"name": event["name"], "timestamp": event["timestamp"],
-                                               "source_ref": ref, "before_window": prior}
-                            calls.move_to_end(pair_key)
-                            if len(calls) > max_pending_calls:
-                                calls.popitem(last=False)
-                                counts["pending_calls_evicted"] += 1
+                        if pair_key and event["kind"] in ("tool_call", "tool_result"):
+                            pairing_events.append((when, sid, call_id, event, prior))
                         if prior:
                             counts["out_of_window_events"] += 1; continue
                         if len(sessions) >= max_sessions and sid not in sessions:
@@ -320,11 +362,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                         if pair_key:
                             event["correlation_id"] = _hash(source_host + "\0" + sid + "\0" + call_id)
                         if event["kind"] == "tool_result":
-                            if pair_key in calls:
-                                event["call"] = calls[pair_key]
-                            elif pair_key:
-                                unresolved.append((event, pair_key))
-                            else:
+                            if not pair_key:
                                 event["pairing"] = "missing_call_id"
                         session = sessions.setdefault(sid, {"id": _label(sid), "source_class": source_class, "events": []})
                         session["events"].append(event)
@@ -333,16 +371,43 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                 gap("file_unreadable", root_index, relative)
             if stop:
                 break
-    for event, key in unresolved:
-        if key in calls:
-            event["call"] = calls[key]
+    # Discovery order is not event order: archive fragments may contain earlier
+    # calls than active files. This metadata buffer is bounded by scan limits.
+    # Preserve source order for ties; a result discovered first can still pair
+    # with a later-discovered call at the same coarse timestamp.
+    pairing_events.sort(key=lambda row: row[0])
+    tied_results: dict[tuple[str, str], tuple[dt.datetime, dict[str, Any], bool]] = {}
+    for when, sid, call_id, event, prior in pairing_events:
+        key = (sid, call_id)
+        if event["kind"] == "tool_call":
+            call = {"name": event["name"], "timestamp": event["timestamp"],
+                    "source_ref": event["source_ref"], "before_window": prior}
+            tied = tied_results.pop(key, None)
+            if tied is not None and tied[0] == when:
+                if not tied[2]:
+                    tied[1].pop("pairing", None)
+                    tied[1]["call"] = call
+                continue
+            calls[key] = call
+            calls.move_to_end(key)
+            if len(calls) > max_pending_calls:
+                calls.popitem(last=False)
+                counts["pending_calls_evicted"] += 1
         else:
-            event["pairing"] = "call_not_found_in_bounded_scan"
+            call = calls.pop(key, None)
+            if call is None:
+                tied_results[key] = (when, event, prior)
+            if not prior:
+                if call is not None:
+                    event["call"] = call
+                else:
+                    event["pairing"] = "call_not_found_in_bounded_scan"
     if counts["pending_calls_evicted"]:
         truncated.add("max_pending_calls")
     counts["sessions_included"] = len(sessions)
     for sid, session in sessions.items():
         session["source_files"] = source_files[sid]
+        session["events"].sort(key=lambda event: event["timestamp"])
     return {"schema": "codex-evidence-index.v2", "source_host": _label(source_host),
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "window": {"after": checkpoint.isoformat() if checkpoint else None, "through": upper_bound.isoformat() if upper_bound else None},
@@ -359,6 +424,8 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
 def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 1024 * 1024,
            max_chars: int = 4000) -> dict[str, Any]:
     """Read exactly one hash-bound reference under an approved root, without scanning."""
+    if not isinstance(ref, dict):
+        raise ValueError("Source reference must be an object")
     if not 1 <= max_bytes <= 1024 * 1024 or not 1 <= max_chars <= 16000:
         raise ValueError("Detail limits exceed allowed bounds")
     index, offset, length = (ref.get(key) for key in ("root_index", "byte_offset", "byte_length"))
@@ -385,11 +452,13 @@ def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 10
     if len(raw) != length or not raw.endswith(b"\n") or raw.count(b"\n") != 1 or _hash(raw) != ref.get("sha256"):
         raise ValueError("Source changed or reference is not one complete record")
     record = json.loads(raw)
+    if not isinstance(record, dict):
+        raise ValueError("Detail record must be an object")
     item = record.get("payload", record)
     if not isinstance(item, dict):
         raise ValueError("Unsupported detail record")
     kind = item.get("type")
-    text = _text(_tool_output(item)) if kind in tuple(RESULTS) else _text(item)
+    text = _tool_text(item) if kind in tuple(RESULTS) else _text(item)
     if kind in tuple(CALLS):
         value = item.get("arguments", item.get("input", ""))
         text = value if isinstance(value, str) else json.dumps(value)
@@ -448,9 +517,13 @@ def main() -> None:
     args = parser.parse_args()
     if not args.authorized:
         parser.error("history access requires explicit --authorized invocation")
+    if not args.detail_ref and (not args.exclude_session or any(not sid.strip() for sid in args.exclude_session)):
+        parser.error("scan requires a nonempty --exclude-session for the current session")
     try:
         if args.detail_ref:
-            with args.detail_ref.open("rb") as handle:
+            reference_path = args.detail_ref.absolute()
+            anchor = Path(reference_path.anchor)
+            with _open_source(anchor, str(reference_path.relative_to(anchor))) as handle:
                 raw_ref = handle.read(16385)
             if len(raw_ref) > 16384:
                 raise ValueError("Detail reference exceeds bounds")

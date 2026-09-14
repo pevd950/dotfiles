@@ -246,7 +246,7 @@ class ScannerTests(unittest.TestCase):
         self.write([meta(), user("sensitive prose")])
         output = self.root / "private" / "index.json"
         command = [sys.executable, str(SCRIPT), "--source-root", str(self.active),
-                   "--source-host", "fixture", "--output", str(output)]
+                   "--source-host", "fixture", "--exclude-session", "current-fixture", "--output", str(output)]
         denied = subprocess.run(command, capture_output=True, text=True)
         self.assertNotEqual(denied.returncode, 0)
         self.assertFalse(output.exists())
