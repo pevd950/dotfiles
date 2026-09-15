@@ -127,6 +127,70 @@ class IntakeTests(unittest.TestCase):
         self.write(self.bundle)
         self.assertTrue(self.run_intake()["hosts"]["alpha"]["eligible"])
 
+    def test_secret_shaped_metadata_must_be_collector_opaque(self):
+        secretish = "gh" + "p_" + "syntheticvalue"
+        for index, mutate in enumerate((
+                lambda b: b.update(source_host=secretish),
+                lambda b: b["sessions"][0].update(id=secretish),
+                lambda b: b["sessions"][0]["events"][0].update(kind="tool_call", name=secretish),
+                lambda b: b["sessions"][0]["events"][0].update(
+                    kind="tool_result", status={}, signals=[], pairing="missing_call_id"),
+        )):
+            bundle = copy.deepcopy(self.bundle)
+            mutate(bundle)
+            self.hosts = {"alpha": {
+                "status": "available", "window": bundle["window"], "path": str(self.path)}}
+            if index == 0:
+                self.hosts = {bundle["source_host"]: {
+                    "status": "available", "window": bundle["window"], "path": str(self.path)}}
+            if index == 2:
+                bundle["sessions"][0]["events"][0].pop("signals")
+            if index == 3:
+                bundle["sessions"][0]["events"][0]["call"] = {
+                    "name": secretish, "timestamp": LOW,
+                    "before_window": True,
+                    "source_ref": copy.deepcopy(bundle["sessions"][0]["events"][0]["source_ref"])}
+                bundle["sessions"][0]["events"][0].pop("pairing")
+                bundle["sessions"][0]["events"][0]["correlation_id"] = "a" * 64
+            self.write(bundle)
+            if index == 0:
+                with self.assertRaises(ValueError):
+                    self.run_intake("secret-0")
+                continue
+            self.assertEqual(self.run_intake("secret-" + str(index))["hosts"]["alpha"]["status"], "invalid_or_denied")
+
+    def test_collector_opaque_metadata_labels_are_supported(self):
+        bundle = copy.deepcopy(self.bundle)
+        bundle["source_host"] = "opaque:" + "a" * 20
+        bundle["sessions"][0]["id"] = "opaque:" + "b" * 20
+        event = bundle["sessions"][0]["events"][0]
+        event.update(kind="tool_call", name="opaque:" + "c" * 20)
+        event.pop("signals", None)
+        self.hosts = {"opaque:" + "a" * 20: {"status": "available", "window": bundle["window"], "path": str(self.path)}}
+        self.write(bundle)
+        entry = self.run_intake("opaque")["hosts"]["opaque:" + "a" * 20]
+        self.assertTrue(entry["eligible"])
+
+    def test_incremental_ledger_budget_rejects_before_second_bundle(self):
+        first = self.run_intake("first")
+        original_limit = intake.MAX_LEDGER
+        try:
+            # Leave the first committed run valid, but make admitting another
+            # host exceed the projected ledger before it is retained.
+            intake.MAX_LEDGER = len(intake.encode(self.ledger())) + 128
+            second_bundle = copy.deepcopy(self.bundle)
+            second_bundle["source_host"] = "beta"
+            second_path = self.root / "second.json"
+            second_path.write_text(json.dumps(second_bundle))
+            second_path.chmod(0o600)
+            with self.assertRaises(ValueError):
+                intake.intake(self.state, "second", {
+                    "alpha": self.hosts["alpha"],
+                    "beta": {"status": "available", "window": second_bundle["window"], "path": str(second_path)}})
+            self.assertNotIn("second", self.ledger()["runs"])
+        finally:
+            intake.MAX_LEDGER = original_limit
+
     def test_declared_budgets_prevent_ack_without_discarding_evidence(self):
         for index, (counter, limit) in enumerate((("records_read", "max_scan_records"), ("bytes_read", "max_bytes"),
                 ("files_discovered", "max_files"), ("directory_entries", "max_directory_entries"),

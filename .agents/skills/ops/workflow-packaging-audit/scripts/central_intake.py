@@ -11,9 +11,12 @@ import re
 import stat
 import uuid
 
+from scan_codex_sessions import SECRET
+
 MAX_INPUT = 8 * 1024 * 1024
 MAX_LEDGER = 32 * 1024 * 1024
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z")
+OPAQUE = re.compile(r"opaque:[a-f0-9]{20}\Z")
 HEX = re.compile(r"[a-f0-9]{64}\Z")
 # Closed vocabulary of the paired collector v2 contract, not arbitrary narratives.
 LIMITATIONS = {
@@ -156,8 +159,14 @@ def strings(value):
 
 
 def metadata_label(value):
-    if value is not None and (not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value)):
+    if value is None:
+        return
+    if not isinstance(value, str):
         raise ValueError("Invalid metadata label")
+    if OPAQUE.fullmatch(value):
+        return
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value) or SECRET.search(value):
+        raise ValueError("Invalid or unscreened metadata label")
 
 
 def source_file(value, roots):
@@ -169,6 +178,7 @@ def source_file(value, roots):
 def validate(bundle, host, expected):
     if not isinstance(bundle, dict) or bundle.get("schema") != "codex-evidence-index.v2" or bundle.get("source_host") != host:
         raise ValueError("Wrong collector schema or host")
+    metadata_label(bundle.get("source_host"))
     fields(bundle, "schema source_host generated_at window roots limits coverage source_gaps truncation archive_metadata complete_within_supported_scope limitations sessions")
     fields(bundle["window"], "after through")
     generated_at = stamp(bundle["generated_at"])
@@ -405,6 +415,13 @@ def intake(state, run_id, hosts):
                     for role, ref in refs:
                         record["provenance"].append({"host": host, "source_ref": ref, "role": role,
                                                      "bundle_sha256": entry["input_sha256"]})
+            # Bound the live result as each host is admitted, before another
+            # bundle can be retained and before the final ledger serialization.
+            projected = {"schema": ledger["schema"], "runs": dict(ledger["runs"]),
+                         "acknowledged_collector_windows": ledger["acknowledged_collector_windows"]}
+            projected["runs"][run_id] = result
+            if len(encode(projected)) > MAX_LEDGER:
+                raise ValueError("Ledger capacity reached; no change written")
         result["digest"] = digest(result)
         previous = ledger["runs"].get(run_id)
         if previous is not None:
