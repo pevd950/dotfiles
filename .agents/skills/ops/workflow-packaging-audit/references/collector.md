@@ -25,6 +25,8 @@ Repeated identical records within one file retain their occurrence count; copies
 
 The default index omits prompts, arguments, output text, previews and session titles. It still contains private metadata such as file paths, session identifiers and tool names. Store and share it accordingly. Do not infer success from a text-extracted exit code or classify a denial without inspecting authorization and surrounding context.
 
+Discovery is bounded by the directory-entry limit. The collector then reads candidate files across all roots in descending modification-time order, with deterministic ties. This prioritizes recent writes, including activity appended to old sessions. Modification time is only an ordering hint: no file is excluded because of its name or modification time, and record timestamps still determine inclusion. Copied files with preserved timestamps remain eligible. A content or discovery cap still means partial coverage; recent-first order cannot guarantee all requested activity fits the budget.
+
 ## Targeted detail
 
 Save one event's `source_ref` object as private JSON, then request just that record:
@@ -54,6 +56,7 @@ Missing/invalid archive timestamps, unsafe or missing rollout paths, mismatched 
 
 ## Deferred acceptance
 
+- Fork files containing a child header followed by an inherited parent `session_meta` header remain unsupported: `session_identity_changed` stops that file and marks coverage partial. Matching `forked_from_id`/`parent_thread_id` proves ancestry, but does not define where copied history ends. Supporting child activity safely requires confirming the producer's `subagent_history_start_ordinal` counting and compaction semantics, then testing parent deduplication and child attribution across that boundary. Do not simply accept or ignore the second identity.
 - Durable per-session incremental offsets, checkpoint acknowledgment, source rotation/truncation recovery and concurrency-safe state are not implemented. Each invocation rescans the approved roots; no audit checkpoint is advanced by this script.
 - The optional adapter selects archive state from a standalone rollback-journal-format snapshot only. Live WAL acquisition, full archive/unarchive history, independently verified snapshot freshness and live-host acceptance remain unimplemented/unverified.
 - This is not the central multi-host collector/reviewer. Host transport restrictions, cross-host copied-session reconciliation, inventory/memory ingestion, review persistence and notification remain separate work.
