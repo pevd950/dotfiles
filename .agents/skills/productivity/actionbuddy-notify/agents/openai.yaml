@@ -1,3 +1,3 @@
 name: actionbuddy-notify
-description: Send the configured user a local notification through the ActionBuddy-backed macOS shortcut.
+description: Provider implementation for $notify-user. Do not call from workflows for routine handoffs.
 entrypoint: SKILL.md

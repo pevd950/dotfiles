@@ -30,7 +30,7 @@ Track independently from the durable record — never block the record or local 
 
 `not needed` · `sent` (validation and send both succeeded) · `indeterminate` (send timed out or unconfirmed) · `failed` (after a reasonable fallback) · `fallback sent` (primary failed, fallback relay succeeded).
 
-Provider-specific behavior lives in `actionbuddy-notify` / `poke-notify`.
+Send and check through `$notify-user` only (`$HOME/.agents/skills/productivity/notify-user/scripts/send_notification.py --check` then `--send`). Do not name ActionBuddy, Poke, or Buddy MCP from this workflow. `fallback sent` applies when a later **enabled** provider succeeds after the first enabled provider fails — it is not a silent Poke retry. Poke stays off unless the user enabled it in notify-user config.
 
 ## Final handoff
 
