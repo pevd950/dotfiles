@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 UNAVAILABLE_MARKERS = (
     "Shortcuts database not found",
+    "shortcuts executable not found",
 )
 SQLITE_SOFT_MARKERS = (
     "unable to open database file",
@@ -38,6 +39,8 @@ def classify(returncode: int, stdout: str, stderr: str) -> str:
     text = f"{stdout}\n{stderr}"
     if returncode == 0 and "OK:" in stdout:
         return "ok"
+    if returncode != 0 and "Shortcut failed with exit" in text:
+        return "failed"
     if any(marker in text for marker in UNAVAILABLE_MARKERS):
         return "skipped"
     if any(marker in text for marker in SQLITE_SOFT_MARKERS):

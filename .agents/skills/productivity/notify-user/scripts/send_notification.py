@@ -106,17 +106,36 @@ def _strip_toml_comment(line: str) -> str:
 
 def _unescape_toml_basic(value: str) -> str:
     out: list[str] = []
-    escaped = False
-    replacements = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}
-    for char in value:
-        if escaped:
-            out.append(replacements.get(char, char))
-            escaped = False
+    replacements = {"b": "\b", "t": "\t", "n": "\n", "f": "\f", "r": "\r", '"': '"', "\\": "\\"}
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if char != "\\":
+            out.append(char)
+            index += 1
             continue
-        if char == "\\":
-            escaped = True
+        index += 1
+        if index >= len(value):
+            raise ValidationError("invalid TOML escape: trailing backslash")
+        code = value[index]
+        if code in replacements:
+            out.append(replacements[code])
+            index += 1
             continue
-        out.append(char)
+        if code in {"u", "U"}:
+            width = 4 if code == "u" else 8
+            hexdigits = value[index + 1 : index + 1 + width]
+            if len(hexdigits) != width or any(
+                digit not in "0123456789abcdefABCDEF" for digit in hexdigits
+            ):
+                raise ValidationError(f"invalid TOML unicode escape: \\{code}{hexdigits}")
+            ordinal = int(hexdigits, 16)
+            if ordinal > 0x10FFFF or 0xD800 <= ordinal <= 0xDFFF:
+                raise ValidationError(f"invalid TOML unicode escape: \\{code}{hexdigits}")
+            out.append(chr(ordinal))
+            index += 1 + width
+            continue
+        raise ValidationError(f"invalid TOML escape: \\{code}")
     return "".join(out)
 
 

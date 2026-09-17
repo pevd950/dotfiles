@@ -316,6 +316,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 0
+        except FileNotFoundError:
+            after, _, _ = try_validate_shortcut_input_body()
+            print(
+                f"ERROR: shortcuts executable not found; ActionBuddy is unavailable; {after}",
+                file=sys.stderr,
+            )
+            return 1
 
         after, _, _ = try_validate_shortcut_input_body()
         if result.returncode != 0:

@@ -213,6 +213,43 @@ class SqliteSoftFailTests(unittest.TestCase):
             },
         )
 
+    def test_send_reports_shortcut_failure_even_when_sqlite_is_unreadable(self):
+        def fake_run(cmd, **_kwargs):
+            if cmd[:2] == ["shortcuts", "list"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout="Send Notification\n", stderr="")
+            if cmd[:3] == ["shortcuts", "run", "Send Notification"]:
+                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="shortcut boom")
+            raise AssertionError(f"unexpected command: {cmd}")
+
+        with (
+            patch.object(
+                helper,
+                "shortcut_actions",
+                side_effect=PermissionError("Operation not permitted"),
+            ),
+            patch.object(helper.subprocess, "run", side_effect=fake_run),
+        ):
+            code, stdout, stderr = run_main(SEND_ARGS)
+
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("Shortcut failed with exit 1", stderr)
+        self.assertIn("shortcut boom", stderr)
+
+    def test_send_errors_when_shortcuts_executable_is_missing(self):
+        with (
+            patch.object(
+                helper,
+                "shortcut_actions",
+                side_effect=RuntimeError("Shortcuts database not found: /missing/Shortcuts.sqlite"),
+            ),
+            patch.object(helper, "run_shortcut", side_effect=FileNotFoundError("shortcuts")),
+        ):
+            code, stdout, stderr = run_main(SEND_ARGS)
+
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("shortcuts executable not found", stderr)
+        self.assertNotIn("Shortcut failed with exit", stderr)
+
 
 class ReadonlyDatabaseTests(unittest.TestCase):
     def test_connect_db_opens_sqlite_read_only(self):

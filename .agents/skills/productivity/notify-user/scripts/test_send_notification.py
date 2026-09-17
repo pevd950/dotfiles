@@ -93,6 +93,55 @@ class ConfigTests(unittest.TestCase):
             providers = notify.load_providers(path)
         self.assertEqual(providers[0].helper, '/tmp/foo"bar#baz.py')
 
+    def test_unescape_toml_basic_supports_standard_escapes(self):
+        self.assertEqual(notify._unescape_toml_basic(r"a\nb\tc"), "a\nb\tc")
+        self.assertEqual(notify._unescape_toml_basic(r"x\u0023y"), "x#y")
+        self.assertEqual(notify._unescape_toml_basic(r"\b\f"), "\b\f")
+
+    def test_unescape_toml_basic_rejects_unknown_and_incomplete_escapes(self):
+        with self.assertRaisesRegex(notify.ValidationError, r"invalid TOML escape: \\q"):
+            notify._unescape_toml_basic(r"\q")
+        with self.assertRaisesRegex(notify.ValidationError, "trailing backslash"):
+            notify._unescape_toml_basic("foo\\")
+        with self.assertRaisesRegex(notify.ValidationError, "invalid TOML unicode escape"):
+            notify._unescape_toml_basic(r"\u12")
+
+    def test_load_providers_rejects_unknown_toml_escape(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "/tmp/foo\\qbar.py"\n'
+            )
+            with self.assertRaisesRegex(notify.ValidationError, r"invalid TOML escape: \\q"):
+                notify.load_providers(path)
+
+    def test_load_providers_rejects_incomplete_toml_escape(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "foo\\"\n'
+            )
+            with self.assertRaisesRegex(notify.ValidationError, "trailing backslash"):
+                notify.load_providers(path)
+
+    def test_load_providers_decodes_unicode_escape_in_helper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "/tmp/foo\\u0023bar.py"\n'
+            )
+            providers = notify.load_providers(path)
+        self.assertEqual(providers[0].helper, "/tmp/foo#bar.py")
+
     def test_resolve_config_prefers_explicit_then_env_then_user_then_bundled(self):
         bundled = notify.bundled_config_path()
         self.assertEqual(bundled, EXAMPLE_CONFIG)
@@ -210,6 +259,29 @@ class AdapterTests(unittest.TestCase):
             stderr="WARN: Shortcuts database unreadable; Send Notification listed by shortcuts",
         )
         self.assertEqual(result, "ok")
+
+    def test_actionbuddy_shortcut_run_failure_is_failed_even_with_sqlite_warning(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "ERROR: Shortcut failed with exit 1: no stderr; "
+                "WARN: Shortcuts database unreadable; sqlite wiring check skipped "
+                "(Operation not permitted)"
+            ),
+        )
+        self.assertEqual(result, "failed")
+
+    def test_actionbuddy_classifies_missing_shortcuts_binary_as_skip(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "ERROR: shortcuts executable not found; ActionBuddy is unavailable; "
+                "Shortcuts database not found: /missing/Shortcuts.sqlite"
+            ),
+        )
+        self.assertEqual(result, "skipped")
 
     def test_poke_soft_skips_when_api_key_is_missing(self):
         with patch.dict(os.environ, {"POKE_API_KEY": ""}, clear=False):
