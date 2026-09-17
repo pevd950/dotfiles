@@ -1,13 +1,13 @@
 ---
 name: poke-notify
-description: "Provider implementation for $notify-user (Poke inbound webhook). Do not call from workflows for routine handoffs — use $notify-user. Poke stays off by default and is explicit-ask / incident-resolved only."
+description: "Provider implementation for $notify-user (Poke inbound webhook). Do not call from workflows for routine handoffs — use $notify-user. Poke is enabled by default in the fan-out and soft-skips when POKE_API_KEY is unset."
 ---
 
 # Poke Notify (provider)
 
 Backend for `$notify-user`. Do not call this skill from workflows for routine completion, blocker, or ready-for-review relays — use `$notify-user`.
 
-Poke stays **off** in the default `$notify-user` provider list. Enable it only when the user explicitly asks for Poke, or confirms the webhook incident is resolved and asks to resume Poke relays. Never a silent ActionBuddy/CodexBuddy fallback. Poke is a relay/messenger, not the reviewer or executor of the task.
+Poke is **enabled** in the default `$notify-user` provider list (ActionBuddy → CodexBuddy → Poke). Soft-skip when `POKE_API_KEY` is unset. Poke is a relay/messenger, not the reviewer or executor of the task.
 
 ## Requirements
 

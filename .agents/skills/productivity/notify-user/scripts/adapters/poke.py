@@ -35,7 +35,7 @@ def fold_message(notification: Notification) -> str:
 
 def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) -> ProviderResult:
     if not os.environ.get("POKE_API_KEY", "").strip():
-        return ProviderResult("poke", "failed", "POKE_API_KEY is not set")
+        return ProviderResult("poke", "skipped", "POKE_API_KEY is not set")
 
     helper = Path(spec.helper) if spec.helper else default_helper()
     command = [

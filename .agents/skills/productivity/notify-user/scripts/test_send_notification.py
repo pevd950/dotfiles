@@ -44,12 +44,12 @@ def write_helper(directory: Path, name: str, script: str) -> Path:
 
 
 class ConfigTests(unittest.TestCase):
-    def test_example_config_orders_actionbuddy_then_codexbuddy_with_poke_off(self):
+    def test_example_config_orders_actionbuddy_then_codexbuddy_then_poke_all_enabled(self):
         providers = notify.load_providers(EXAMPLE_CONFIG)
         self.assertEqual([item.id for item in providers], ["actionbuddy", "codexbuddy", "poke"])
         self.assertTrue(providers[0].enabled)
         self.assertTrue(providers[1].enabled)
-        self.assertFalse(providers[2].enabled)
+        self.assertTrue(providers[2].enabled)
 
     def test_load_providers_reads_enable_flags_and_optional_helper(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -163,6 +163,12 @@ class AdapterTests(unittest.TestCase):
             stderr="WARN: Shortcuts database unreadable; Send Notification listed by shortcuts",
         )
         self.assertEqual(result, "ok")
+
+    def test_poke_soft_skips_when_api_key_is_missing(self):
+        with patch.dict(os.environ, {"POKE_API_KEY": ""}, clear=False):
+            result = poke.run("check", payload(), notify.ProviderSpec("poke", True))
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("POKE_API_KEY", result.detail)
 
     def test_poke_wraps_existing_helper_and_never_logs_api_key(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -388,6 +394,7 @@ class AdapterPathTests(unittest.TestCase):
         self.assertTrue(poke.default_helper().is_file())
 
     def test_bundled_example_check_soft_skips_unavailable_backends(self):
+        env = {key: value for key, value in os.environ.items() if key != "POKE_API_KEY"}
         completed = subprocess.run(
             [
                 sys.executable,
@@ -404,9 +411,11 @@ class AdapterPathTests(unittest.TestCase):
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=env,
         )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
-        self.assertIn("poke: disabled", completed.stdout)
+        self.assertRegex(completed.stdout, r"poke: skipped")
+        self.assertNotIn("poke: disabled", completed.stdout)
         self.assertIn("notification_status: checked", completed.stdout)
 
 

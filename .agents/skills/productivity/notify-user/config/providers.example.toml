@@ -3,9 +3,9 @@
 # or set NOTIFY_USER_CONFIG to override. Adding a provider is an adapter plus a row here —
 # do not teach workflow skills to call ActionBuddy, Poke, or Buddy MCP directly.
 #
-# Default enable order: ActionBuddy → CodexBuddy (Host ready) → Poke off.
-# Fan-out tries every enabled provider. Soft-skip unavailable Hosts.
-# Do not silently enable Poke because another provider failed.
+# Default enable order: ActionBuddy → CodexBuddy → Poke (all enabled).
+# Fan-out tries every enabled provider. Soft-skip unavailable backends
+# (missing Shortcuts, Buddy Host/MCP, or POKE_API_KEY).
 
 [[providers]]
 id = "actionbuddy"
@@ -17,4 +17,4 @@ enabled = true
 
 [[providers]]
 id = "poke"
-enabled = false
+enabled = true

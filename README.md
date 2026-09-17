@@ -169,7 +169,7 @@ Both scripts are designed to be safe to re-run.
 - Bootstrap symlinks each shared skill folder into `CODEX_HOME/skills` (defaulting to `.codex/skills/`), `.claude/skills/`, and `.copilot/skills/`.
 - Skills that depend on machine-local secrets should read them from env vars at runtime rather than storing them in tracked files.
 - Notify the user: load `$notify-user` (`.agents/skills/productivity/notify-user/`). Do not call ActionBuddy, Poke, or Buddy MCP for routine handoffs.
-- Example secret: enabling the Poke provider under `$notify-user` requires `POKE_API_KEY`.
+- Example secret: the default-enabled Poke provider under `$notify-user` requires `POKE_API_KEY` (missing key soft-skips).
 
 ## 🧪 Testing
 
