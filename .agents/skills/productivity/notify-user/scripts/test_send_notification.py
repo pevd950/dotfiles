@@ -69,6 +69,18 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertEqual(providers[1].helper, "/tmp/fake-poke.py")
 
+    def test_load_providers_keeps_hash_inside_quoted_helper_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "/tmp/#notify/helper.py"  # local override\n'
+            )
+            providers = notify.load_providers(path)
+        self.assertEqual(providers[0].helper, "/tmp/#notify/helper.py")
+
     def test_resolve_config_prefers_explicit_then_env_then_user_then_bundled(self):
         bundled = notify.bundled_config_path()
         self.assertEqual(bundled, EXAMPLE_CONFIG)
@@ -132,6 +144,29 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(sent.status, "sent")
         self.assertIn("actionbuddy", checked.provider)
 
+    def test_actionbuddy_forwards_configured_timeout_to_helper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "actionbuddy.py",
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('OK: timeout=' + sys.argv[sys.argv.index('--timeout')+1])\n",
+            )
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            result = actionbuddy.run("check", payload(timeout=60), spec)
+        self.assertEqual(result.status, "checked")
+        self.assertIn("timeout=60", result.detail)
+
+    def test_actionbuddy_missing_helper_is_failed_not_skipped(self):
+        result = actionbuddy.run(
+            "check",
+            payload(),
+            notify.ProviderSpec(id="actionbuddy", enabled=True, helper="/missing/actionbuddy.py"),
+        )
+        self.assertEqual(result.status, "failed")
+        self.assertIn("helper not found", result.detail)
+
     def test_actionbuddy_classifies_missing_shortcuts_db_as_skip(self):
         result = actionbuddy.classify(
             returncode=1,
@@ -189,6 +224,16 @@ class AdapterTests(unittest.TestCase):
 
     def test_codexbuddy_soft_skips_when_host_unavailable(self):
         result = codexbuddy.run("check", payload(), notify.ProviderSpec("codexbuddy", True), host_probe=lambda: False)
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("Host/MCP unavailable", result.detail)
+
+    def test_codexbuddy_skips_unavailable_host_before_byte_limits(self):
+        result = codexbuddy.run(
+            "check",
+            payload(message="b" * 561),
+            notify.ProviderSpec("codexbuddy", True),
+            host_probe=lambda: False,
+        )
         self.assertEqual(result.status, "skipped")
         self.assertIn("Host/MCP unavailable", result.detail)
 
@@ -286,6 +331,26 @@ class FanoutTests(unittest.TestCase):
         )
         self.assertEqual(status, "checked")
 
+    def test_provider_exception_fails_that_provider_and_continues(self):
+        def boom(mode, notification, spec, **_kwargs):
+            raise OSError("unexpected adapter crash")
+
+        results, status = notify.run_fanout(
+            "check",
+            payload(),
+            [notify.ProviderSpec("actionbuddy", True), notify.ProviderSpec("codexbuddy", True)],
+            runners={
+                "actionbuddy": boom,
+                "codexbuddy": lambda mode, notification, spec, **_: ProviderResult(
+                    "codexbuddy", "skipped", "Host/MCP unavailable"
+                ),
+            },
+        )
+        self.assertEqual(results[0].status, "failed")
+        self.assertEqual(results[0].detail, "provider raised an unexpected error")
+        self.assertEqual(results[1].status, "skipped")
+        self.assertEqual(status, "failed")
+
 
 class CliTests(unittest.TestCase):
     def test_check_cli_with_all_skipped_providers_exits_zero(self):
@@ -346,6 +411,15 @@ class CliTests(unittest.TestCase):
         self.assertRegex(completed.stdout, r"codexbuddy: (skipped|checked)")
         self.assertIn("poke: disabled", completed.stdout)
         self.assertIn("notification_status: checked", completed.stdout)
+
+    def test_format_report_redacts_home_paths(self):
+        home = str(Path.home())
+        report = notify.format_report(
+            [ProviderResult("actionbuddy", "failed", f"Shortcut failed: {home}/Library/Shortcuts/Shortcuts.sqlite")],
+            "failed",
+        )
+        self.assertNotIn(home, report)
+        self.assertIn("$HOME/Library/Shortcuts/Shortcuts.sqlite", report)
 
     def test_json_check_output_includes_per_provider_status(self):
         with tempfile.TemporaryDirectory() as folder:

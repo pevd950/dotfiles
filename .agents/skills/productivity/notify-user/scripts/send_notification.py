@@ -80,12 +80,25 @@ def _parse_toml_scalar(raw: str):
     return value
 
 
+def _strip_toml_comment(line: str) -> str:
+    in_single = False
+    in_double = False
+    for index, char in enumerate(line):
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif char == "#" and not in_single and not in_double:
+            return line[:index]
+    return line
+
+
 def load_providers(path: Path) -> list[ProviderSpec]:
     text = path.read_text(encoding="utf-8")
     providers: list[ProviderSpec] = []
     current: dict[str, object] | None = None
     for raw in text.splitlines():
-        line = raw.split("#", 1)[0].strip()
+        line = _strip_toml_comment(raw).strip()
         if not line:
             continue
         if line == "[[providers]]":
@@ -168,12 +181,26 @@ def run_fanout(
         if runner is None:
             results.append(ProviderResult(spec.id, "failed", "unknown provider id"))
             continue
-        results.append(runner(mode, notification, spec))
+        try:
+            results.append(runner(mode, notification, spec))
+        except Exception:
+            results.append(ProviderResult(spec.id, "failed", "provider raised an unexpected error"))
     return results, aggregate_status(results, mode)
 
 
+def redact_detail(detail: str) -> str:
+    text = detail
+    home = str(Path.home())
+    if home:
+        text = text.replace(home, "$HOME")
+    api_key = os.environ.get("POKE_API_KEY", "")
+    if api_key:
+        text = text.replace(api_key, "$POKE_API_KEY")
+    return text
+
+
 def format_report(results: list[ProviderResult], status: str) -> str:
-    lines = [f"{item.provider}: {item.status} — {item.detail}" for item in results]
+    lines = [f"{item.provider}: {item.status} — {redact_detail(item.detail)}" for item in results]
     lines.append(f"notification_status: {status}")
     return "\n".join(lines)
 
@@ -220,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "notification_status": status,
                     "providers": [
-                        {"provider": item.provider, "status": item.status, "detail": item.detail}
+                        {"provider": item.provider, "status": item.status, "detail": redact_detail(item.detail)}
                         for item in results
                     ],
                 },

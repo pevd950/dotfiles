@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 UNAVAILABLE_MARKERS = (
     "Shortcuts database not found",
-    "No such file or directory",
 )
 SQLITE_SOFT_MARKERS = (
     "unable to open database file",
@@ -52,6 +51,9 @@ def classify(returncode: int, stdout: str, stderr: str) -> str:
 
 def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) -> ProviderResult:
     helper = Path(spec.helper) if spec.helper else default_helper()
+    if not helper.is_file():
+        return ProviderResult("actionbuddy", "failed", f"helper not found: {helper}")
+    timeout = max(notification.timeout, 1)
     command = [
         sys.executable,
         str(helper),
@@ -62,6 +64,8 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
         notification.subtitle,
         "--message",
         notification.message,
+        "--timeout",
+        str(timeout),
     ]
     try:
         completed = subprocess.run(
@@ -70,7 +74,7 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=max(notification.timeout, 5),
+            timeout=timeout + 10,
         )
     except FileNotFoundError as exc:
         return ProviderResult("actionbuddy", "skipped", f"helper unavailable: {exc}")

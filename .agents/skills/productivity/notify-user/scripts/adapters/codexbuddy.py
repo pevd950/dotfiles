@@ -79,14 +79,14 @@ def run(
     host_probe: Callable[[], bool] | None = None,
     **_kwargs,
 ) -> ProviderResult:
+    probe = host_probe or detect_host
+    if not probe():
+        return ProviderResult("codexbuddy", "skipped", "Codex Buddy Host/MCP unavailable")
+
     try:
         validate_fields(notification)
     except ValidationError as exc:
         return ProviderResult("codexbuddy", "failed", str(exc))
-
-    probe = host_probe or detect_host
-    if not probe():
-        return ProviderResult("codexbuddy", "skipped", "Codex Buddy Host/MCP unavailable")
 
     if mode == "check":
         return ProviderResult(
