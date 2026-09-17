@@ -20,12 +20,37 @@ from typing import Any
 
 SHORTCUT_NAME = "Send Notification"
 DB_PATH = Path.home() / "Library" / "Shortcuts" / "Shortcuts.sqlite"
+DB_UNREADABLE_MARKERS = (
+    "unable to open database file",
+    "authorization denied",
+    "operation not permitted",
+    "permission denied",
+    "database not found",
+    "shortcuts database not found",
+    "shortcuts database unreadable",
+)
+
+
+def is_db_unreadable(exc: BaseException) -> bool:
+    if isinstance(exc, PermissionError):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in DB_UNREADABLE_MARKERS)
 
 
 def connect_db() -> sqlite3.Connection:
-    if not DB_PATH.exists():
+    try:
+        exists = DB_PATH.exists()
+    except OSError as exc:
+        raise RuntimeError(f"Shortcuts database unreadable: {exc}") from exc
+    if not exists:
         raise RuntimeError(f"Shortcuts database not found: {DB_PATH}")
-    return sqlite3.connect(DB_PATH)
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        conn.execute("PRAGMA query_only = ON")
+        return conn
+    except (sqlite3.Error, OSError) as exc:
+        raise RuntimeError(f"Shortcuts database unreadable: {exc}") from exc
 
 
 def find_shortcut(conn: sqlite3.Connection) -> int:
@@ -39,12 +64,15 @@ def find_shortcut(conn: sqlite3.Connection) -> int:
 
 
 def shortcut_actions() -> list[dict[str, Any]]:
-    with connect_db() as conn:
-        shortcut_pk = find_shortcut(conn)
-        data_row = conn.execute(
-            "select ZDATA from ZSHORTCUTACTIONS where ZSHORTCUT = ?",
-            (shortcut_pk,),
-        ).fetchone()
+    try:
+        with connect_db() as conn:
+            shortcut_pk = find_shortcut(conn)
+            data_row = conn.execute(
+                "select ZDATA from ZSHORTCUTACTIONS where ZSHORTCUT = ?",
+                (shortcut_pk,),
+            ).fetchone()
+    except (sqlite3.Error, OSError) as exc:
+        raise RuntimeError(f"Shortcuts database unreadable: {exc}") from exc
     if not data_row:
         raise RuntimeError(f"Shortcut actions not found: {SHORTCUT_NAME}")
     actions = plistlib.loads(data_row[0])
@@ -163,6 +191,42 @@ def validate_shortcut_input_body() -> str:
     )
 
 
+def shortcut_is_listed() -> bool:
+    try:
+        result = subprocess.run(
+            ["shortcuts", "list"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            check=False,
+        )
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+    if result.returncode != 0:
+        return False
+    names = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    return SHORTCUT_NAME in names
+
+
+def try_validate_shortcut_input_body() -> tuple[str, bool, bool | None]:
+    """Return (detail, strict, listed).
+
+    strict=True means Shortcuts.sqlite was readable and wiring was validated.
+    listed is set only when sqlite was unreadable and `shortcuts list` was consulted.
+    """
+    try:
+        return validate_shortcut_input_body(), True, None
+    except Exception as exc:
+        if not is_db_unreadable(exc):
+            raise
+        listed = shortcut_is_listed()
+        warning = f"sqlite wiring check skipped ({exc})"
+        if listed:
+            return f"{warning}; {SHORTCUT_NAME} listed by shortcuts", False, True
+        return f"{warning}; {SHORTCUT_NAME} not confirmed via shortcuts list", False, False
+
+
 def notification_payload(title: str, subtitle: str, message: str) -> str:
     return json.dumps(
         {
@@ -228,26 +292,32 @@ def main() -> int:
 
     try:
         check_message(args.message, args.title, args.subtitle)
-        before = validate_shortcut_input_body()
+        before, strict, listed = try_validate_shortcut_input_body()
+        lengths = (
+            f"title length={len(args.title)}; subtitle length={len(args.subtitle)}; "
+            f"message length={len(args.message)}"
+        )
         if args.check:
-            print(
-                f"OK: {SHORTCUT_NAME} is available; {before}; "
-                f"title length={len(args.title)}; subtitle length={len(args.subtitle)}; "
-                f"message length={len(args.message)}"
-            )
+            if strict:
+                print(f"OK: {SHORTCUT_NAME} is available; {before}; {lengths}")
+                return 0
+            if listed:
+                print(f"OK: {SHORTCUT_NAME} is listed; {before}; {lengths}")
+                return 0
+            print(f"WARN: {SHORTCUT_NAME} sqlite wiring unavailable; {before}; {lengths}", file=sys.stderr)
             return 0
 
         try:
             result = run_shortcut(args.title, args.subtitle, args.message, args.timeout)
         except subprocess.TimeoutExpired:
-            after = validate_shortcut_input_body()
+            after, _, _ = try_validate_shortcut_input_body()
             print(
                 f"WARN: Shortcut timed out after {args.timeout}s; delivery may have succeeded; {after}",
                 file=sys.stderr,
             )
             return 0
 
-        after = validate_shortcut_input_body()
+        after, _, _ = try_validate_shortcut_input_body()
         if result.returncode != 0:
             stderr = result.stderr.strip() or "no stderr"
             raise RuntimeError(f"Shortcut failed with exit {result.returncode}: {stderr}; {after}")

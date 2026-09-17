@@ -56,7 +56,7 @@ Override with `$XDG_CONFIG_HOME/notify-user/providers.toml` or `NOTIFY_USER_CONF
 
 ## Provider behavior
 
-**ActionBuddy** — wraps `actionbuddy-notify` (`shortcuts run` + structured Shortcut Input). Missing Shortcuts DB / non-macOS → `skipped`. `shortcuts run` timeout after a successful wiring check → `indeterminate`. Repair the shortcut via the provider skill; do not call that skill from workflows.
+**ActionBuddy** — wraps `actionbuddy-notify` (`shortcuts run` + structured Shortcut Input). Missing Shortcuts DB / non-macOS → `skipped`. Sqlite TCC / unreadable DB → warn and still `--check` via `shortcuts list` / `--send` via `shortcuts run` (`checked` / `indeterminate` / `sent`; do not fail fan-out on sqlite access). `shortcuts run` timeout → `indeterminate`. Repair the shortcut via the provider skill; do not call that skill from workflows.
 
 **CodexBuddy** — probe-only until a dedicated Host/MCP send path is stable. Soft-skip when `codex-buddy-mcp` / Host config is absent. **Approval gate:** `buddy_send_custom_notification` may run only after the user explicitly asks for or approves an externally visible Buddy handoff in this session. This adapter never invokes that MCP tool and never talks to the Host over an invented HTTP/CLI send path. Do not set an env var or flag to bypass the gate. Product notification routing policy stays in pevd950/codex-buddy (related: #27).
 

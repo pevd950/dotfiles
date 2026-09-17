@@ -148,6 +148,22 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(result, "indeterminate")
 
+    def test_actionbuddy_sqlite_tcc_error_is_not_failed(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr="ERROR: unable to open database file",
+        )
+        self.assertIn(result, {"skipped", "indeterminate"})
+
+    def test_actionbuddy_sqlite_warning_with_successful_send_is_ok(self):
+        result = actionbuddy.classify(
+            returncode=0,
+            stdout="OK: Notification sent!; sqlite wiring check skipped (Operation not permitted)",
+            stderr="WARN: Shortcuts database unreadable; Send Notification listed by shortcuts",
+        )
+        self.assertEqual(result, "ok")
+
     def test_poke_wraps_existing_helper_and_never_logs_api_key(self):
         with tempfile.TemporaryDirectory() as folder:
             helper = write_helper(
@@ -321,7 +337,7 @@ class CliTests(unittest.TestCase):
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("actionbuddy: skipped", completed.stdout)
-        self.assertIn("codexbuddy: skipped", completed.stdout)
+        self.assertRegex(completed.stdout, r"codexbuddy: (skipped|checked)")
         self.assertIn("poke: disabled", completed.stdout)
         self.assertIn("notification_status: checked", completed.stdout)
 

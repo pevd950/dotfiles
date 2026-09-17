@@ -16,6 +16,13 @@ UNAVAILABLE_MARKERS = (
     "Shortcuts database not found",
     "No such file or directory",
 )
+SQLITE_SOFT_MARKERS = (
+    "unable to open database file",
+    "Operation not permitted",
+    "authorization denied",
+    "Shortcuts database unreadable",
+    "sqlite wiring check skipped",
+)
 INDETERMINATE_MARKERS = ("WARN:", "timed out")
 
 
@@ -30,8 +37,12 @@ def default_helper() -> Path:
 
 def classify(returncode: int, stdout: str, stderr: str) -> str:
     text = f"{stdout}\n{stderr}"
+    if returncode == 0 and "OK:" in stdout:
+        return "ok"
     if any(marker in text for marker in UNAVAILABLE_MARKERS):
         return "skipped"
+    if any(marker in text for marker in SQLITE_SOFT_MARKERS):
+        return "indeterminate"
     if any(marker in text for marker in INDETERMINATE_MARKERS):
         return "indeterminate"
     if returncode == 0:

@@ -12,7 +12,7 @@ Keep this skill for shortcut-contract repair and helper details. The notificatio
 ## Shortcut contract
 
 - macOS shortcut named `Send Notification` containing ActionBuddy's `Send Notification` action, with title, subtitle, and body wired from a JSON `Shortcut Input` dictionary (`title`, `subtitle`, `body`). `Show When Run` stays disabled.
-- The helper writes the payload to a temp JSON file and runs `shortcuts run "Send Notification" --input-path <file>`. It validates the structured shortcut before and after each send and must never patch the shortcut with outgoing text or edit `Shortcuts.sqlite` to inject content (it reads that database only to validate wiring).
+- The helper writes the payload to a temp JSON file and runs `shortcuts run "Send Notification" --input-path <file>`. When `Shortcuts.sqlite` is readable it validates the structured shortcut before and after each send. If the database is unreadable (TCC, sandbox, missing file), it warns and still attempts `shortcuts run` / `shortcuts list` — it must never patch the shortcut or write `Shortcuts.sqlite`.
 - If the helper reports the shortcut still uses the legacy body-only contract or literal text, repair the shortcut to extract fields from JSON `Shortcut Input`, then re-validate. Never "fix" a timeout by reverting to literal-body patching.
 - Attachments are unvalidated; treat them as unsupported until tested through `shortcuts run --input-path`.
 
@@ -29,4 +29,4 @@ python3 "$HOME/.agents/skills/productivity/actionbuddy-notify/scripts/send_notif
 python3 "$HOME/.agents/skills/productivity/actionbuddy-notify/scripts/send_notification.py" --send  --title "Codex" --subtitle "Ready" --message "..."
 ```
 
-Readonly-database, Operation-not-permitted, or Shortcuts access errors in a sandboxed session → retry with the session's approved local-automation escalation when policy permits. A `shortcuts run` timeout after pre/post validation succeeded is indeterminate-but-nonfatal. Never include secrets in notification text — the message transits a local temp file.
+Readonly-database, Operation-not-permitted, or Shortcuts sqlite access errors in a sandboxed session are a **soft warning**, not a hard failure: `--check` uses `shortcuts list`, and `--send` still runs `shortcuts run`. Retry with the session's approved local-automation escalation only when `shortcuts run` itself is denied. A `shortcuts run` timeout after send is indeterminate-but-nonfatal. Never include secrets in notification text — the message transits a local temp file.
