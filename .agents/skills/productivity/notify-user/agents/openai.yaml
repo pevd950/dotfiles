@@ -1,0 +1,7 @@
+interface:
+  display_name: "Notify User"
+  short_description: "Fan out a structured handoff to enabled notification providers."
+  default_prompt: "Use $notify-user to send the configured user a concise handoff when work is done, blocked, or ready for review."
+
+policy:
+  allow_implicit_invocation: true

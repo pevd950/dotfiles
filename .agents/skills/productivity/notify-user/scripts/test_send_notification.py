@@ -1,0 +1,398 @@
+#!/usr/bin/env python3
+"""Regression tests for the notify-user fan-out CLI and adapters."""
+
+from __future__ import annotations
+
+import json
+import os
+import stat
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
+
+import send_notification as notify  # noqa: E402
+from adapters import ProviderResult  # noqa: E402
+from adapters import actionbuddy, codexbuddy, poke  # noqa: E402
+
+
+SKILL_DIR = SCRIPTS.parent
+EXAMPLE_CONFIG = SKILL_DIR / "config" / "providers.example.toml"
+FANOUT = SCRIPTS / "send_notification.py"
+
+
+def payload(**overrides):
+    fields = dict(
+        title="Codex",
+        subtitle="Ready",
+        message="For the user from Codex: PR is ready. Next step: review.",
+    )
+    fields.update(overrides)
+    return notify.Notification(**fields)
+
+
+def write_helper(directory: Path, name: str, script: str) -> Path:
+    path = directory / name
+    path.write_text(script)
+    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    return path
+
+
+class ConfigTests(unittest.TestCase):
+    def test_example_config_orders_actionbuddy_then_codexbuddy_with_poke_off(self):
+        providers = notify.load_providers(EXAMPLE_CONFIG)
+        self.assertEqual([item.id for item in providers], ["actionbuddy", "codexbuddy", "poke"])
+        self.assertTrue(providers[0].enabled)
+        self.assertTrue(providers[1].enabled)
+        self.assertFalse(providers[2].enabled)
+
+    def test_load_providers_reads_enable_flags_and_optional_helper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = false\n"
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+                'helper = "/tmp/fake-poke.py"\n'
+            )
+            providers = notify.load_providers(path)
+        self.assertEqual(providers[0].id, "actionbuddy")
+        self.assertFalse(providers[0].enabled)
+        self.assertTrue(providers[1].enabled)
+        self.assertEqual(providers[1].helper, "/tmp/fake-poke.py")
+
+    def test_resolve_config_prefers_explicit_then_env_then_user_then_bundled(self):
+        bundled = notify.bundled_config_path()
+        self.assertEqual(bundled, EXAMPLE_CONFIG)
+        with tempfile.TemporaryDirectory() as folder:
+            explicit = Path(folder) / "explicit.toml"
+            env_path = Path(folder) / "env.toml"
+            explicit.write_text('[[providers]]\nid = "actionbuddy"\nenabled = true\n')
+            env_path.write_text('[[providers]]\nid = "poke"\nenabled = true\n')
+            self.assertEqual(notify.resolve_config_path(str(explicit)), explicit)
+            with patch.dict(os.environ, {"NOTIFY_USER_CONFIG": str(env_path)}, clear=False):
+                self.assertEqual(notify.resolve_config_path(None), env_path)
+            with patch.dict(os.environ, {"XDG_CONFIG_HOME": folder}, clear=False):
+                env = {key: value for key, value in os.environ.items() if key != "NOTIFY_USER_CONFIG"}
+                with patch.dict(os.environ, env, clear=True):
+                    os.environ["XDG_CONFIG_HOME"] = folder
+                    user = Path(folder) / "notify-user" / "providers.toml"
+                    self.assertEqual(notify.resolve_config_path(None), bundled)
+                    user.parent.mkdir()
+                    user.write_text('[[providers]]\nid = "codexbuddy"\nenabled = true\n')
+                    self.assertEqual(notify.resolve_config_path(None), user)
+
+
+class PayloadTests(unittest.TestCase):
+    def test_rejects_empty_message(self):
+        with self.assertRaisesRegex(notify.ValidationError, "message"):
+            notify.validate_notification(payload(message="  "))
+
+    def test_poke_folds_title_and_subtitle_into_one_paragraph(self):
+        folded = poke.fold_message(payload())
+        self.assertIn("Codex", folded)
+        self.assertIn("Ready", folded)
+        self.assertIn("PR is ready", folded)
+        self.assertNotIn("\n", folded)
+
+    def test_codexbuddy_enforces_byte_limits_and_id_shape(self):
+        with self.assertRaisesRegex(notify.ValidationError, "title"):
+            codexbuddy.validate_fields(payload(title="n" * 121))
+        with self.assertRaisesRegex(notify.ValidationError, "subtitle"):
+            codexbuddy.validate_fields(payload(subtitle="s" * 161))
+        with self.assertRaisesRegex(notify.ValidationError, "message"):
+            codexbuddy.validate_fields(payload(message="b" * 561))
+        with self.assertRaisesRegex(notify.ValidationError, "callerNamespaceID"):
+            codexbuddy.validate_fields(payload(caller_namespace_id="bad id"))
+
+
+class AdapterTests(unittest.TestCase):
+    def test_actionbuddy_wraps_existing_helper_check_and_send(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "actionbuddy.py",
+                "#!/usr/bin/env python3\n"
+                "import json,sys\n"
+                "mode='check' if '--check' in sys.argv else 'send'\n"
+                "print(json.dumps({'mode': mode, 'title': sys.argv[sys.argv.index('--title')+1]}))\n",
+            )
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            checked = actionbuddy.run("check", payload(), spec)
+            sent = actionbuddy.run("send", payload(), spec)
+        self.assertEqual(checked.status, "checked")
+        self.assertEqual(sent.status, "sent")
+        self.assertIn("actionbuddy", checked.provider)
+
+    def test_actionbuddy_classifies_missing_shortcuts_db_as_skip(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr="ERROR: Shortcuts database not found: /tmp/Shortcuts.sqlite",
+        )
+        self.assertEqual(result, "skipped")
+
+    def test_actionbuddy_timeout_warning_is_indeterminate(self):
+        result = actionbuddy.classify(
+            returncode=0,
+            stdout="",
+            stderr="WARN: Shortcut timed out after 30s; delivery may have succeeded; wired",
+        )
+        self.assertEqual(result, "indeterminate")
+
+    def test_poke_wraps_existing_helper_and_never_logs_api_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "poke.py",
+                "#!/usr/bin/env python3\n"
+                "import os,sys\n"
+                "assert os.environ.get('POKE_API_KEY') == 'secret-key'\n"
+                "print('Endpoint: https://poke.com/api/v1/inbound/api-message')\n"
+                "print('Payload: {\"message\":\"folded\"}')\n",
+            )
+            spec = notify.ProviderSpec(id="poke", enabled=True, helper=str(helper))
+            with patch.dict(os.environ, {"POKE_API_KEY": "secret-key"}):
+                result = poke.run("check", payload(), spec)
+        self.assertEqual(result.status, "checked")
+        self.assertNotIn("secret-key", result.detail)
+
+    def test_codexbuddy_soft_skips_when_host_unavailable(self):
+        result = codexbuddy.run("check", payload(), notify.ProviderSpec("codexbuddy", True), host_probe=lambda: False)
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("Host/MCP unavailable", result.detail)
+
+    def test_codexbuddy_does_not_invent_a_send_bypass_when_host_is_present(self):
+        result = codexbuddy.run(
+            "send",
+            payload(caller_namespace_id="notify-user", notification_id="pr-78"),
+            notify.ProviderSpec("codexbuddy", True),
+            host_probe=lambda: True,
+        )
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("explicit user approval", result.detail.lower())
+        self.assertNotIn("bypass", result.detail.lower())
+        self.assertIn("buddy_send_custom_notification", result.detail)
+
+
+class FanoutTests(unittest.TestCase):
+    def test_disabled_providers_are_not_called(self):
+        calls = []
+
+        def recording(mode, notification, spec, **_kwargs):
+            calls.append(spec.id)
+            return ProviderResult(spec.id, "sent", "ok")
+
+        providers = [
+            notify.ProviderSpec("actionbuddy", True),
+            notify.ProviderSpec("codexbuddy", True),
+            notify.ProviderSpec("poke", False),
+        ]
+        results, status = notify.run_fanout(
+            "send",
+            payload(),
+            providers,
+            runners={"actionbuddy": recording, "codexbuddy": recording, "poke": recording},
+        )
+        self.assertEqual(calls, ["actionbuddy", "codexbuddy"])
+        self.assertEqual([item.status for item in results if item.provider == "poke"], ["disabled"])
+        self.assertEqual(status, "sent")
+
+    def test_no_silent_poke_fallback_when_poke_is_disabled_and_primary_fails(self):
+        def fail_actionbuddy(mode, notification, spec, **_kwargs):
+            return ProviderResult("actionbuddy", "failed", "shortcut error")
+
+        def boom(mode, notification, spec, **_kwargs):
+            raise AssertionError("poke must not run when disabled")
+
+        results, status = notify.run_fanout(
+            "send",
+            payload(),
+            [notify.ProviderSpec("actionbuddy", True), notify.ProviderSpec("poke", False)],
+            runners={"actionbuddy": fail_actionbuddy, "poke": boom},
+        )
+        self.assertEqual(status, "failed")
+        self.assertEqual(results[-1].status, "disabled")
+
+    def test_fallback_sent_when_primary_fails_and_later_enabled_provider_sends(self):
+        runners = {
+            "actionbuddy": lambda mode, notification, spec, **_: ProviderResult("actionbuddy", "failed", "no shortcuts"),
+            "codexbuddy": lambda mode, notification, spec, **_: ProviderResult("codexbuddy", "sent", "delivered"),
+        }
+        _results, status = notify.run_fanout(
+            "send",
+            payload(),
+            [notify.ProviderSpec("actionbuddy", True), notify.ProviderSpec("codexbuddy", True)],
+            runners=runners,
+        )
+        self.assertEqual(status, "fallback sent")
+
+    def test_indeterminate_when_send_times_out_without_confirmed_delivery(self):
+        _results, status = notify.run_fanout(
+            "send",
+            payload(),
+            [notify.ProviderSpec("actionbuddy", True)],
+            runners={
+                "actionbuddy": lambda mode, notification, spec, **_: ProviderResult(
+                    "actionbuddy", "indeterminate", "timeout"
+                )
+            },
+        )
+        self.assertEqual(status, "indeterminate")
+
+    def test_skipped_hosts_do_not_fail_check(self):
+        _results, status = notify.run_fanout(
+            "check",
+            payload(),
+            [notify.ProviderSpec("actionbuddy", True), notify.ProviderSpec("codexbuddy", True)],
+            runners={
+                "actionbuddy": lambda mode, notification, spec, **_: ProviderResult(
+                    "actionbuddy", "skipped", "Shortcuts database not found"
+                ),
+                "codexbuddy": lambda mode, notification, spec, **_: ProviderResult(
+                    "codexbuddy", "skipped", "Host/MCP unavailable"
+                ),
+            },
+        )
+        self.assertEqual(status, "checked")
+
+
+class CliTests(unittest.TestCase):
+    def test_check_cli_with_all_skipped_providers_exits_zero(self):
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / "providers.toml"
+            config.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                "[[providers]]\n"
+                'id = "codexbuddy"\n'
+                "enabled = true\n"
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = false\n"
+            )
+            helper = write_helper(
+                Path(folder),
+                "missing_db.py",
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('ERROR: Shortcuts database not found: /missing', file=sys.stderr)\n"
+                "sys.exit(1)\n",
+            )
+            config.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                f'helper = "{helper}"\n'
+                "[[providers]]\n"
+                'id = "codexbuddy"\n'
+                "enabled = true\n"
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = false\n"
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(FANOUT),
+                    "--check",
+                    "--config",
+                    str(config),
+                    "--title",
+                    "Codex",
+                    "--subtitle",
+                    "Ready",
+                    "--message",
+                    "For the user from Codex: CLI check.",
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("actionbuddy: skipped", completed.stdout)
+        self.assertIn("codexbuddy: skipped", completed.stdout)
+        self.assertIn("poke: disabled", completed.stdout)
+        self.assertIn("notification_status: checked", completed.stdout)
+
+    def test_json_check_output_includes_per_provider_status(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "ok.py",
+                "#!/usr/bin/env python3\nprint('OK: Send Notification is available')\n",
+            )
+            config = Path(folder) / "providers.toml"
+            config.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                f'helper = "{helper}"\n'
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = false\n"
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(FANOUT),
+                    "--check",
+                    "--json",
+                    "--config",
+                    str(config),
+                    "--message",
+                    "JSON check body",
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["notification_status"], "checked")
+        providers = {item["provider"]: item["status"] for item in payload["providers"]}
+        self.assertEqual(providers["actionbuddy"], "checked")
+        self.assertEqual(providers["poke"], "disabled")
+
+
+class AdapterPathTests(unittest.TestCase):
+    def test_default_helpers_point_at_existing_provider_scripts(self):
+        self.assertTrue(actionbuddy.default_helper().is_file())
+        self.assertTrue(poke.default_helper().is_file())
+
+    def test_bundled_example_check_soft_skips_unavailable_backends(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(FANOUT),
+                "--check",
+                "--title",
+                "Codex",
+                "--subtitle",
+                "Validation",
+                "--message",
+                "For the user from Codex: notify-user check on this host.",
+            ],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        self.assertIn("poke: disabled", completed.stdout)
+        self.assertIn("notification_status: checked", completed.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

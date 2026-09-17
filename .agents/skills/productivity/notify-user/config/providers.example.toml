@@ -1,0 +1,20 @@
+# Ordered notification providers for `$notify-user`.
+# Copy to $XDG_CONFIG_HOME/notify-user/providers.toml (default ~/.config/notify-user/providers.toml)
+# or set NOTIFY_USER_CONFIG to override. Adding a provider is an adapter plus a row here —
+# do not teach workflow skills to call ActionBuddy, Poke, or Buddy MCP directly.
+#
+# Default enable order: ActionBuddy → CodexBuddy (Host ready) → Poke off.
+# Fan-out tries every enabled provider. Soft-skip unavailable Hosts.
+# Do not silently enable Poke because another provider failed.
+
+[[providers]]
+id = "actionbuddy"
+enabled = true
+
+[[providers]]
+id = "codexbuddy"
+enabled = true
+
+[[providers]]
+id = "poke"
+enabled = false
