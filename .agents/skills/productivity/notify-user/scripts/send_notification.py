@@ -157,7 +157,10 @@ def load_providers(path: Path) -> list[ProviderSpec]:
         if "=" not in line:
             raise ValidationError(f"{path}: invalid line {raw!r}")
         key, value = line.split("=", 1)
-        current[key.strip()] = _parse_toml_scalar(value)
+        key = key.strip()
+        if key in current:
+            raise ValidationError(f"{path}: duplicate key {key!r}")
+        current[key] = _parse_toml_scalar(value)
     if current is not None:
         providers.append(_provider_from_mapping(current))
     if not providers:

@@ -41,6 +41,8 @@ def classify(returncode: int, stdout: str, stderr: str) -> str:
         return "ok"
     if returncode != 0 and "Shortcut failed with exit" in text:
         return "failed"
+    if "timed out" in text:
+        return "indeterminate"
     if any(marker in text for marker in UNAVAILABLE_MARKERS):
         return "skipped"
     if any(marker in text for marker in SQLITE_SOFT_MARKERS):

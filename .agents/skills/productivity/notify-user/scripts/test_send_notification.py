@@ -51,6 +51,18 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_rejects_duplicate_keys(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = false\n"
+                "enabled = true\n"
+            )
+            with self.assertRaisesRegex(notify.ValidationError, r"duplicate key 'enabled'"):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_unknown_keys(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"
@@ -282,6 +294,17 @@ class AdapterTests(unittest.TestCase):
             ),
         )
         self.assertEqual(result, "failed")
+
+    def test_actionbuddy_timeout_is_indeterminate_even_with_missing_db_marker(self):
+        result = actionbuddy.classify(
+            returncode=0,
+            stdout="",
+            stderr=(
+                "WARN: Shortcut timed out after 30s; delivery may have succeeded; "
+                "Shortcuts database not found: /tmp/Shortcuts.sqlite"
+            ),
+        )
+        self.assertEqual(result, "indeterminate")
 
     def test_actionbuddy_classifies_missing_shortcuts_binary_as_skip(self):
         result = actionbuddy.classify(

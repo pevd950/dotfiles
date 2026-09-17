@@ -108,12 +108,25 @@ class SqliteAccessClassificationTests(unittest.TestCase):
 
 class StrictWiringTests(unittest.TestCase):
     def test_check_ok_when_sqlite_actions_are_readable_and_wired(self):
-        with patch.object(helper, "shortcut_actions", return_value=valid_actions()):
+        with (
+            patch.object(helper, "shortcut_actions", return_value=valid_actions()),
+            patch.object(helper, "shortcut_is_listed", return_value=True),
+        ):
             code, stdout, stderr = run_main(CHECK_ARGS)
         self.assertEqual(code, 0, stderr)
         self.assertIn("OK:", stdout)
         self.assertIn("title/subtitle/body wired", stdout)
         self.assertNotIn("ERROR:", stderr)
+
+    def test_check_skips_when_sqlite_is_readable_but_shortcuts_is_missing(self):
+        with (
+            patch.object(helper, "shortcut_actions", return_value=valid_actions()),
+            patch.object(helper, "shortcut_is_listed", return_value=False),
+        ):
+            code, stdout, stderr = run_main(CHECK_ARGS)
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("shortcuts executable not found", stderr)
+        self.assertNotIn("OK:", stdout)
 
     def test_check_hard_fails_when_db_is_readable_but_wiring_is_wrong(self):
         actions = [

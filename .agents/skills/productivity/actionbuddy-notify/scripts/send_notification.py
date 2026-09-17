@@ -213,10 +213,10 @@ def try_validate_shortcut_input_body() -> tuple[str, bool, bool | None]:
     """Return (detail, strict, listed).
 
     strict=True means Shortcuts.sqlite was readable and wiring was validated.
-    listed is set only when sqlite was unreadable and `shortcuts list` was consulted.
+    listed is whether `shortcuts list` can see Send Notification.
     """
     try:
-        return validate_shortcut_input_body(), True, None
+        detail = validate_shortcut_input_body()
     except Exception as exc:
         if not is_db_unreadable(exc):
             raise
@@ -225,6 +225,7 @@ def try_validate_shortcut_input_body() -> tuple[str, bool, bool | None]:
         if listed:
             return f"{warning}; {SHORTCUT_NAME} listed by shortcuts", False, True
         return f"{warning}; {SHORTCUT_NAME} not confirmed via shortcuts list", False, False
+    return detail, True, shortcut_is_listed()
 
 
 def notification_payload(title: str, subtitle: str, message: str) -> str:
@@ -298,12 +299,18 @@ def main() -> int:
             f"message length={len(args.message)}"
         )
         if args.check:
-            if strict:
+            if strict and listed:
                 print(f"OK: {SHORTCUT_NAME} is available; {before}; {lengths}")
                 return 0
             if listed:
                 print(f"OK: {SHORTCUT_NAME} is listed; {before}; {lengths}")
                 return 0
+            if strict:
+                print(
+                    f"ERROR: shortcuts executable not found; ActionBuddy is unavailable; {before}",
+                    file=sys.stderr,
+                )
+                return 1
             print(f"WARN: {SHORTCUT_NAME} sqlite wiring unavailable; {before}; {lengths}", file=sys.stderr)
             return 0
 
