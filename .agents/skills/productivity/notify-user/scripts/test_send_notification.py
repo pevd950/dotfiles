@@ -81,6 +81,18 @@ class ConfigTests(unittest.TestCase):
             providers = notify.load_providers(path)
         self.assertEqual(providers[0].helper, "/tmp/#notify/helper.py")
 
+    def test_load_providers_honors_escaped_quotes_before_hash(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "/tmp/foo\\"bar#baz.py"\n'
+            )
+            providers = notify.load_providers(path)
+        self.assertEqual(providers[0].helper, '/tmp/foo"bar#baz.py')
+
     def test_resolve_config_prefers_explicit_then_env_then_user_then_bundled(self):
         bundled = notify.bundled_config_path()
         self.assertEqual(bundled, EXAMPLE_CONFIG)

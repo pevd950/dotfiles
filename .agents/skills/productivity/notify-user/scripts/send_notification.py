@@ -73,8 +73,8 @@ def _parse_toml_scalar(raw: str):
     value = raw.strip()
     if value in {"true", "false"}:
         return value == "true"
-    if value.startswith('"') and value.endswith('"'):
-        return value[1:-1]
+    if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+        return _unescape_toml_basic(value[1:-1])
     if value.startswith("'") and value.endswith("'"):
         return value[1:-1]
     return value
@@ -83,14 +83,41 @@ def _parse_toml_scalar(raw: str):
 def _strip_toml_comment(line: str) -> str:
     in_single = False
     in_double = False
+    escaped = False
     for index, char in enumerate(line):
+        if in_double:
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == '"':
+                in_double = False
+            continue
         if char == "'" and not in_double:
             in_single = not in_single
         elif char == '"' and not in_single:
-            in_double = not in_double
+            in_double = True
         elif char == "#" and not in_single and not in_double:
             return line[:index]
     return line
+
+
+def _unescape_toml_basic(value: str) -> str:
+    out: list[str] = []
+    escaped = False
+    replacements = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\"}
+    for char in value:
+        if escaped:
+            out.append(replacements.get(char, char))
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        out.append(char)
+    return "".join(out)
 
 
 def load_providers(path: Path) -> list[ProviderSpec]:
