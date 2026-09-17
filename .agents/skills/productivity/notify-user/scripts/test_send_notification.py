@@ -303,6 +303,14 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result.status, "failed")
         self.assertIn("helper not found", result.detail)
 
+    def test_actionbuddy_classifies_absent_listed_shortcut_as_failed(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr="ERROR: Send Notification is not listed by shortcuts; wired",
+        )
+        self.assertEqual(result, "failed")
+
     def test_actionbuddy_classifies_missing_shortcuts_db_as_skip(self):
         result = actionbuddy.classify(
             returncode=1,

@@ -318,6 +318,12 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 1
+            if strict and probe == "absent":
+                print(
+                    f"ERROR: {SHORTCUT_NAME} is not listed by shortcuts; {before}",
+                    file=sys.stderr,
+                )
+                return 1
             if strict:
                 print(
                     f"WARN: shortcuts list did not confirm {SHORTCUT_NAME}; {before}; {lengths}",

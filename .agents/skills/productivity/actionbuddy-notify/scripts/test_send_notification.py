@@ -128,6 +128,17 @@ class StrictWiringTests(unittest.TestCase):
         self.assertIn("shortcuts executable not found", stderr)
         self.assertNotIn("OK:", stdout)
 
+    def test_check_fails_when_sqlite_is_wired_but_shortcut_is_absent(self):
+        with (
+            patch.object(helper, "shortcut_actions", return_value=valid_actions()),
+            patch.object(helper, "probe_shortcuts", return_value="absent"),
+        ):
+            code, stdout, stderr = run_main(CHECK_ARGS)
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("is not listed by shortcuts", stderr)
+        self.assertNotIn("OK:", stdout)
+        self.assertNotIn("WARN: shortcuts list did not confirm", stderr)
+
     def test_check_is_indeterminate_when_shortcuts_list_times_out(self):
         with (
             patch.object(helper, "shortcut_actions", return_value=valid_actions()),
