@@ -7,6 +7,8 @@ description: "Fan out a structured handoff to the configured user's enabled noti
 
 Single caller-facing notification skill (`$notify-user`). Workflows load only this skill and run the fan-out script. Do not name ActionBuddy, Poke, or Buddy MCP for routine handoffs.
 
+`$notify-user` does not disable or replace Codex native Desktop/TUI/`notify`-hook turn notifications — those remain automatic and separate from this ActionBuddy/Buddy custom fan-out.
+
 `actionbuddy-notify` and `poke-notify` are provider implementations (repair docs + helpers). Codex Buddy custom notify remains Host/MCP-owned and still requires **explicit user approval** — this skill does not invent a bypass.
 
 ## Fields
