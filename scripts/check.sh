@@ -13,6 +13,7 @@ bash_files=(
   setup.sh
   scripts/setup-checks.sh
   .config/yadm/bootstrap
+  .cursor/install.sh
   .zshrc_custom/bin/coderabbit
   .zshrc_custom/bin/cr
 )
