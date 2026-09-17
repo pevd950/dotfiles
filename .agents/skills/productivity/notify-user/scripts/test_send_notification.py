@@ -51,6 +51,17 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_rejects_unknown_keys(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabeld = false\n"
+            )
+            with self.assertRaisesRegex(notify.ValidationError, r"unknown keys: enabeld"):
+                notify.load_providers(path)
+
     def test_load_providers_reads_enable_flags_and_optional_helper(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"

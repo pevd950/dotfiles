@@ -169,6 +169,9 @@ def _provider_from_mapping(mapping: dict[str, object]) -> ProviderSpec:
     provider_id = mapping.get("id")
     if not isinstance(provider_id, str) or not provider_id.strip():
         raise ValidationError("provider id is required")
+    unknown = sorted(set(mapping) - {"id", "enabled", "helper"})
+    if unknown:
+        raise ValidationError(f"{provider_id}: unknown keys: {', '.join(unknown)}")
     enabled = mapping.get("enabled", True)
     if not isinstance(enabled, bool):
         raise ValidationError(f"{provider_id}: enabled must be a boolean")

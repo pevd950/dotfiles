@@ -1,3 +1,6 @@
 name: actionbuddy-notify
 description: Provider implementation for $notify-user. Do not call from workflows for routine handoffs.
 entrypoint: SKILL.md
+
+policy:
+  allow_implicit_invocation: false
