@@ -165,6 +165,11 @@ def load_providers(path: Path) -> list[ProviderSpec]:
         providers.append(_provider_from_mapping(current))
     if not providers:
         raise ValidationError(f"{path}: no [[providers]] entries")
+    seen: set[str] = set()
+    for provider in providers:
+        if provider.id in seen:
+            raise ValidationError(f"{path}: duplicate provider id {provider.id!r}")
+        seen.add(provider.id)
     return providers
 
 

@@ -110,7 +110,7 @@ class StrictWiringTests(unittest.TestCase):
     def test_check_ok_when_sqlite_actions_are_readable_and_wired(self):
         with (
             patch.object(helper, "shortcut_actions", return_value=valid_actions()),
-            patch.object(helper, "shortcut_is_listed", return_value=True),
+            patch.object(helper, "probe_shortcuts", return_value="listed"),
         ):
             code, stdout, stderr = run_main(CHECK_ARGS)
         self.assertEqual(code, 0, stderr)
@@ -121,12 +121,22 @@ class StrictWiringTests(unittest.TestCase):
     def test_check_skips_when_sqlite_is_readable_but_shortcuts_is_missing(self):
         with (
             patch.object(helper, "shortcut_actions", return_value=valid_actions()),
-            patch.object(helper, "shortcut_is_listed", return_value=False),
+            patch.object(helper, "probe_shortcuts", return_value="missing"),
         ):
             code, stdout, stderr = run_main(CHECK_ARGS)
         self.assertEqual(code, 1, stdout + stderr)
         self.assertIn("shortcuts executable not found", stderr)
         self.assertNotIn("OK:", stdout)
+
+    def test_check_is_indeterminate_when_shortcuts_list_times_out(self):
+        with (
+            patch.object(helper, "shortcut_actions", return_value=valid_actions()),
+            patch.object(helper, "probe_shortcuts", return_value="indeterminate"),
+        ):
+            code, stdout, stderr = run_main(CHECK_ARGS)
+        self.assertEqual(code, 0, stdout + stderr)
+        self.assertIn("WARN: shortcuts list did not confirm", stderr)
+        self.assertNotIn("shortcuts executable not found", stderr)
 
     def test_check_hard_fails_when_db_is_readable_but_wiring_is_wrong(self):
         actions = [

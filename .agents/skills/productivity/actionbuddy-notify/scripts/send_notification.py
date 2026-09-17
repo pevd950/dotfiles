@@ -191,7 +191,7 @@ def validate_shortcut_input_body() -> str:
     )
 
 
-def shortcut_is_listed() -> bool:
+def probe_shortcuts() -> str:
     try:
         result = subprocess.run(
             ["shortcuts", "list"],
@@ -201,31 +201,37 @@ def shortcut_is_listed() -> bool:
             timeout=10,
             check=False,
         )
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
-        return False
+    except FileNotFoundError:
+        return "missing"
+    except (OSError, subprocess.TimeoutExpired):
+        return "indeterminate"
     if result.returncode != 0:
-        return False
+        return "indeterminate"
     names = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-    return SHORTCUT_NAME in names
+    return "listed" if SHORTCUT_NAME in names else "absent"
 
 
-def try_validate_shortcut_input_body() -> tuple[str, bool, bool | None]:
-    """Return (detail, strict, listed).
+def shortcut_is_listed() -> bool:
+    return probe_shortcuts() == "listed"
+
+
+def try_validate_shortcut_input_body() -> tuple[str, bool, str]:
+    """Return (detail, strict, probe).
 
     strict=True means Shortcuts.sqlite was readable and wiring was validated.
-    listed is whether `shortcuts list` can see Send Notification.
+    probe is listed, missing, absent, or indeterminate from `shortcuts list`.
     """
     try:
         detail = validate_shortcut_input_body()
     except Exception as exc:
         if not is_db_unreadable(exc):
             raise
-        listed = shortcut_is_listed()
+        probe = probe_shortcuts()
         warning = f"sqlite wiring check skipped ({exc})"
-        if listed:
-            return f"{warning}; {SHORTCUT_NAME} listed by shortcuts", False, True
-        return f"{warning}; {SHORTCUT_NAME} not confirmed via shortcuts list", False, False
-    return detail, True, shortcut_is_listed()
+        if probe == "listed":
+            return f"{warning}; {SHORTCUT_NAME} listed by shortcuts", False, probe
+        return f"{warning}; {SHORTCUT_NAME} not confirmed via shortcuts list", False, probe
+    return detail, True, probe_shortcuts()
 
 
 def notification_payload(title: str, subtitle: str, message: str) -> str:
@@ -293,7 +299,8 @@ def main() -> int:
 
     try:
         check_message(args.message, args.title, args.subtitle)
-        before, strict, listed = try_validate_shortcut_input_body()
+        before, strict, probe = try_validate_shortcut_input_body()
+        listed = probe == "listed"
         lengths = (
             f"title length={len(args.title)}; subtitle length={len(args.subtitle)}; "
             f"message length={len(args.message)}"
@@ -305,12 +312,18 @@ def main() -> int:
             if listed:
                 print(f"OK: {SHORTCUT_NAME} is listed; {before}; {lengths}")
                 return 0
-            if strict:
+            if strict and probe == "missing":
                 print(
                     f"ERROR: shortcuts executable not found; ActionBuddy is unavailable; {before}",
                     file=sys.stderr,
                 )
                 return 1
+            if strict:
+                print(
+                    f"WARN: shortcuts list did not confirm {SHORTCUT_NAME}; {before}; {lengths}",
+                    file=sys.stderr,
+                )
+                return 0
             print(f"WARN: {SHORTCUT_NAME} sqlite wiring unavailable; {before}; {lengths}", file=sys.stderr)
             return 0
 

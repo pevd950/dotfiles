@@ -51,6 +51,20 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_rejects_duplicate_provider_ids(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+            )
+            with self.assertRaisesRegex(notify.ValidationError, r"duplicate provider id 'poke'"):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_duplicate_keys(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"
@@ -338,7 +352,26 @@ class AdapterTests(unittest.TestCase):
             with patch.dict(os.environ, {"POKE_API_KEY": "secret-key"}):
                 result = poke.run("check", payload(), spec)
         self.assertEqual(result.status, "checked")
+        self.assertEqual(result.detail, "helper ok")
         self.assertNotIn("secret-key", result.detail)
+        self.assertNotIn("folded", result.detail)
+
+    def test_poke_failed_helper_does_not_report_raw_stderr(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "poke.py",
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('HTTP 401 {\"error\":\"token leaked\"}', file=sys.stderr)\n"
+                "raise SystemExit(1)\n",
+            )
+            spec = notify.ProviderSpec(id="poke", enabled=True, helper=str(helper))
+            with patch.dict(os.environ, {"POKE_API_KEY": "secret-key"}):
+                result = poke.run("send", payload(), spec)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.detail, "helper failed (exit 1)")
+        self.assertNotIn("token leaked", result.detail)
 
     def test_codexbuddy_soft_skips_when_host_unavailable(self):
         result = codexbuddy.run("check", payload(), notify.ProviderSpec("codexbuddy", True), host_probe=lambda: False)

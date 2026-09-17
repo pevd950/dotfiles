@@ -59,10 +59,6 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
     except subprocess.TimeoutExpired:
         return ProviderResult("poke", "indeterminate", "helper timed out")
 
-    detail = completed.stdout.strip() or completed.stderr.strip() or f"exit {completed.returncode}"
-    api_key = os.environ.get("POKE_API_KEY", "")
-    if api_key and api_key in detail:
-        detail = detail.replace(api_key, "$POKE_API_KEY")
     if completed.returncode == 0:
-        return ProviderResult("poke", "checked" if mode == "check" else "sent", detail)
-    return ProviderResult("poke", "failed", detail)
+        return ProviderResult("poke", "checked" if mode == "check" else "sent", "helper ok")
+    return ProviderResult("poke", "failed", f"helper failed (exit {completed.returncode})")
