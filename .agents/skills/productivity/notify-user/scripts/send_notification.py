@@ -75,9 +75,9 @@ def _parse_toml_scalar(raw: str):
         return value == "true"
     if value.startswith('"') and value.endswith('"') and len(value) >= 2:
         return _unescape_toml_basic(value[1:-1])
-    if value.startswith("'") and value.endswith("'"):
+    if value.startswith("'") and value.endswith("'") and len(value) >= 2:
         return value[1:-1]
-    return value
+    raise ValidationError(f"invalid TOML scalar: {raw!r}")
 
 
 def _strip_toml_comment(line: str) -> str:

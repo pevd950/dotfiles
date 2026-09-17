@@ -24,6 +24,8 @@ SQLITE_SOFT_MARKERS = (
     "sqlite wiring check skipped",
 )
 INDETERMINATE_MARKERS = ("WARN:", "timed out")
+# Two `shortcuts list` probes (10s each) plus helper cleanup around `shortcuts run`.
+HELPER_OVERHEAD_SECONDS = 30
 
 
 def default_helper() -> Path:
@@ -79,7 +81,7 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=timeout + 10,
+            timeout=timeout + HELPER_OVERHEAD_SECONDS,
         )
     except FileNotFoundError as exc:
         return ProviderResult("actionbuddy", "skipped", f"helper unavailable: {exc}")
@@ -87,7 +89,11 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
         return ProviderResult("actionbuddy", "indeterminate", "helper timed out")
 
     status = classify(completed.returncode, completed.stdout, completed.stderr)
-    detail = (completed.stdout.strip() or completed.stderr.strip() or f"exit {completed.returncode}")
     if status == "ok":
-        status = "checked" if mode == "check" else "sent"
-    return ProviderResult("actionbuddy", status, detail)
+        reported = "checked" if mode == "check" else "sent"
+        return ProviderResult("actionbuddy", reported, "helper ok")
+    if status == "skipped":
+        return ProviderResult("actionbuddy", status, "ActionBuddy unavailable")
+    if status == "indeterminate":
+        return ProviderResult("actionbuddy", status, "ActionBuddy indeterminate")
+    return ProviderResult("actionbuddy", "failed", f"helper failed (exit {completed.returncode})")

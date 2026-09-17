@@ -51,6 +51,13 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_rejects_bare_unquoted_scalar(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text("[[providers]]\nid = poke\nenabled = true\n")
+            with self.assertRaisesRegex(notify.ValidationError, "invalid TOML scalar"):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_duplicate_provider_ids(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"
@@ -254,7 +261,38 @@ class AdapterTests(unittest.TestCase):
             spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
             result = actionbuddy.run("check", payload(timeout=60), spec)
         self.assertEqual(result.status, "checked")
-        self.assertIn("timeout=60", result.detail)
+        self.assertEqual(result.detail, "helper ok")
+
+    def test_actionbuddy_outer_timeout_allows_both_shortcuts_probes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(Path(folder), "actionbuddy.py", "#!/usr/bin/env python3\nprint('unused')\n")
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            captured: dict[str, object] = {}
+
+            def fake_run(*args, **kwargs):
+                captured["timeout"] = kwargs.get("timeout")
+                return subprocess.CompletedProcess(args[0], 0, stdout="OK: sent\n", stderr="")
+
+            with patch.object(actionbuddy.subprocess, "run", side_effect=fake_run):
+                result = actionbuddy.run("send", payload(timeout=60), spec)
+        self.assertEqual(result.status, "sent")
+        self.assertEqual(captured["timeout"], 60 + actionbuddy.HELPER_OVERHEAD_SECONDS)
+
+    def test_actionbuddy_failed_helper_does_not_report_raw_stderr(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "actionbuddy.py",
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('Shortcut failed with exit 1: token leaked', file=sys.stderr)\n"
+                "raise SystemExit(1)\n",
+            )
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            result = actionbuddy.run("send", payload(), spec)
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.detail, "helper failed (exit 1)")
+        self.assertNotIn("token leaked", result.detail)
 
     def test_actionbuddy_missing_helper_is_failed_not_skipped(self):
         result = actionbuddy.run(
