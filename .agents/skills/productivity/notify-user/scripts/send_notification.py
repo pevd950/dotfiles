@@ -168,7 +168,7 @@ def load_providers(path: Path) -> list[ProviderSpec]:
         line = _strip_toml_comment(raw).strip()
         if not line:
             continue
-        if line == "[[providers]]":
+        if "".join(line.split()) == "[[providers]]":
             if current is not None:
                 providers.append(_provider_from_mapping(current))
             current = {}

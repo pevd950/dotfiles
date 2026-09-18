@@ -298,9 +298,10 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        check_message(args.message, args.title, args.subtitle)
         before, strict, probe = try_validate_shortcut_input_body()
         listed = probe == "listed"
+        if listed or probe == "indeterminate":
+            check_message(args.message, args.title, args.subtitle)
         lengths = (
             f"title length={len(args.title)}; subtitle length={len(args.subtitle)}; "
             f"message length={len(args.message)}"

@@ -51,6 +51,18 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_accepts_whitespace_in_table_header(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[ providers ]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+            )
+            providers = notify.load_providers(path)
+        self.assertEqual(providers[0].id, "poke")
+        self.assertTrue(providers[0].enabled)
+
     def test_load_providers_rejects_unescaped_interior_quotes(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"

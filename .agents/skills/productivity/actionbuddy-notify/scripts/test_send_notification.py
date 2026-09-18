@@ -118,6 +118,29 @@ class StrictWiringTests(unittest.TestCase):
         self.assertIn("title/subtitle/body wired", stdout)
         self.assertNotIn("ERROR:", stderr)
 
+    def test_check_skips_payload_limits_when_shortcuts_is_unavailable(self):
+        long_args = [
+            "--check",
+            "--title",
+            "Codex",
+            "--subtitle",
+            "Ready",
+            "--message",
+            "x" * 2001,
+        ]
+        with (
+            patch.object(
+                helper,
+                "shortcut_actions",
+                side_effect=RuntimeError("Shortcuts database not found: /missing/Shortcuts.sqlite"),
+            ),
+            patch.object(helper, "probe_shortcuts", return_value="missing"),
+        ):
+            code, stdout, stderr = run_main(long_args)
+        self.assertEqual(code, 0, stdout + stderr)
+        self.assertNotIn("too long", stderr)
+        self.assertIn("WARN:", stderr)
+
     def test_check_skips_when_sqlite_is_readable_but_shortcuts_is_missing(self):
         with (
             patch.object(helper, "shortcut_actions", return_value=valid_actions()),
