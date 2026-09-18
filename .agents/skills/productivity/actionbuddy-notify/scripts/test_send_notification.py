@@ -320,6 +320,30 @@ class SqliteSoftFailTests(unittest.TestCase):
         self.assertIn("Shortcut failed with exit 1", stderr)
         self.assertIn("shortcut boom", stderr)
 
+    def test_send_timeout_stays_indeterminate_when_follow_up_probe_raises(self):
+        with (
+            patch.object(
+                helper,
+                "try_validate_shortcut_input_body",
+                side_effect=[
+                    ("wired", True, "listed"),
+                    RuntimeError("shortcut disappeared"),
+                ],
+            ),
+            patch.object(
+                helper,
+                "run_shortcut",
+                side_effect=subprocess.TimeoutExpired(["shortcuts", "run"], 30),
+            ),
+        ):
+            code, stdout, stderr = run_main(SEND_ARGS)
+
+        self.assertEqual(code, 0, stdout + stderr)
+        self.assertIn("WARN:", stderr)
+        self.assertIn("timed out", stderr.lower())
+        self.assertIn("follow-up wiring check failed", stderr)
+        self.assertNotIn("ERROR:", stderr)
+
     def test_send_errors_when_shortcuts_executable_is_missing(self):
         with (
             patch.object(

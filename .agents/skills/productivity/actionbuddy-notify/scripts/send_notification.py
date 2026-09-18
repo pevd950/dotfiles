@@ -234,6 +234,14 @@ def try_validate_shortcut_input_body() -> tuple[str, bool, str]:
     return detail, True, probe_shortcuts()
 
 
+def follow_up_wiring_detail() -> str:
+    try:
+        detail, _, _ = try_validate_shortcut_input_body()
+    except Exception as exc:
+        return f"follow-up wiring check failed ({exc})"
+    return detail
+
+
 def notification_payload(title: str, subtitle: str, message: str) -> str:
     return json.dumps(
         {
@@ -343,21 +351,21 @@ def main() -> int:
         try:
             result = run_shortcut(args.title, args.subtitle, args.message, args.timeout)
         except subprocess.TimeoutExpired:
-            after, _, _ = try_validate_shortcut_input_body()
+            after = follow_up_wiring_detail()
             print(
                 f"WARN: Shortcut timed out after {args.timeout}s; delivery may have succeeded; {after}",
                 file=sys.stderr,
             )
             return 0
         except FileNotFoundError:
-            after, _, _ = try_validate_shortcut_input_body()
+            after = follow_up_wiring_detail()
             print(
                 f"ERROR: shortcuts executable not found; ActionBuddy is unavailable; {after}",
                 file=sys.stderr,
             )
             return 1
 
-        after, _, _ = try_validate_shortcut_input_body()
+        after = follow_up_wiring_detail()
         if result.returncode != 0:
             stderr = result.stderr.strip() or "no stderr"
             raise RuntimeError(f"Shortcut failed with exit {result.returncode}: {stderr}; {after}")

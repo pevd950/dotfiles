@@ -56,6 +56,8 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
     except FileNotFoundError as exc:
         return ProviderResult("poke", "failed", f"helper unavailable: {exc}")
     except subprocess.TimeoutExpired:
+        if mode == "check":
+            return ProviderResult("poke", "failed", "helper timed out during check")
         return ProviderResult("poke", "indeterminate", "helper timed out")
 
     if completed.returncode == 0:

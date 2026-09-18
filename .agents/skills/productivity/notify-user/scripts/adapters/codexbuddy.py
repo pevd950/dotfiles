@@ -61,7 +61,7 @@ def detect_host(which: Callable[[str], str | None] = shutil.which, home: Path | 
     for path in candidates:
         try:
             text = path.read_text(encoding="utf-8")
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             continue
         if any(marker in text for marker in HOST_MARKERS):
             return True

@@ -566,6 +566,19 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result.status, "checked")
         self.assertEqual(result.detail, "helper ok")
 
+    def test_poke_check_timeout_is_failed_and_send_timeout_is_indeterminate(self):
+        spec = notify.ProviderSpec("poke", True)
+        with patch.dict(os.environ, {"POKE_API_KEY": "secret-key"}):
+            with patch.object(
+                poke.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired("poke", 5),
+            ):
+                checked = poke.run("check", payload(), spec)
+                sent = poke.run("send", payload(), spec)
+        self.assertEqual(checked.status, "failed")
+        self.assertEqual(sent.status, "indeterminate")
+
     def test_poke_failed_helper_does_not_report_raw_stderr(self):
         with tempfile.TemporaryDirectory() as folder:
             helper = write_helper(
@@ -618,6 +631,15 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(result.status, "skipped")
         self.assertIn("560-byte", result.detail)
+
+    def test_codexbuddy_skips_undecodable_config_hints(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder)
+            (home / ".codex").mkdir()
+            (home / ".cursor").mkdir()
+            (home / ".codex" / "config.toml").write_bytes(b"\xff\xfe not utf-8")
+            (home / ".cursor" / "mcp.json").write_text("{}", encoding="utf-8")
+            self.assertFalse(codexbuddy.detect_host(which=lambda _name: None, home=home))
 
 
 class FanoutTests(unittest.TestCase):
