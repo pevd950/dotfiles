@@ -42,8 +42,7 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
         sys.executable,
         str(helper),
         f"--{mode}",
-        "--message",
-        fold_message(notification),
+        f"--message={fold_message(notification)}",
     ]
     try:
         completed = subprocess.run(

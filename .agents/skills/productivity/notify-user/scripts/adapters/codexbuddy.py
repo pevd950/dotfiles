@@ -86,7 +86,11 @@ def run(
     try:
         validate_fields(notification)
     except ValidationError as exc:
-        return ProviderResult("codexbuddy", "failed", str(exc))
+        return ProviderResult(
+            "codexbuddy",
+            "skipped",
+            f"Buddy field limits: {exc}; send remains approval-gated",
+        )
 
     if mode == "check":
         return ProviderResult(

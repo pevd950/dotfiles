@@ -58,6 +58,10 @@ def classify(returncode: int, stdout: str, stderr: str) -> str:
     return "failed"
 
 
+def _cli_option(name: str, value: object) -> str:
+    return f"--{name}={value}"
+
+
 def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) -> ProviderResult:
     helper = Path(spec.helper) if spec.helper else default_helper()
     if not helper.is_file():
@@ -67,14 +71,10 @@ def run(mode: str, notification: Notification, spec: ProviderSpec, **_kwargs) ->
         sys.executable,
         str(helper),
         f"--{mode}",
-        "--title",
-        notification.title,
-        "--subtitle",
-        notification.subtitle,
-        "--message",
-        notification.message,
-        "--timeout",
-        str(timeout),
+        _cli_option("title", notification.title),
+        _cli_option("subtitle", notification.subtitle),
+        _cli_option("message", notification.message),
+        _cli_option("timeout", timeout),
     ]
     try:
         completed = subprocess.run(

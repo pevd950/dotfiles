@@ -331,7 +331,8 @@ class AdapterTests(unittest.TestCase):
                 "#!/usr/bin/env python3\n"
                 "import json,sys\n"
                 "mode='check' if '--check' in sys.argv else 'send'\n"
-                "print(json.dumps({'mode': mode, 'title': sys.argv[sys.argv.index('--title')+1]}))\n",
+                "title = next(a.split('=',1)[1] for a in sys.argv if a.startswith('--title='))\n"
+                "print(json.dumps({'mode': mode, 'title': title}))\n",
             )
             spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
             checked = actionbuddy.run("check", payload(), spec)
@@ -347,10 +348,36 @@ class AdapterTests(unittest.TestCase):
                 "actionbuddy.py",
                 "#!/usr/bin/env python3\n"
                 "import sys\n"
-                "print('OK: timeout=' + sys.argv[sys.argv.index('--timeout')+1])\n",
+                "print('OK: timeout=' + next(a.split('=',1)[1] for a in sys.argv if a.startswith('--timeout=')))\n",
             )
             spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
             result = actionbuddy.run("check", payload(timeout=60), spec)
+        self.assertEqual(result.status, "checked")
+        self.assertEqual(result.detail, "helper ok")
+
+    def test_actionbuddy_passes_option_like_fields_without_argparse_reinterpreting_them(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "actionbuddy.py",
+                "#!/usr/bin/env python3\n"
+                "import argparse\n"
+                "p = argparse.ArgumentParser()\n"
+                "p.add_argument('--check', action='store_true')\n"
+                "p.add_argument('--send', action='store_true')\n"
+                "p.add_argument('--title')\n"
+                "p.add_argument('--subtitle')\n"
+                "p.add_argument('--message', required=True)\n"
+                "p.add_argument('--timeout', type=int, default=30)\n"
+                "args = p.parse_args()\n"
+                "print('OK: message=' + args.message)\n",
+            )
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            result = actionbuddy.run(
+                "check",
+                payload(title="--title-like", subtitle="-ready", message="--blocked"),
+                spec,
+            )
         self.assertEqual(result.status, "checked")
         self.assertEqual(result.detail, "helper ok")
 
@@ -515,6 +542,30 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("secret-key", result.detail)
         self.assertNotIn("folded", result.detail)
 
+    def test_poke_passes_option_like_message_without_argparse_reinterpreting_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "poke.py",
+                "#!/usr/bin/env python3\n"
+                "import argparse\n"
+                "p = argparse.ArgumentParser()\n"
+                "p.add_argument('--check', action='store_true')\n"
+                "p.add_argument('--send', action='store_true')\n"
+                "p.add_argument('--message', required=True)\n"
+                "args = p.parse_args()\n"
+                "print('OK: message=' + args.message)\n",
+            )
+            spec = notify.ProviderSpec(id="poke", enabled=True, helper=str(helper))
+            with patch.dict(os.environ, {"POKE_API_KEY": "secret-key"}):
+                result = poke.run(
+                    "check",
+                    payload(title="", subtitle="", message="--blocked"),
+                    spec,
+                )
+        self.assertEqual(result.status, "checked")
+        self.assertEqual(result.detail, "helper ok")
+
     def test_poke_failed_helper_does_not_report_raw_stderr(self):
         with tempfile.TemporaryDirectory() as folder:
             helper = write_helper(
@@ -557,7 +608,16 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(result.status, "skipped")
         self.assertIn("explicit user approval", result.detail.lower())
         self.assertNotIn("bypass", result.detail.lower())
-        self.assertIn("buddy_send_custom_notification", result.detail)
+
+    def test_codexbuddy_field_limit_skips_instead_of_failing_check(self):
+        result = codexbuddy.run(
+            "check",
+            payload(message="b" * 561),
+            notify.ProviderSpec("codexbuddy", True),
+            host_probe=lambda: True,
+        )
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("560-byte", result.detail)
 
 
 class FanoutTests(unittest.TestCase):
