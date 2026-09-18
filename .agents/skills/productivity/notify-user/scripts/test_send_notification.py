@@ -63,6 +63,17 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(providers[0].id, "poke")
         self.assertTrue(providers[0].enabled)
 
+    def test_load_providers_rejects_whitespace_inside_table_tokens(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[pro viders]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+            )
+            with self.assertRaisesRegex(notify.ValidationError, r"keys must appear under"):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_unescaped_interior_quotes(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"

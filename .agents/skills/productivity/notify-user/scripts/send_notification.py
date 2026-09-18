@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_TITLE = "Codex"
 DEFAULT_SUBTITLE = "Codex"
 DEFAULT_NAMESPACE = "notify-user"
+_PROVIDERS_HEADER = re.compile(r"^\[\[\s*providers\s*\]\]$")
 RUNNERS: dict[str, Callable[..., ProviderResult]] = {
     "actionbuddy": actionbuddy.run,
     "poke": poke.run,
@@ -168,7 +170,7 @@ def load_providers(path: Path) -> list[ProviderSpec]:
         line = _strip_toml_comment(raw).strip()
         if not line:
             continue
-        if "".join(line.split()) == "[[providers]]":
+        if _PROVIDERS_HEADER.fullmatch(line):
             if current is not None:
                 providers.append(_provider_from_mapping(current))
             current = {}
