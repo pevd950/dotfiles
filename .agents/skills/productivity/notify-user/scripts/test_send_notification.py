@@ -756,6 +756,28 @@ class FanoutTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_parse_args_accepts_option_like_title_subtitle_and_message(self):
+        args = notify.parse_args(
+            [
+                "--check",
+                "--title",
+                "--from-codex",
+                "--subtitle",
+                "-ready",
+                "--message",
+                "--blocked",
+            ]
+        )
+        self.assertTrue(args.check)
+        self.assertEqual(args.title, "--from-codex")
+        self.assertEqual(args.subtitle, "-ready")
+        self.assertEqual(args.message, "--blocked")
+
+    def test_parse_args_accepts_equals_form_for_option_like_message(self):
+        args = notify.parse_args(["--send", "--message=--blocked"])
+        self.assertTrue(args.send)
+        self.assertEqual(args.message, "--blocked")
+
     def test_check_cli_with_all_skipped_providers_exits_zero(self):
         with tempfile.TemporaryDirectory() as folder:
             config = Path(folder) / "providers.toml"

@@ -33,10 +33,12 @@ Write a concise handoff: status, concrete context, plain-text URLs (not Markdown
 
 ```bash
 python3 "$HOME/.agents/skills/productivity/notify-user/scripts/send_notification.py" \
-  --check --title "Codex" --subtitle "Ready" --message "..."
+  --check --title=Codex --subtitle=Ready --message="..."
 python3 "$HOME/.agents/skills/productivity/notify-user/scripts/send_notification.py" \
-  --send  --title "Codex" --subtitle "Ready" --message "..."
+  --send --title=Codex --subtitle=Ready --message="..."
 ```
+
+Prefer `--flag=value` for title, subtitle, and message so a body like `--blocked` is not parsed as a new option. Space-separated `--message "$value"` still works.
 
 Optional: `--config PATH`, `--json`, `--destination`, `--caller-namespace-id`, `--notification-id`.
 

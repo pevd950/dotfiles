@@ -306,7 +306,34 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=30, help="Per-provider helper timeout in seconds")
     parser.add_argument("--config", default=None, help="Provider config TOML (default: example or user override)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON instead of text")
-    return parser.parse_args(argv)
+    raw = argv if argv is not None else sys.argv[1:]
+    return parser.parse_args(_attach_valued_flags(raw))
+
+
+_VALUED_FLAGS = (
+    "--title",
+    "--subtitle",
+    "--message",
+    "--destination",
+    "--caller-namespace-id",
+    "--notification-id",
+    "--timeout",
+    "--config",
+)
+
+
+def _attach_valued_flags(argv: list[str]) -> list[str]:
+    attached: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in _VALUED_FLAGS and index + 1 < len(argv):
+            attached.append(f"{token}={argv[index + 1]}")
+            index += 2
+            continue
+        attached.append(token)
+        index += 1
+    return attached
 
 
 def main(argv: list[str] | None = None) -> int:
