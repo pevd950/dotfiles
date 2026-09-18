@@ -205,6 +205,8 @@ def _provider_from_mapping(mapping: dict[str, object]) -> ProviderSpec:
     provider_id = mapping.get("id")
     if not isinstance(provider_id, str) or not provider_id.strip():
         raise ValidationError("provider id is required")
+    if provider_id != provider_id.strip():
+        raise ValidationError("provider id must not have surrounding whitespace")
     unknown = sorted(set(mapping) - {"id", "enabled", "helper"})
     if unknown:
         raise ValidationError(f"{provider_id}: unknown keys: {', '.join(unknown)}")
@@ -214,7 +216,7 @@ def _provider_from_mapping(mapping: dict[str, object]) -> ProviderSpec:
     helper = mapping.get("helper")
     if helper is not None and not isinstance(helper, str):
         raise ValidationError(f"{provider_id}: helper must be a string")
-    return ProviderSpec(id=provider_id.strip(), enabled=enabled, helper=helper)
+    return ProviderSpec(id=provider_id, enabled=enabled, helper=helper)
 
 
 def validate_notification(notification: Notification) -> None:
@@ -254,7 +256,7 @@ def run_fanout(
     runners: dict[str, Callable[..., ProviderResult]] | None = None,
 ) -> tuple[list[ProviderResult], str]:
     validate_notification(notification)
-    dispatch = runners or RUNNERS
+    dispatch = RUNNERS if runners is None else runners
     results: list[ProviderResult] = []
     for spec in providers:
         if not spec.enabled:

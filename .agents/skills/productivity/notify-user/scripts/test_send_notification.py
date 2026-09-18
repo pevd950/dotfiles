@@ -125,6 +125,19 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(notify.ValidationError, "invalid TOML scalar"):
                 notify.load_providers(path)
 
+    def test_load_providers_rejects_padded_provider_ids(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = " poke "\n'
+                "enabled = true\n"
+            )
+            with self.assertRaisesRegex(
+                notify.ValidationError, "provider id must not have surrounding whitespace"
+            ):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_duplicate_provider_ids(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"
@@ -252,6 +265,17 @@ class ConfigTests(unittest.TestCase):
             )
             providers = notify.load_providers(path)
         self.assertEqual(providers[0].helper, "/tmp/foo#bar.py")
+
+    def test_poke_short_description_fits_openai_yaml_limit(self):
+        yaml_path = SKILL_DIR.parent / "poke-notify" / "agents" / "openai.yaml"
+        description = None
+        for line in yaml_path.read_text().splitlines():
+            if line.lstrip().startswith("short_description:"):
+                description = line.split(":", 1)[1].strip().strip('"')
+                break
+        self.assertIsNotNone(description)
+        self.assertGreaterEqual(len(description), 25)
+        self.assertLessEqual(len(description), 64)
 
     def test_resolve_config_prefers_explicit_then_env_then_user_then_bundled(self):
         bundled = notify.bundled_config_path()
@@ -537,6 +561,17 @@ class AdapterTests(unittest.TestCase):
 
 
 class FanoutTests(unittest.TestCase):
+    def test_empty_runners_map_does_not_fall_back_to_global_runners(self):
+        results, status = notify.run_fanout(
+            "send",
+            payload(),
+            [notify.ProviderSpec("poke", True)],
+            runners={},
+        )
+        self.assertEqual(results[0].status, "failed")
+        self.assertEqual(results[0].detail, "unknown provider id")
+        self.assertEqual(status, "failed")
+
     def test_disabled_providers_are_not_called(self):
         calls = []
 
