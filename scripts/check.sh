@@ -44,6 +44,12 @@ done
   -s .agents/skills/development/babysit-pr/scripts -p 'test_*.py'
 
 "$checks_python" -m unittest discover \
+  -s .agents/skills/productivity/notify-user/scripts -p 'test_*.py'
+
+"$checks_python" -m unittest discover \
+  -s .agents/skills/productivity/actionbuddy-notify/scripts -p 'test_*.py'
+
+"$checks_python" -m unittest discover \
   -s .agents/skills/ops/workflow-packaging-audit/scripts -p 'test_*.py'
 
 "$checks_python" scripts/check_instructions.py

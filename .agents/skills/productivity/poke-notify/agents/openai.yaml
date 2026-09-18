@@ -1,10 +1,10 @@
 interface:
   display_name: "Poke Notify"
-  short_description: "Send completion SMS."
+  short_description: "Poke webhook for $notify-user; default-on, key soft-skip."
   icon_small: "./assets/poke-notify-icon.svg"
   icon_large: "./assets/poke-notify-icon.png"
   brand_color: "#DB2777"
-  default_prompt: "Use $poke-notify to send the configured user a concise SMS handoff when work is done, blocked, or ready for review."
+  default_prompt: "Do not use $poke-notify for routine handoffs. Load $notify-user instead. Use this provider skill only when repairing the Poke webhook helper or when the user explicitly asked for Poke."
 
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false
