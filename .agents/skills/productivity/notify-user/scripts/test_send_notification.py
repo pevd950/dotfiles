@@ -778,6 +778,18 @@ class CliTests(unittest.TestCase):
         self.assertTrue(args.send)
         self.assertEqual(args.message, "--blocked")
 
+    def test_parse_args_does_not_consume_recognized_switches_as_field_values(self):
+        with self.assertRaises(SystemExit):
+            notify.parse_args(["--send", "--message", "--check"])
+        with self.assertRaises(SystemExit):
+            notify.parse_args(["--send", "--message", "--json"])
+
+    def test_parse_args_equals_form_can_use_a_recognized_switch_as_message(self):
+        args = notify.parse_args(["--send", "--message=--check"])
+        self.assertTrue(args.send)
+        self.assertFalse(args.check)
+        self.assertEqual(args.message, "--check")
+
     def test_check_cli_with_all_skipped_providers_exits_zero(self):
         with tempfile.TemporaryDirectory() as folder:
             config = Path(folder) / "providers.toml"

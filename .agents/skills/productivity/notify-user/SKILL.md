@@ -38,7 +38,7 @@ python3 "$HOME/.agents/skills/productivity/notify-user/scripts/send_notification
   --send --title=Codex --subtitle=Ready --message="..."
 ```
 
-Prefer `--flag=value` for title, subtitle, and message so a body like `--blocked` is not parsed as a new option. Space-separated `--message "$value"` still works.
+Prefer `--flag=value` for title, subtitle, and message so a body like `--blocked` is not parsed as a new option. Space-separated `--message "$value"` still works. If the value itself is a CLI switch (`--check`, `--json`, …), use the equals form (`--message=--check`).
 
 Optional: `--config PATH`, `--json`, `--destination`, `--caller-namespace-id`, `--notification-id`.
 

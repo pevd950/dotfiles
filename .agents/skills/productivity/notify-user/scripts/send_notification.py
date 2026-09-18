@@ -292,6 +292,41 @@ def format_report(results: list[ProviderResult], status: str) -> str:
     return "\n".join(lines)
 
 
+_VALUED_FLAGS = (
+    "--title",
+    "--subtitle",
+    "--message",
+    "--destination",
+    "--caller-namespace-id",
+    "--notification-id",
+    "--timeout",
+    "--config",
+)
+_SWITCH_FLAGS = frozenset(_VALUED_FLAGS + ("--check", "--send", "--json", "--help", "-h"))
+
+
+def _is_recognized_switch(token: str) -> bool:
+    if token in _SWITCH_FLAGS:
+        return True
+    return any(token.startswith(f"{flag}=") for flag in _VALUED_FLAGS)
+
+
+def _attach_valued_flags(argv: list[str]) -> list[str]:
+    attached: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token in _VALUED_FLAGS and index + 1 < len(argv):
+            nxt = argv[index + 1]
+            if not _is_recognized_switch(nxt):
+                attached.append(f"{token}={nxt}")
+                index += 2
+                continue
+        attached.append(token)
+        index += 1
+    return attached
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -308,32 +343,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON instead of text")
     raw = argv if argv is not None else sys.argv[1:]
     return parser.parse_args(_attach_valued_flags(raw))
-
-
-_VALUED_FLAGS = (
-    "--title",
-    "--subtitle",
-    "--message",
-    "--destination",
-    "--caller-namespace-id",
-    "--notification-id",
-    "--timeout",
-    "--config",
-)
-
-
-def _attach_valued_flags(argv: list[str]) -> list[str]:
-    attached: list[str] = []
-    index = 0
-    while index < len(argv):
-        token = argv[index]
-        if token in _VALUED_FLAGS and index + 1 < len(argv):
-            attached.append(f"{token}={argv[index + 1]}")
-            index += 2
-            continue
-        attached.append(token)
-        index += 1
-    return attached
 
 
 def main(argv: list[str] | None = None) -> int:
