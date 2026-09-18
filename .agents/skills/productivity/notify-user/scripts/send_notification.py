@@ -24,7 +24,12 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_TITLE = "Codex"
 DEFAULT_SUBTITLE = "Codex"
 DEFAULT_NAMESPACE = "notify-user"
+_TOML_WS = " \t"
 _PROVIDERS_HEADER = re.compile(r"^\[\[[ \t]*providers[ \t]*\]\]$")
+
+
+def _toml_ws_strip(value: str) -> str:
+    return value.strip(_TOML_WS)
 RUNNERS: dict[str, Callable[..., ProviderResult]] = {
     "actionbuddy": actionbuddy.run,
     "poke": poke.run,
@@ -72,7 +77,7 @@ def resolve_config_path(explicit: str | None) -> Path:
 
 
 def _parse_toml_scalar(raw: str):
-    value = raw.strip()
+    value = _toml_ws_strip(raw)
     if value in {"true", "false"}:
         return value == "true"
     if value.startswith('"') and value.endswith('"') and len(value) >= 2:
@@ -167,7 +172,7 @@ def load_providers(path: Path) -> list[ProviderSpec]:
     providers: list[ProviderSpec] = []
     current: dict[str, object] | None = None
     for raw in text.splitlines():
-        line = _strip_toml_comment(raw).strip()
+        line = _toml_ws_strip(_strip_toml_comment(raw))
         if not line:
             continue
         if _PROVIDERS_HEADER.fullmatch(line):
@@ -180,7 +185,7 @@ def load_providers(path: Path) -> list[ProviderSpec]:
         if "=" not in line:
             raise ValidationError(f"{path}: invalid line {raw!r}")
         key, value = line.split("=", 1)
-        key = key.strip()
+        key = _toml_ws_strip(key)
         if key in current:
             raise ValidationError(f"{path}: duplicate key {key!r}")
         current[key] = _parse_toml_scalar(value)
