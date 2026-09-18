@@ -324,6 +324,12 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 1
+            if probe == "indeterminate":
+                print(
+                    f"WARN: shortcuts list timed out or failed; {before}; {lengths}",
+                    file=sys.stderr,
+                )
+                return 0
             if strict:
                 print(
                     f"WARN: shortcuts list did not confirm {SHORTCUT_NAME}; {before}; {lengths}",

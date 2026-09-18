@@ -388,6 +388,17 @@ class AdapterTests(unittest.TestCase):
         )
         self.assertEqual(result, "failed")
 
+    def test_actionbuddy_list_timeout_warning_is_indeterminate_even_with_missing_db(self):
+        result = actionbuddy.classify(
+            returncode=0,
+            stdout="",
+            stderr=(
+                "WARN: shortcuts list timed out or failed; "
+                "Shortcuts database not found: /tmp/Shortcuts.sqlite"
+            ),
+        )
+        self.assertEqual(result, "indeterminate")
+
     def test_actionbuddy_timeout_is_indeterminate_even_with_missing_db_marker(self):
         result = actionbuddy.classify(
             returncode=0,

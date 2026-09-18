@@ -160,8 +160,22 @@ class StrictWiringTests(unittest.TestCase):
         ):
             code, stdout, stderr = run_main(CHECK_ARGS)
         self.assertEqual(code, 0, stdout + stderr)
-        self.assertIn("WARN: shortcuts list did not confirm", stderr)
+        self.assertIn("WARN: shortcuts list timed out or failed", stderr)
         self.assertNotIn("shortcuts executable not found", stderr)
+
+    def test_check_is_indeterminate_when_sqlite_unreadable_and_list_times_out(self):
+        with (
+            patch.object(
+                helper,
+                "shortcut_actions",
+                side_effect=RuntimeError("Shortcuts database not found: /missing/Shortcuts.sqlite"),
+            ),
+            patch.object(helper, "probe_shortcuts", return_value="indeterminate"),
+        ):
+            code, stdout, stderr = run_main(CHECK_ARGS)
+        self.assertEqual(code, 0, stdout + stderr)
+        self.assertIn("WARN: shortcuts list timed out or failed", stderr)
+        self.assertIn("Shortcuts database not found", stderr)
 
     def test_check_hard_fails_when_db_is_readable_but_wiring_is_wrong(self):
         actions = [

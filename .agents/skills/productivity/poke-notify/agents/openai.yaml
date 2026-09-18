@@ -1,6 +1,6 @@
 interface:
   display_name: "Poke Notify"
-  short_description: "Poke webhook backend for $notify-user (off by default)."
+  short_description: "Poke webhook backend for $notify-user (enabled by default; missing POKE_API_KEY soft-skips)."
   icon_small: "./assets/poke-notify-icon.svg"
   icon_large: "./assets/poke-notify-icon.png"
   brand_color: "#DB2777"
