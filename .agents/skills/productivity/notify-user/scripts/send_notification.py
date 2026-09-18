@@ -24,7 +24,7 @@ SKILL_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_TITLE = "Codex"
 DEFAULT_SUBTITLE = "Codex"
 DEFAULT_NAMESPACE = "notify-user"
-_PROVIDERS_HEADER = re.compile(r"^\[\[\s*providers\s*\]\]$")
+_PROVIDERS_HEADER = re.compile(r"^\[\[[ \t]*providers[ \t]*\]\]$")
 RUNNERS: dict[str, Callable[..., ProviderResult]] = {
     "actionbuddy": actionbuddy.run,
     "poke": poke.run,
