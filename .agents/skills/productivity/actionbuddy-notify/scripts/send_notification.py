@@ -46,7 +46,7 @@ def connect_db() -> sqlite3.Connection:
     if not exists:
         raise RuntimeError(f"Shortcuts database not found: {DB_PATH}")
     try:
-        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        conn = sqlite3.connect(f"{DB_PATH.resolve().as_uri()}?mode=ro", uri=True)
         conn.execute("PRAGMA query_only = ON")
         return conn
     except (sqlite3.Error, OSError) as exc:
@@ -306,6 +306,12 @@ def main() -> int:
             f"message length={len(args.message)}"
         )
         if args.check:
+            if probe == "absent":
+                print(
+                    f"ERROR: {SHORTCUT_NAME} is not listed by shortcuts; {before}",
+                    file=sys.stderr,
+                )
+                return 1
             if strict and listed:
                 print(f"OK: {SHORTCUT_NAME} is available; {before}; {lengths}")
                 return 0
@@ -315,12 +321,6 @@ def main() -> int:
             if strict and probe == "missing":
                 print(
                     f"ERROR: shortcuts executable not found; ActionBuddy is unavailable; {before}",
-                    file=sys.stderr,
-                )
-                return 1
-            if strict and probe == "absent":
-                print(
-                    f"ERROR: {SHORTCUT_NAME} is not listed by shortcuts; {before}",
                     file=sys.stderr,
                 )
                 return 1

@@ -51,6 +51,28 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(providers[1].enabled)
         self.assertTrue(providers[2].enabled)
 
+    def test_load_providers_rejects_unescaped_interior_quotes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                'helper = "foo"bar"\n'
+            )
+            with self.assertRaisesRegex(notify.ValidationError, "invalid TOML scalar"):
+                notify.load_providers(path)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_text(
+                "[[providers]]\n"
+                "id = 'actionbuddy'\n"
+                "enabled = true\n"
+                "helper = 'foo'bar'\n"
+            )
+            with self.assertRaisesRegex(notify.ValidationError, "invalid TOML scalar"):
+                notify.load_providers(path)
+
     def test_load_providers_rejects_bare_unquoted_scalar(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "providers.toml"
@@ -308,6 +330,17 @@ class AdapterTests(unittest.TestCase):
             returncode=1,
             stdout="",
             stderr="ERROR: Send Notification is not listed by shortcuts; wired",
+        )
+        self.assertEqual(result, "failed")
+
+    def test_actionbuddy_absent_shortcut_is_failed_even_with_missing_db_marker(self):
+        result = actionbuddy.classify(
+            returncode=1,
+            stdout="",
+            stderr=(
+                "ERROR: Send Notification is not listed by shortcuts; "
+                "Shortcuts database not found: /missing/Shortcuts.sqlite"
+            ),
         )
         self.assertEqual(result, "failed")
 
@@ -665,26 +698,52 @@ class AdapterPathTests(unittest.TestCase):
         self.assertTrue(poke.default_helper().is_file())
 
     def test_bundled_example_check_soft_skips_unavailable_backends(self):
-        env = {key: value for key, value in os.environ.items() if key != "POKE_API_KEY"}
-        completed = subprocess.run(
-            [
-                sys.executable,
-                str(FANOUT),
-                "--check",
-                "--title",
-                "Codex",
-                "--subtitle",
-                "Validation",
-                "--message",
-                "For the user from Codex: notify-user check on this host.",
-            ],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-        )
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(
+                Path(folder),
+                "actionbuddy.py",
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('ERROR: Shortcuts database not found: /missing', file=sys.stderr)\n"
+                "sys.exit(1)\n",
+            )
+            config = Path(folder) / "providers.toml"
+            config.write_text(
+                "[[providers]]\n"
+                'id = "actionbuddy"\n'
+                "enabled = true\n"
+                f'helper = "{helper}"\n'
+                "[[providers]]\n"
+                'id = "codexbuddy"\n'
+                "enabled = true\n"
+                "[[providers]]\n"
+                'id = "poke"\n'
+                "enabled = true\n"
+            )
+            env = {key: value for key, value in os.environ.items() if key != "POKE_API_KEY"}
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(FANOUT),
+                    "--check",
+                    "--config",
+                    str(config),
+                    "--title",
+                    "Codex",
+                    "--subtitle",
+                    "Validation",
+                    "--message",
+                    "For the user from Codex: notify-user check on this host.",
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
         self.assertEqual(completed.returncode, 0, completed.stderr + completed.stdout)
+        self.assertIn("actionbuddy: skipped", completed.stdout)
+        self.assertRegex(completed.stdout, r"codexbuddy: (skipped|checked)")
         self.assertRegex(completed.stdout, r"poke: skipped")
         self.assertNotIn("poke: disabled", completed.stdout)
         self.assertIn("notification_status: checked", completed.stdout)

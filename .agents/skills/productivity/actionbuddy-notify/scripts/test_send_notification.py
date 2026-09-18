@@ -128,6 +128,20 @@ class StrictWiringTests(unittest.TestCase):
         self.assertIn("shortcuts executable not found", stderr)
         self.assertNotIn("OK:", stdout)
 
+    def test_check_fails_when_sqlite_is_unreadable_but_shortcut_is_absent(self):
+        with (
+            patch.object(
+                helper,
+                "shortcut_actions",
+                side_effect=RuntimeError("Shortcuts database not found: /missing/Shortcuts.sqlite"),
+            ),
+            patch.object(helper, "probe_shortcuts", return_value="absent"),
+        ):
+            code, stdout, stderr = run_main(CHECK_ARGS)
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("is not listed by shortcuts", stderr)
+        self.assertNotIn("OK:", stdout)
+
     def test_check_fails_when_sqlite_is_wired_but_shortcut_is_absent(self):
         with (
             patch.object(helper, "shortcut_actions", return_value=valid_actions()),
@@ -306,6 +320,24 @@ class ReadonlyDatabaseTests(unittest.TestCase):
             verify.close()
         self.assertEqual(row, ("Send Notification",))
         self.assertEqual(names, ["Send Notification"])
+
+    def test_connect_db_escapes_uri_reserved_characters_in_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            db_path = Path(folder) / "dir#hash" / "Shortcuts.sqlite"
+            db_path.parent.mkdir()
+            seed = sqlite3.connect(db_path)
+            seed.execute("create table ZSHORTCUT (Z_PK integer, ZNAME text)")
+            seed.execute("insert into ZSHORTCUT values (1, 'Send Notification')")
+            seed.commit()
+            seed.close()
+
+            with patch.object(helper, "DB_PATH", db_path):
+                conn = helper.connect_db()
+                try:
+                    row = conn.execute("select ZNAME from ZSHORTCUT where Z_PK = 1").fetchone()
+                finally:
+                    conn.close()
+        self.assertEqual(row, ("Send Notification",))
 
 
 if __name__ == "__main__":

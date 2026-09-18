@@ -74,10 +74,31 @@ def _parse_toml_scalar(raw: str):
     if value in {"true", "false"}:
         return value == "true"
     if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+        if not _quoted_scalar_is_well_formed(value, '"', allow_escape=True):
+            raise ValidationError(f"invalid TOML scalar: {raw!r}")
         return _unescape_toml_basic(value[1:-1])
     if value.startswith("'") and value.endswith("'") and len(value) >= 2:
+        if "'" in value[1:-1]:
+            raise ValidationError(f"invalid TOML scalar: {raw!r}")
         return value[1:-1]
     raise ValidationError(f"invalid TOML scalar: {raw!r}")
+
+
+def _quoted_scalar_is_well_formed(value: str, quote: str, *, allow_escape: bool) -> bool:
+    inner = value[1:-1]
+    if not allow_escape:
+        return quote not in inner
+    escaped = False
+    for char in inner:
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == quote:
+            return False
+    return True
 
 
 def _strip_toml_comment(line: str) -> str:

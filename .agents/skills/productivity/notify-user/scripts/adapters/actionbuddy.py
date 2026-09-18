@@ -41,7 +41,9 @@ def classify(returncode: int, stdout: str, stderr: str) -> str:
     text = f"{stdout}\n{stderr}"
     if returncode == 0 and "OK:" in stdout:
         return "ok"
-    if returncode != 0 and "Shortcut failed with exit" in text:
+    if returncode != 0 and (
+        "Shortcut failed with exit" in text or "is not listed by shortcuts" in text
+    ):
         return "failed"
     if "timed out" in text:
         return "indeterminate"
