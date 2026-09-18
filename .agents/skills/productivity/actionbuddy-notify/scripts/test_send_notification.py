@@ -344,6 +344,31 @@ class SqliteSoftFailTests(unittest.TestCase):
         self.assertIn("follow-up wiring check failed", stderr)
         self.assertNotIn("ERROR:", stderr)
 
+    def test_send_fails_when_postflight_wiring_validation_raises(self):
+        with (
+            patch.object(
+                helper,
+                "try_validate_shortcut_input_body",
+                side_effect=[
+                    ("wired", True, "listed"),
+                    RuntimeError("Send Notification body must be wired to structured Shortcut Input"),
+                ],
+            ),
+            patch.object(
+                helper,
+                "run_shortcut",
+                return_value=subprocess.CompletedProcess(
+                    ["shortcuts", "run"], 0, stdout="Notification sent!\n", stderr=""
+                ),
+            ),
+        ):
+            code, stdout, stderr = run_main(SEND_ARGS)
+
+        self.assertEqual(code, 1, stdout + stderr)
+        self.assertIn("ERROR:", stderr)
+        self.assertIn("structured Shortcut Input", stderr)
+        self.assertNotIn("OK:", stdout)
+
     def test_send_errors_when_shortcuts_executable_is_missing(self):
         with (
             patch.object(

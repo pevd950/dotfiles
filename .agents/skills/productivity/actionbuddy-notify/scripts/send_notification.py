@@ -365,7 +365,7 @@ def main() -> int:
             )
             return 1
 
-        after = follow_up_wiring_detail()
+        after, _, _ = try_validate_shortcut_input_body()
         if result.returncode != 0:
             stderr = result.stderr.strip() or "no stderr"
             raise RuntimeError(f"Shortcut failed with exit {result.returncode}: {stderr}; {after}")
