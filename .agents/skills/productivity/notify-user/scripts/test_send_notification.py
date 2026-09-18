@@ -298,6 +298,41 @@ class ConfigTests(unittest.TestCase):
                     user.write_text('[[providers]]\nid = "codexbuddy"\nenabled = true\n')
                     self.assertEqual(notify.resolve_config_path(None), user)
 
+    def test_resolve_config_fails_closed_when_user_path_cannot_be_inspected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = {key: value for key, value in os.environ.items() if key != "NOTIFY_USER_CONFIG"}
+            with patch.dict(os.environ, env, clear=True):
+                os.environ["XDG_CONFIG_HOME"] = folder
+                user = Path(folder) / "notify-user" / "providers.toml"
+                real_lstat = os.lstat
+
+                def fake_lstat(path, *args, **kwargs):
+                    if Path(path) == user:
+                        raise PermissionError("Operation not permitted")
+                    return real_lstat(path, *args, **kwargs)
+
+                with patch.object(notify.os, "lstat", side_effect=fake_lstat):
+                    with self.assertRaisesRegex(notify.ValidationError, "unable to inspect user config"):
+                        notify.resolve_config_path(None)
+
+    def test_resolve_config_fails_closed_on_dangling_user_symlink(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env = {key: value for key, value in os.environ.items() if key != "NOTIFY_USER_CONFIG"}
+            with patch.dict(os.environ, env, clear=True):
+                os.environ["XDG_CONFIG_HOME"] = folder
+                user_dir = Path(folder) / "notify-user"
+                user_dir.mkdir()
+                (user_dir / "providers.toml").symlink_to(Path(folder) / "missing.toml")
+                with self.assertRaisesRegex(notify.ValidationError, "unable to inspect user config"):
+                    notify.resolve_config_path(None)
+
+    def test_load_providers_rejects_invalid_utf8(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "providers.toml"
+            path.write_bytes(b"[[providers]]\nid = \"poke\"\n\xff")
+            with self.assertRaisesRegex(notify.ValidationError, "not valid UTF-8"):
+                notify.load_providers(path)
+
 
 class PayloadTests(unittest.TestCase):
     def test_rejects_empty_message(self):
@@ -395,6 +430,22 @@ class AdapterTests(unittest.TestCase):
                 result = actionbuddy.run("send", payload(timeout=60), spec)
         self.assertEqual(result.status, "sent")
         self.assertEqual(captured["timeout"], 60 + actionbuddy.HELPER_OVERHEAD_SECONDS)
+
+    def test_actionbuddy_check_timeout_is_failed_and_send_timeout_is_indeterminate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            helper = write_helper(Path(folder), "actionbuddy.py", "#!/usr/bin/env python3\nprint('unused')\n")
+            spec = notify.ProviderSpec(id="actionbuddy", enabled=True, helper=str(helper))
+            with patch.object(
+                actionbuddy.subprocess,
+                "run",
+                side_effect=subprocess.TimeoutExpired("actionbuddy", 5),
+            ):
+                checked = actionbuddy.run("check", payload(), spec)
+                sent = actionbuddy.run("send", payload(), spec)
+        self.assertEqual(checked.status, "failed")
+        self.assertEqual(checked.detail, "helper timed out during check")
+        self.assertEqual(sent.status, "indeterminate")
+        self.assertEqual(sent.detail, "helper timed out")
 
     def test_actionbuddy_failed_helper_does_not_report_raw_stderr(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -848,6 +899,31 @@ class CliTests(unittest.TestCase):
         self.assertRegex(completed.stdout, r"codexbuddy: (skipped|checked)")
         self.assertIn("poke: disabled", completed.stdout)
         self.assertIn("notification_status: checked", completed.stdout)
+
+    def test_check_cli_invalid_utf8_config_exits_one_without_traceback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            config = Path(folder) / "providers.toml"
+            config.write_bytes(b"\xff\xfe not utf-8")
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(FANOUT),
+                    "--check",
+                    "--config",
+                    str(config),
+                    "--message",
+                    "For the user from Codex: CLI check.",
+                ],
+                check=False,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertIn("ERROR:", completed.stderr)
+        self.assertIn("not valid UTF-8", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+        self.assertNotIn("UnicodeDecodeError", completed.stderr)
 
     def test_format_report_redacts_home_paths(self):
         home = str(Path.home())

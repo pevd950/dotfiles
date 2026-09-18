@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,7 +72,18 @@ def resolve_config_path(explicit: str | None) -> Path:
     if env:
         return Path(env)
     user = user_config_path()
-    if user.is_file():
+    try:
+        info = os.lstat(user)
+    except FileNotFoundError:
+        return bundled_config_path()
+    except OSError as exc:
+        raise ValidationError("unable to inspect user config path") from exc
+    if stat.S_ISLNK(info.st_mode):
+        try:
+            info = os.stat(user)
+        except OSError as exc:
+            raise ValidationError("unable to inspect user config path") from exc
+    if stat.S_ISREG(info.st_mode):
         return user
     return bundled_config_path()
 
@@ -168,7 +180,10 @@ def _unescape_toml_basic(value: str) -> str:
 
 
 def load_providers(path: Path) -> list[ProviderSpec]:
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValidationError(f"{path}: not valid UTF-8") from exc
     providers: list[ProviderSpec] = []
     current: dict[str, object] | None = None
     for raw in text.splitlines():
