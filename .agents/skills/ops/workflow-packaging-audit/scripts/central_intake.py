@@ -1,6 +1,7 @@
 """Private local intake. No transport, review verdicts, or all-source checkpoints."""
 import argparse
 from contextlib import contextmanager
+from collections import Counter
 import datetime as dt
 import fcntl
 import hashlib
@@ -139,7 +140,7 @@ def reference(ref, roots):
         raise ValueError("Invalid source reference")
     fields(ref, "root_index relative_path byte_offset byte_length sha256")
     path = ref.get("relative_path")
-    if not isinstance(path, str) or not path or path.startswith("/") or any(p in ("", ".", "..") for p in path.split("/")):
+    if not isinstance(path, str) or not path or "\0" in path or path.startswith("/") or any(p in ("", ".", "..") for p in path.split("/")):
         raise ValueError("Unsafe source reference")
     for name in ("root_index", "byte_offset", "byte_length"):
         if type(ref.get(name)) is not int or ref[name] < (1 if name == "byte_length" else 0):
@@ -265,6 +266,8 @@ def validate(bundle, host, expected, *, intake_time=None):
             reference(ref, len(bundle["roots"]))
             if ref["byte_length"] > bundle["limits"]["max_line_bytes"]:
                 raise ValueError("Reference exceeds collector record limit")
+            if ref["byte_offset"] + ref["byte_length"] > min(coverage["bytes_read"], bundle["limits"]["max_bytes"]):
+                raise ValueError("Reference exceeds scanned byte coverage or budget")
             if (ref["root_index"], ref["relative_path"]) not in files:
                 raise ValueError("Reference outside session provenance")
         if "archived_at" in session and type(session["archived_at"]) is not int:
@@ -286,10 +289,13 @@ def validate(bundle, host, expected, *, intake_time=None):
             if not common | required_fields <= set(event) or set(event) - common - required_fields - optional:
                 raise ValueError("Fields do not match event kind")
             hashes = event["canonical_sha256s"]
+            mirrors = event.get("mirror_source_refs", [])
+            if not isinstance(mirrors, list) or len(mirrors) > 1:
+                raise ValueError("Expected at most one mirrored envelope")
             if (not isinstance(hashes, list) or not 1 <= len(hashes) <= 2
                     or any(not isinstance(h, str) or not HEX.fullmatch(h) for h in hashes)
                     or hashes != sorted(set(hashes))
-                    or (len(hashes) == 2 and not event.get("mirror_source_refs"))):
+                    or len(hashes) != 1 + len(mirrors)):
                 raise ValueError("Invalid canonical record digests")
             if event["kind"] == "tool_result":
                 if ("call" in event) == ("pairing" in event):
@@ -402,6 +408,41 @@ def locked(path):
             os.close(lock)
 
 
+def merge_events(hosts):
+    """Merge unique complete evidence; keep ambiguous occurrences host-local.
+
+    Local occurrence ordinals cannot identify a physical event across hosts.
+    A repeat in any admitted bundle (or partial coverage) disables cross-host
+    merging for that session/digest group, including earlier admitted hosts.
+    """
+    ambiguous = set()
+    for entry in hosts.values():
+        for session in entry.get("bundle", {}).get("sessions", []):
+            counts = Counter(tuple(event["canonical_sha256s"]) for event in session["events"])
+            ambiguous.update((session["id"], hashes) for hashes, count in counts.items()
+                             if count > 1 or not entry["eligible"])
+    events = {}
+    for host, entry in sorted(hosts.items()):
+        for session in entry.get("bundle", {}).get("sessions", []):
+            occurrences = Counter()
+            for event in session["events"]:
+                hashes = tuple(event["canonical_sha256s"])
+                occurrences[hashes] += 1
+                local = (session["id"], hashes) in ambiguous
+                identity = digest([session["id"], hashes, host if local else None, occurrences[hashes]])
+                record = events.setdefault(identity, {
+                    "session": session["id"], "canonical_sha256s": list(hashes),
+                    "raw_sha256s": [], "occurrence": occurrences[hashes],
+                    "identity_scope": "host_local" if local else "unique_in_complete_inputs",
+                    "provenance": []})
+                refs = [("primary", event["source_ref"])] + [("mirror", ref) for ref in event.get("mirror_source_refs", [])]
+                record["raw_sha256s"] = sorted(set(record["raw_sha256s"]) | {ref["sha256"] for _, ref in refs})
+                for role, ref in refs:
+                    record["provenance"].append({"host": host, "source_ref": ref, "role": role,
+                                                 "bundle_sha256": entry["input_sha256"]})
+    return events
+
+
 def intake(state, run_id, hosts):
     """hosts maps labels to explicit status, window and (for available) bundle path."""
     label(run_id)
@@ -432,19 +473,8 @@ def intake(state, run_id, hosts):
                 entry["status"] = "invalid_or_denied"
                 continue
             entry.update(bundle=bundle, eligible=eligible, status="complete_supported" if eligible else "partial")
-            for session in bundle["sessions"]:
-                occurrences = {}
-                for event in session["events"]:
-                    hashes = tuple(event["canonical_sha256s"])
-                    raw_hashes = {ref["sha256"] for ref in [event["source_ref"], *event.get("mirror_source_refs", [])]}
-                    occurrences[hashes] = occurrences.get(hashes, 0) + 1
-                    identity = digest([session["id"], hashes, occurrences[hashes]])
-                    record = result["events"].setdefault(identity, {"session": session["id"], "canonical_sha256s": list(hashes), "raw_sha256s": [], "occurrence": occurrences[hashes], "provenance": []})
-                    record["raw_sha256s"] = sorted(set(record["raw_sha256s"]) | raw_hashes)
-                    refs = [("primary", event["source_ref"])] + [("mirror", ref) for ref in event.get("mirror_source_refs", [])]
-                    for role, ref in refs:
-                        record["provenance"].append({"host": host, "source_ref": ref, "role": role,
-                                                     "bundle_sha256": entry["input_sha256"]})
+            result["events"].clear()
+            result["events"] = merge_events(result["hosts"])
             # Bound the live result as each host is admitted, before another
             # bundle can be retained and before the final ledger serialization.
             projected = {"schema": ledger["schema"], "runs": dict(ledger["runs"]),

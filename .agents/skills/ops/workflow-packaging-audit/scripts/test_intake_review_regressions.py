@@ -99,9 +99,105 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertNotEqual(bundles[0]["sessions"][0]["events"][0]["source_ref"]["sha256"],
                             bundles[1]["sessions"][0]["events"][0]["source_ref"]["sha256"])
         run = intake.intake(state, "copies", manifests)
-        self.assertEqual(len(run["events"]), 3)
-        self.assertTrue(all(len(e["provenance"]) == 2 and len(e["raw_sha256s"]) == 2 for e in run["events"].values()))
+        self.assertEqual(len(run["events"]), 5)
+        merged = [e for e in run["events"].values() if len(e["provenance"]) == 2]
+        self.assertEqual(len(merged), 1)  # unique tool call merges; repeated messages do not
+        self.assertEqual(len(merged[0]["raw_sha256s"]), 2)
         self.assertTrue(all(e["eligible"] for e in run["hosts"].values()))
+
+    def test_omitted_repeat_keeps_all_hosts_physical_occurrences_separate(self):
+        state, _ = self.prepare()
+        for order, repeated_host in enumerate(("alpha", "beta")):
+            manifests = {}
+            for host in ("alpha", "beta"):
+                # Same timestamp and canonical digest, but one source has lost
+                # the first physical occurrence: no ordinal match is provable.
+                events = [fixtures.user("identical")] * (2 if host == repeated_host else 1)
+                self.write([fixtures.meta()] + events)
+                bundle = self.collect(source_host=host)
+                path = self.root / (host + ".json")
+                fixtures.scanner._write_private(path, bundle)
+                manifests[host] = {"status": "available", "window": bundle["window"], "path": str(path)}
+            run = intake.intake(state, "omitted-" + str(order), manifests)
+            self.assertEqual(len(run["events"]), 3)
+            self.assertTrue(all(e["identity_scope"] == "host_local" and len(e["provenance"]) == 1
+                                for e in run["events"].values()))
+            self.assertEqual(run, intake.intake(state, "omitted-" + str(order), manifests))
+
+    def test_partial_singleton_does_not_claim_cross_host_occurrence_identity(self):
+        state, bundle = self.prepare()
+        manifests = {}
+        for host in ("alpha", "beta"):
+            candidate = copy.deepcopy(bundle)
+            candidate["source_host"] = host
+            if host == "beta":
+                candidate["truncation"] = ["max_bytes"]
+                candidate["complete_within_supported_scope"] = False
+            path = self.root / (host + ".json")
+            fixtures.scanner._write_private(path, candidate)
+            manifests[host] = {"status": "available", "window": candidate["window"], "path": str(path)}
+        run = intake.intake(state, "partial-singleton", manifests)
+        self.assertEqual(len(run["events"]), 2)
+        self.assertTrue(all(len(e["provenance"]) == 1 for e in run["events"].values()))
+
+    def reference_bundle(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.user("same"),
+                    {"type": "event_msg", "timestamp": fixtures.NOW,
+                     "payload": {"type": "user_message", "message": "same"}},
+                    fixtures.item("function_call", name="test", call_id="one", arguments="{}"),
+                    fixtures.item("function_call_output", call_id="one", output="exit code 0")])
+        return state, self.collect(source_host="alpha")
+
+    def test_every_reference_must_fit_coverage_and_byte_budget(self):
+        state, original = self.reference_bundle()
+        for role in ("primary", "mirror", "call"):
+            for bound in ("coverage", "budget"):
+                bundle = copy.deepcopy(original)
+                events = bundle["sessions"][0]["events"]
+                ref = (events[0]["source_ref"] if role == "primary" else
+                       events[0]["mirror_source_refs"][0] if role == "mirror" else events[-1]["call"]["source_ref"])
+                if bound == "coverage":
+                    ref["byte_offset"] = bundle["coverage"]["bytes_read"] - ref["byte_length"] + 1
+                else:
+                    bundle["limits"]["max_bytes"] = ref["byte_offset"] + ref["byte_length"] - 1
+                name = role + "-" + bound
+                run = self.submit(state, bundle, name)
+                self.assertEqual(run["hosts"]["alpha"]["status"], "invalid_or_denied")
+                self.assert_cannot_acknowledge(state, run, bundle, name)
+        self.assertTrue(self.submit(state, original, "valid-end-boundary")["hosts"]["alpha"]["eligible"])
+
+    def test_nul_path_with_matching_provenance_is_rejected(self):
+        state, bundle = self.reference_bundle()
+        session = bundle["sessions"][0]
+        path = "bad\0name.jsonl"
+        for source in session["source_files"]:
+            source["relative_path"] = path
+        for event in session["events"]:
+            for ref in [event["source_ref"], *event.get("mirror_source_refs", []),
+                        *([event["call"]["source_ref"]] if "call" in event else [])]:
+                ref["relative_path"] = path
+        run = self.submit(state, bundle, "nul")
+        self.assertEqual(run["hosts"]["alpha"]["status"], "invalid_or_denied")
+        self.assert_cannot_acknowledge(state, run, bundle, "nul")
+
+    def test_mirror_requires_exactly_two_canonical_digests_and_one_reference(self):
+        state, original = self.reference_bundle()
+        for name in ("missing-digest", "missing-ref", "extra-ref", "empty-refs"):
+            bundle = copy.deepcopy(original)
+            event = bundle["sessions"][0]["events"][0]
+            if name == "missing-digest":
+                event["canonical_sha256s"] = event["canonical_sha256s"][:1]
+            elif name == "missing-ref":
+                event.pop("mirror_source_refs")
+            elif name == "extra-ref":
+                event["mirror_source_refs"] *= 2
+            else:
+                event["mirror_source_refs"] = []
+            run = self.submit(state, bundle, name)
+            self.assertEqual(run["hosts"]["alpha"]["status"], "invalid_or_denied")
+            self.assert_cannot_acknowledge(state, run, bundle, name)
+        self.assertTrue(self.submit(state, original, "valid-mirror")["hosts"]["alpha"]["eligible"])
 
     def test_invalid_or_missing_canonical_digests_rejected(self):
         state, original = self.prepare()

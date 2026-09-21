@@ -302,11 +302,12 @@ class IntakeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.run_intake("invalidledger")
 
-    def test_copies_merge_preserving_occurrences_and_host_provenance(self):
+    def test_ambiguous_copies_preserve_host_local_occurrences(self):
         event = self.bundle["sessions"][0]["events"][0]
         self.bundle["sessions"][0]["events"].append(copy.deepcopy(event))
         self.bundle["sessions"][0]["events"][1]["source_ref"]["byte_offset"] += event["source_ref"]["byte_length"]
-        self.bundle["coverage"]["emitted_events"] = 2
+        self.bundle["coverage"].update(emitted_events=2, records_read=3,
+                                       bytes_read=self.bundle["coverage"]["bytes_read"] + event["source_ref"]["byte_length"])
         self.write(self.bundle)
         other = copy.deepcopy(self.bundle)
         other["source_host"] = "beta"
@@ -315,15 +316,16 @@ class IntakeTests(unittest.TestCase):
         path.chmod(0o600)
         self.hosts["beta"] = {**self.hosts["alpha"], "path": str(path)}
         run = self.run_intake()
-        self.assertEqual(len(run["events"]), 2)
-        self.assertTrue(all(len(e["provenance"]) == 2 for e in run["events"].values()))
+        self.assertEqual(len(run["events"]), 4)
+        self.assertTrue(all(len(e["provenance"]) == 1 for e in run["events"].values()))
 
-    def test_reversed_mirror_primary_merges_and_keeps_repetitions(self):
+    def test_reversed_mirrors_keep_ambiguous_repetitions_host_local(self):
         event = self.bundle["sessions"][0]["events"][0]
         mirror = {**event["source_ref"], "sha256": "f" * 64, "byte_offset": 999}
         event["mirror_source_refs"] = [mirror]
+        event["canonical_sha256s"] = sorted(event["canonical_sha256s"] + ["f" * 64])
         self.bundle["sessions"][0]["events"].append(copy.deepcopy(event))
-        self.bundle["coverage"].update(emitted_events=2, records_read=5)
+        self.bundle["coverage"].update(emitted_events=2, records_read=5, bytes_read=999 + mirror["byte_length"])
         self.write(self.bundle)
         other = copy.deepcopy(self.bundle)
         other["source_host"] = "beta"
@@ -334,8 +336,8 @@ class IntakeTests(unittest.TestCase):
         path.chmod(0o600)
         self.hosts["beta"] = {**self.hosts["alpha"], "path": str(path)}
         run = self.run_intake()
-        self.assertEqual(len(run["events"]), 2)
-        self.assertTrue(all(len(e["provenance"]) == 4 for e in run["events"].values()))
+        self.assertEqual(len(run["events"]), 4)
+        self.assertTrue(all(len(e["provenance"]) == 2 for e in run["events"].values()))
         self.assertTrue(all(len(e["raw_sha256s"]) == 2 for e in run["events"].values()))
 
     def test_closed_narratives_archive_contract_and_provenance_membership(self):
