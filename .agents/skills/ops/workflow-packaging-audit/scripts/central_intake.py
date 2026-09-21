@@ -169,10 +169,12 @@ def metadata_label(value):
         raise ValueError("Invalid or unscreened metadata label")
 
 
-def source_file(value, roots):
+def source_file(value, roots, require_jsonl=False):
     fields(value, "root_index relative_path")
     # Reuse the same bounded-root and relative-path contract as detail references.
     reference({**value, "byte_offset": 0, "byte_length": 1, "sha256": "0" * 64}, roots)
+    if require_jsonl and Path(value["relative_path"]).suffix != ".jsonl":
+        raise ValueError("Source file must be JSONL")
 
 
 def validate(bundle, host, expected):
@@ -245,7 +247,7 @@ def validate(bundle, host, expected):
         if not isinstance(session.get("source_files"), list):
             raise ValueError("Invalid session provenance")
         for source in session["source_files"]:
-            source_file(source, len(bundle["roots"]))
+            source_file(source, len(bundle["roots"]), require_jsonl=True)
         files = {(source["root_index"], source["relative_path"]) for source in session["source_files"]}
         def session_reference(ref):
             reference(ref, len(bundle["roots"]))
@@ -331,7 +333,8 @@ def validate(bundle, host, expected):
                 session_reference(event["call"]["source_ref"])
     if coverage["sessions_included"] != len(seen) or coverage["emitted_events"] != total:
         raise ValueError("Coverage counts disagree with input")
-    errors = any(coverage.get(k, 0) for k in ("malformed_records", "incomplete_trailing_records", "pending_calls_evicted"))
+    errors = any(coverage.get(k, 0) for k in ("malformed_records", "incomplete_trailing_records",
+                                              "untimestamped_events", "pending_calls_evicted"))
     # Archive snapshots cannot prove freshness even if their gap was removed.
     return (bundle["complete_within_supported_scope"] and not bundle["source_gaps"]
             and not bundle["truncation"] and not errors and archive["status"] == "disabled"

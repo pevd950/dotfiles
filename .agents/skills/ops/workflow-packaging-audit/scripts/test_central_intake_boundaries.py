@@ -131,6 +131,24 @@ class IntakeBoundaryTests(unittest.TestCase):
                 self.assertEqual(len(result["events"]), 1)
                 self.assert_cannot_acknowledge(state, result, bundle, run)
 
+    def test_untimestamped_events_stay_partial_even_without_declared_gaps(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(),
+                    {"type": "response_item", "payload": {"type": "message", "role": "user",
+                                                             "content": [{"type": "input_text", "text": "missing timestamp"}]}},
+                    fixtures.user("valid")])
+        bundle = self.collect(source_host="alpha")
+        self.assertEqual(bundle["coverage"]["untimestamped_events"], 1)
+        self.assertEqual(bundle["coverage"]["emitted_events"], 1)
+        self.assertTrue(any(gap["reason"] == "event_timestamp_missing_or_invalid"
+                            for gap in bundle["source_gaps"]))
+        bundle["source_gaps"] = []
+        bundle["complete_within_supported_scope"] = True
+        result = self.submit(state, bundle, "untimestamped")
+        self.assertEqual(result["hosts"]["alpha"]["status"], "partial")
+        self.assertEqual(len(result["events"]), 1)
+        self.assert_cannot_acknowledge(state, result, bundle, "untimestamped")
+
     def test_excluded_sidecar_sessions_cannot_be_injected(self):
         state, original = self.prepare()
         original["sessions"][0]["source_class"] = "approval_sidecar"
@@ -253,6 +271,53 @@ class IntakeBoundaryTests(unittest.TestCase):
                     event["call"]["source_ref"] = bad
                 result = self.submit(state, bundle, run=kind)
                 self.assertFalse(result["hosts"]["alpha"]["eligible"])
+
+    def test_session_and_event_references_require_jsonl_paths(self):
+        state, _ = self.prepare()
+        original = self.collect(source_host="alpha")
+        def rename_references(session, old_ref, new_path):
+            old_key = (old_ref["root_index"], old_ref["relative_path"])
+            for source in session["source_files"]:
+                if (source["root_index"], source["relative_path"]) == old_key:
+                    source["relative_path"] = new_path
+            for candidate in session["events"]:
+                refs = [candidate.get("source_ref"), *candidate.get("mirror_source_refs", [])]
+                if candidate.get("call"):
+                    refs.append(candidate["call"].get("source_ref"))
+                for ref in refs:
+                    if ref and (ref["root_index"], ref["relative_path"]) == old_key:
+                        ref["relative_path"] = new_path
+
+        bad_paths = {"session": "session.txt", "primary": ".jsonl",
+                     "mirror": "mirror.txt", "call": ".jsonl"}
+        for kind in ("session", "primary", "mirror", "call"):
+            with self.subTest(kind=kind):
+                bundle = copy.deepcopy(original)
+                session = bundle["sessions"][0]
+                event = session["events"][0]
+                if kind == "session":
+                    rename_references(session, session["source_files"][0], bad_paths[kind])
+                elif kind == "primary":
+                    rename_references(session, event["source_ref"], bad_paths[kind])
+                elif kind == "mirror":
+                    self.write([fixtures.meta(), {"type": "event_msg", "timestamp": fixtures.NOW,
+                                                 "payload": {"type": "user_message", "message": "synthetic correction"}}],
+                               directory=self.archive)
+                    bundle = self.collect(source_host="alpha")
+                    session = bundle["sessions"][0]
+                    event = next(e for e in bundle["sessions"][0]["events"]
+                                 if e.get("mirror_source_refs"))
+                    rename_references(session, event["mirror_source_refs"][0], bad_paths[kind])
+                else:
+                    self.write([fixtures.meta(), fixtures.item("function_call", name="exec_command", call_id="one"),
+                                fixtures.item("function_call_output", call_id="one", output="exit code 0")],
+                               name="call.jsonl")
+                    bundle = self.collect(source_host="alpha")
+                    session = bundle["sessions"][0]
+                    result_event = next(e for e in bundle["sessions"][0]["events"] if e["kind"] == "tool_result")
+                    rename_references(session, result_event["call"]["source_ref"], bad_paths[kind])
+                result = self.submit(state, bundle, run="suffix-" + kind)
+                self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
 
     def test_real_opposite_discovery_orders_merge_mirrored_event(self):
         state, _ = self.prepare()
