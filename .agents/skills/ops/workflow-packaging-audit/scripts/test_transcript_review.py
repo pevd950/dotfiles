@@ -165,6 +165,18 @@ class TranscriptReviewTests(unittest.TestCase):
         self.pull(); self.scan()
         self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
 
+    def test_context_neighbors_skip_trace_metadata(self):
+        self.write([record('user_message', message='request'),
+                    record('function_call', name='exec', call_id='x', arguments='build'),
+                    *[{'type': 'token_usage_record'} for _ in range(30)],
+                    record('function_call_output', call_id='x', output='failed'),
+                    *[{'type': 'token_usage_record'} for _ in range(30)],
+                    record('agent_message', message='corrected')])
+        self.pull(); self.scan()
+        rows = reader.context(self.cache, self.relative, 33, radius=1)['records']
+        self.assertEqual([r['kind'] for r in rows], ['user_message', 'tool_call', 'tool_result', 'assistant_message'])
+        self.assertIn('corrected', rows[-1]['text'])
+
     def test_source_label_cannot_mix_different_roots(self):
         self.write([record('user_message', message='source one')])
         self.pull()

@@ -272,7 +272,13 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
             target = connection.execute('SELECT * FROM records WHERE file=? AND line=?', (file['id'], line)).fetchone()
             if target is None:
                 raise ValueError('Record not indexed')
-            rows = {r['line']: r for r in connection.execute('SELECT * FROM records WHERE file=? AND line BETWEEN ? AND ?', (file['id'], line-radius, line+radius))}
+            # Activity neighbors remain useful when token/trace metadata fills
+            # many physical JSONL lines between a request and its response.
+            rows = {target['line']: target}
+            activity = "kind IN ('user_message','assistant_message','tool_call','tool_result')"
+            for op, order in (('<', 'DESC'), ('>', 'ASC')):
+                neighbors = connection.execute(f'SELECT * FROM records WHERE file=? AND line{op}? AND {activity} ORDER BY line {order} LIMIT ?', (file['id'], line, radius))
+                rows.update({r['line']: r for r in neighbors})
             user = connection.execute("SELECT * FROM records WHERE file=? AND line<=? AND kind='user_message' ORDER BY line DESC LIMIT 1", (file['id'], line)).fetchone()
             if user:
                 rows[user['line']] = user
