@@ -87,7 +87,7 @@ def rsync_command(spec, area, destination, exclude):
 
 def pull(cache, config):
     sources = config.get('sources', [])
-    if not sources or len({s['label'] for s in sources}) != len(sources):
+    if not sources or len({s['label'].casefold() for s in sources}) != len(sources):
         raise ValueError('Supply uniquely labeled approved sources')
     for spec in sources:
         validate_source(spec)
@@ -103,6 +103,9 @@ def pull(cache, config):
     with locked_cache(cache) as root:
         metadata = root / 'snapshot.json'
         previous = read_json(metadata) if metadata.exists() else {'sources': {}}
+        prior_labels = {label.casefold(): label for label in previous['sources']}
+        if any(spec['label'].casefold() in prior_labels and prior_labels[spec['label'].casefold()] != spec['label'] for spec in sources):
+            raise ValueError('Source label differs only by case from prior cache identity')
         snapshot = {'observed_at': dt.datetime.now(dt.timezone.utc).isoformat(),
                     'exclude_sessions': exclude, 'sources': {s['label']: {**previous['sources'].get(s['label'], {}),
                         'status': 'not_attempted', 'error': None} for s in sources},

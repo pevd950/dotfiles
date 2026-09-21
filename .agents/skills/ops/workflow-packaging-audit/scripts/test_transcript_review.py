@@ -54,6 +54,27 @@ class TranscriptReviewTests(unittest.TestCase):
     def report(self):
         return reader.report(self.cache, AFTER, THROUGH)
 
+    def test_case_colliding_source_labels_rejected(self):
+        self.config['sources'].append({**self.spec,'label':'SOURCE-A'})
+        with self.assertRaises(ValueError):self.pull()
+        self.assertFalse(self.cache.exists())
+        self.config['sources'].pop();self.pull();self.spec['label']='SOURCE-A'
+        with self.assertRaises(ValueError):self.pull()
+
+    def test_oversized_session_identity_is_gap_without_index_amplification(self):
+        self.write([{'type':'session_meta','payload':{'id':'x'*(1024*1024)}}]+[record('user_message',message='small') for _ in range(100)])
+        self.pull();self.scan(max_records=2)
+        self.assertFalse(self.report()['all_sources_covered'])
+        self.assertTrue(all(r['session'] is None for r in reader.candidates(self.cache,AFTER,THROUGH)))
+        self.assertLess((self.cache/'index.sqlite3').stat().st_size,1024*1024)
+
+    def test_undated_report_does_not_query_header_per_activity(self):
+        activity=record('user_message',message='undated');activity.pop('timestamp')
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}]+[activity]*5000)
+        self.pull();self.scan()
+        with patch.object(reader,'scope_at_record',side_effect=AssertionError('per-record scope lookup')):
+            self.assertEqual(self.report()['sources']['source-a']['undated_files_with_session_time'],0)
+
     def test_cache_cannot_overlap_local_source(self):
         for cache in (self.codex/'sessions', self.codex/'sessions'/'cache', self.codex):
             with self.subTest(cache=cache), self.assertRaises(ValueError):

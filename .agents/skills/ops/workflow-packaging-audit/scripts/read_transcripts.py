@@ -49,13 +49,13 @@ def connect(root):
     if 'excluded' not in columns:
         connection.execute('ALTER TABLE records ADD COLUMN excluded INTEGER DEFAULT 0')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
-    if version is None or version[0] != '4':
+    if version is None or version[0] != '5':
         # Rebuild derived cursors once to account for identity/envelope gaps
         # and quarantine unknown segments after excluded sessions.
         with connection:
             connection.execute('DELETE FROM records')
             connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0")
-            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','4')")
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','5')")
     return connection
 
 
@@ -168,7 +168,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                         if record.get('type') == 'session_meta' or legacy_header:
                                             payload = record if legacy_header else record.get('payload', {})
                                             identity = payload.get('id') if isinstance(payload, dict) else None
-                                            valid = isinstance(identity, str) and bool(identity.strip()) and '\0' not in identity
+                                            valid = isinstance(identity, str) and bool(identity.strip()) and len(identity.encode('utf-8')) <= 256 and '\0' not in identity
                                             session = identity if valid else unknown_session
                                             if not header_seen:
                                                 owner = session
@@ -274,9 +274,11 @@ def report(cache, after, through):
                 excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
                 undated_files = set()
                 for file in rows:
-                    for record in connection.execute("SELECT * FROM records WHERE file=? AND excluded=0 AND stamp IS NULL AND kind IN ('user_message','assistant_message','tool_call','tool_result')", (file['id'],)):
-                        scope = scope_at_record(connection, file_scope(connection, snapshot, file), record)
-                        if scope['session_started_at'] is not None:
+                    current_header_time = None
+                    for record in connection.execute("SELECT kind,stamp,excluded FROM records WHERE file=? AND (kind IN ('session_meta','invalid_session_meta') OR (excluded=0 AND stamp IS NULL AND kind IN ('user_message','assistant_message','tool_call','tool_result'))) ORDER BY line", (file['id'],)):
+                        if record['kind'] in ('session_meta', 'invalid_session_meta'):
+                            current_header_time = record['stamp'] if record['kind'] == 'session_meta' else None
+                        elif current_header_time is not None:
                             undated_files.add(file['id'])
                             break
                 sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
