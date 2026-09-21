@@ -54,6 +54,59 @@ class TranscriptReviewTests(unittest.TestCase):
     def report(self):
         return reader.report(self.cache, AFTER, THROUGH)
 
+    def test_excluded_filename_keeps_included_fork(self):
+        self.config['exclude_sessions'] = ['excluded']
+        self.write([{'type':'session_meta','payload':{'id':'excluded'}}, record('user_message',message='hide'),
+                    {'type':'session_meta','payload':{'id':'keep'}},record('user_message',message='keep')],name='rollout-excluded.jsonl')
+        self.pull(); self.scan(max_records=1)
+        self.assertEqual([r['session'] for r in reader.candidates(self.cache,AFTER,THROUGH)],['keep'])
+
+    def test_parse_failure_quarantines_excluded_segment_across_batches(self):
+        self.config['exclude_sessions']=['excluded']
+        path=self.write([{'type':'session_meta','payload':{'id':'excluded'}}])
+        with path.open('a') as f:
+            f.write('not json\n'+json.dumps(record('user_message',message='hide'))+'\n')
+            f.write(json.dumps({'type':'session_meta','payload':{'id':'keep'}})+'\n'+json.dumps(record('user_message',message='keep'))+'\n')
+        self.pull();self.scan(max_records=1)
+        self.assertEqual([r['line'] for r in reader.candidates(self.cache,AFTER,THROUGH)],[5])
+        with self.assertRaises(ValueError):reader.context(self.cache,self.relative,3)
+
+    def test_supported_bad_envelopes_are_gaps(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}},
+                    {'type':'response_item','payload':None},{'type':'event_msg'},
+                    {'type':'event_msg','payload':{}},record('user_message',message='later')])
+        self.pull();self.scan()
+        self.assertGreaterEqual(self.report()['sources']['source-a']['malformed_records'],3)
+        self.assertFalse(self.report()['all_sources_covered'])
+        self.assertEqual(len(reader.candidates(self.cache,AFTER,THROUGH)),1)
+
+    def test_headerless_activity_is_identity_gap(self):
+        self.write([record('user_message',message='unknown')]);self.pull();self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+        self.assertEqual(self.report()['sources']['source-a']['malformed_records'],1)
+        self.assertIsNone(reader.candidates(self.cache,AFTER,THROUGH)[0]['session'])
+
+    def test_partial_inventory_cannot_attribute_uncopied_bytes(self):
+        self.pull()
+        self.write([record('user_message',message='source')])
+        cached=self.cache/self.relative;cached.write_text(json.dumps(record('user_message',message='unverified'))+'\n');cached.chmod(0o600)
+        original=puller.probe
+        def partial(spec,exclude):
+            result=original(spec,exclude);result['roots']['sessions']['status']='partial';return result
+        with patch.object(puller,'probe',side_effect=partial):
+            result=self.pull()['source-a']
+        self.assertEqual(result['cached_files'],0)
+        self.scan();self.assertEqual(reader.candidates(self.cache,AFTER,THROUGH),[])
+
+    def test_signal_filter_matches_only_exact_array_values(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}},
+                    record('function_call',name='friction_candidate',call_id='a'),
+                    record('function_call_output',call_id='a',output='error: failed')])
+        self.pull();self.scan()
+        rows=reader.candidates(self.cache,AFTER,THROUGH,signal='friction_candidate')
+        self.assertEqual([r['kind'] for r in rows],['tool_result'])
+        self.assertEqual(reader.candidates(self.cache,AFTER,THROUGH,signal='%'),[])
+
     def test_real_rsync_scope_privacy_and_no_deletion_propagation(self):
         path = self.write([record('user_message', message='hello')])
         (self.codex / 'config.toml').write_text('not a transcript')
@@ -71,7 +124,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(self.report()['sources']['source-a']['retained_files_absent_at_source'], 1)
 
     def test_resumes_whole_records_and_uses_activity_not_filename(self):
-        self.write([record('user_message', message=str(i)) for i in range(8)])
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}] + [record('user_message', message=str(i)) for i in range(8)])
         self.pull()
         first = reader.scan_batch(self.cache, max_records=1, max_bytes=1)
         self.assertEqual(first['batch_records'], 1)
@@ -80,7 +133,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(self.report()['sources']['source-a']['selected_records'], 8)
         page1 = reader.candidates(self.cache, AFTER, THROUGH, limit=3)
         page2 = reader.candidates(self.cache, AFTER, THROUGH, limit=3, offset=3)
-        self.assertEqual([r['line'] for r in page1 + page2], list(range(1, 7)))
+        self.assertEqual([r['line'] for r in page1 + page2], list(range(2, 8)))
         self.assertTrue(self.report()['all_sources_covered'])
 
     def test_large_record_and_fork_headers_do_not_hide_later_activity(self):
@@ -96,7 +149,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(self.report()['sources']['source-a']['oversized_unparsed'], 0)
 
     def test_oversize_gap_continues_and_larger_limit_retries(self):
-        self.write([record('user_message', message='x'*1000), record('user_message', message='later')])
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='x'*1000), record('user_message', message='later')])
         self.pull(); self.scan(max_record_bytes=300)
         self.assertFalse(self.report()['all_sources_covered'])
         self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
@@ -250,7 +303,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH)), 1)
 
     def test_requested_window_cannot_extend_beyond_inventory(self):
-        self.write([record('user_message', message='dated')]); self.pull(); self.scan()
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='dated')]); self.pull(); self.scan()
         from transcript_cache import write_json
         snapshot = read_json(self.cache / 'snapshot.json')
         snapshot['sources']['source-a']['coverage_through'] = '2026-09-10T00:00:00Z'
@@ -284,7 +337,7 @@ class TranscriptReviewTests(unittest.TestCase):
                             {'type':'session_meta','payload':{'id':'child'}},record('user_message',message='child')])
                 self.pull();self.scan(max_records=1)
                 state=self.report()['sources']['source-a']
-                self.assertEqual(state['malformed_records'],1)
+                self.assertEqual(state['malformed_records'],2)
                 self.assertFalse(state['timestamp_selection_complete'])
                 rows=reader.candidates(self.cache,AFTER,THROUGH)
                 self.assertTrue(all(r['owner'] is None for r in rows))
@@ -314,7 +367,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertTrue((self.cache / self.relative).exists())
 
     def test_mutation_during_resumed_scan_cannot_be_reported_complete(self):
-        self.write([record('user_message', message='first'), record('user_message', message='later')])
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='first'), record('user_message', message='later')])
         self.pull()
         reader.scan_batch(self.cache, max_records=1)
         cached = self.cache / self.relative
@@ -328,7 +381,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertTrue(self.report()['all_sources_covered'])
 
     def test_malformed_and_untimestamped_events_are_visible_gaps(self):
-        source = self.write([record('user_message', message='valid'),
+        source = self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='valid'),
                              {'type': 'event_msg', 'payload': {'type': 'user_message', 'message': 'missing timestamp'}}])
         with source.open('a') as handle: handle.write('malformed\n')
         self.pull(); self.scan()

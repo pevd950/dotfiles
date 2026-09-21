@@ -49,13 +49,13 @@ def connect(root):
     if 'excluded' not in columns:
         connection.execute('ALTER TABLE records ADD COLUMN excluded INTEGER DEFAULT 0')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
-    if version is None or version[0] != '3':
-        # Rebuild derived cursors once: older readers stopped at excluded owners
-        # and did not validate headers or retain per-record exclusion state.
+    if version is None or version[0] != '4':
+        # Rebuild derived cursors once to account for identity/envelope gaps
+        # and quarantine unknown segments after excluded sessions.
         with connection:
             connection.execute('DELETE FROM records')
             connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0")
-            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','3')")
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','4')")
     return connection
 
 
@@ -152,8 +152,10 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                 when = kind = call_id = None
                                 summary = {}
                                 previous_gaps = (malformed, oversized, untimestamped)
+                                was_excluded = session in snapshot.get('exclude_sessions', []) or session == '\0quarantined'
+                                unknown_session = '\0quarantined' if was_excluded else None
                                 if raw is None:
-                                    session = None
+                                    session = unknown_session
                                     oversized += 1
                                     kind = 'oversized_unparsed'
                                 else:
@@ -167,7 +169,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                             payload = record if legacy_header else record.get('payload', {})
                                             identity = payload.get('id') if isinstance(payload, dict) else None
                                             valid = isinstance(identity, str) and bool(identity.strip()) and '\0' not in identity
-                                            session = identity if valid else None
+                                            session = identity if valid else unknown_session
                                             if not header_seen:
                                                 owner = session
                                             header_seen = True
@@ -175,10 +177,16 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                             if not valid:
                                                 malformed += 1
                                         else:
+                                            if record.get('type') in ('response_item', 'event_msg'):
+                                                payload = record.get('payload')
+                                                if not isinstance(payload, dict) or not isinstance(payload.get('type'), str) or not payload['type']:
+                                                    raise ValueError('Malformed supported envelope')
                                             decoded = _event(record)
                                             if decoded:
                                                 summary, call_id = decoded
                                                 kind = summary['kind']
+                                                if session is None:
+                                                    malformed += 1  # Activity without session provenance.
                                                 if when is None:
                                                     untimestamped += 1
                                             else:
@@ -186,9 +194,9 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                     except (ValueError, TypeError, RecursionError):
                                         malformed += 1
                                         kind = 'malformed'
-                                        session = None
-                                excluded = session in snapshot.get('exclude_sessions', [])
-                                if excluded:
+                                        session = unknown_session
+                                excluded = session in snapshot.get('exclude_sessions', []) or session == '\0quarantined'
+                                if excluded and session != '\0quarantined':
                                     malformed, oversized, untimestamped = previous_gaps
                                 connection.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                                     (file['id'], line, start, length, digest,
@@ -317,7 +325,7 @@ def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=
             if kind:
                 query += ' AND r.kind=?'; args.append(kind)
             if signal:
-                query += ' AND r.summary LIKE ?'; args.append('%' + signal + '%')
+                query += " AND EXISTS (SELECT 1 FROM json_each(r.summary, '$.signals') WHERE type='text' AND value=?)"; args.append(signal)
             query += ' ORDER BY r.stamp,f.source,f.path,r.line LIMIT ? OFFSET ?'
             args.extend([limit, offset])
             rows = connection.execute(query, args).fetchall()

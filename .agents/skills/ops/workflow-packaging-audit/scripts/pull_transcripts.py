@@ -28,7 +28,7 @@ for area,raw in request['roots'].items():
   unsafe=[d for d in dirs if pathlib.Path(base,d).is_symlink()]
   gaps.extend('symlink_directory' for _ in unsafe);dirs[:]=[d for d in dirs if d not in unsafe]
   for name in names:
-   if not name.endswith('.jsonl') or any(name.endswith('-'+sid+'.jsonl') for sid in request['exclude_sessions']):continue
+   if not name.endswith('.jsonl'):continue
    q=pathlib.Path(base,name)
    try:
     s=q.lstat()
@@ -80,7 +80,6 @@ def rsync_command(spec, area, destination, exclude):
     command = ['rsync', '-rt', '--checksum', '--delay-updates', '--timeout=60']
     if spec.get('ssh'):
         command += ['-e', shlex.join(SSH)]
-    command += ['--exclude=*-' + sid + '.jsonl' for sid in exclude]
     return command + ['--exclude=.~tmp~/', '--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
 
 
@@ -140,6 +139,7 @@ def pull(cache, config):
                 inventory_completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
                 inventory = {}
                 for area in ('sessions', 'archived_sessions'):
+                    copied = transfer[area] == 'ok'
                     now_files = after['roots'][area]['files']
                     if before['roots'][area] != after['roots'][area]:
                         transfer[area] = 'source_changed_during_pull'
@@ -154,13 +154,16 @@ def pull(cache, config):
                         name = str(path.relative_to(directory))
                         prior = old.get('files', {}).get(relative, {})
                         present = name in now_files
-                        if not prior and not present and name not in before['roots'][area]['files']:
+                        if not prior and (not copied or (not present and name not in before['roots'][area]['files'])):
                             transfer[area] = 'unattributed_cache_file'
                             continue
                         first = signature(path)
                         digest = file_hash(path)
                         if signature(path) != first:
                             raise ValueError('Cache changed during inventory')
+                        if not copied and prior and digest != prior.get('sha256'):
+                            transfer[area] = 'unverified_cache_change'
+                            continue
                         inventory[relative] = {
                             'area': area, 'sha256': digest, 'size': first[0], 'mtime_ns': first[1],
                             'present_at_source': present,
