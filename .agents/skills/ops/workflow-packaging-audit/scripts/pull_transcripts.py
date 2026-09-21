@@ -107,6 +107,7 @@ def pull(cache, config):
             entry = {**old, 'status': 'unavailable', 'error': None}
             snapshot['sources'][label] = entry
             try:
+                coverage_through = dt.datetime.now(dt.timezone.utc).isoformat()
                 before = probe(spec, exclude)
                 identity = {k: before[k] for k in ('hostname', 'user')}
                 if old.get('identity') not in (None, identity) or old.get('roots') not in (None, spec['roots']):
@@ -136,6 +137,7 @@ def pull(cache, config):
                             path.chmod(0o700 if stat.S_ISDIR(info.st_mode) else 0o600)
                     transfer[area] = 'ok' if result.returncode == 0 else 'rsync_incomplete'
                 after = probe(spec, exclude)
+                inventory_completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
                 inventory = {}
                 for area in ('sessions', 'archived_sessions'):
                     now_files = after['roots'][area]['files']
@@ -170,9 +172,10 @@ def pull(cache, config):
                     if any(str(Path(label, area, name)) not in inventory for name in now_files):
                         transfer[area] = 'cache_missing_source_files'
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
+                             coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
                              status='ok' if all(v == 'ok' for v in transfer.values()) else 'partial')
                 if entry['status'] == 'ok':
-                    entry['last_successful_pull'] = snapshot['observed_at']
+                    entry['last_successful_pull'] = dt.datetime.now(dt.timezone.utc).isoformat()
             except subprocess.TimeoutExpired:
                 entry['error'] = 'source_timeout'
             except (OSError, ValueError, KeyError, TypeError):

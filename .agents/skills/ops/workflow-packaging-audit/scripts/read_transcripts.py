@@ -45,16 +45,17 @@ def connect(root):
     connection.row_factory = sqlite3.Row
     connection.execute('PRAGMA trusted_schema=OFF')
     connection.executescript(SCHEMA)
+    columns = {r['name'] for r in connection.execute('PRAGMA table_info(records)')}
+    if 'excluded' not in columns:
+        connection.execute('ALTER TABLE records ADD COLUMN excluded INTEGER DEFAULT 0')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
-    if version is None or version[0] != '2':
-        # Older indexes did not recognize the first-row legacy session header.
-        # Revisit only affected files; cached raw transcripts remain untouched.
+    if version is None or version[0] != '3':
+        # Rebuild derived cursors once: older readers stopped at excluded owners
+        # and did not validate headers or retain per-record exclusion state.
         with connection:
-            ids = connection.execute('SELECT id FROM files WHERE untimestamped>0').fetchall()
-            for row in ids:
-                connection.execute('DELETE FROM records WHERE file=?', (row['id'],))
-                connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0 WHERE id=?", (row['id'],))
-            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','2')")
+            connection.execute('DELETE FROM records')
+            connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0")
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','3')")
     return connection
 
 
@@ -129,6 +130,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                     expected = (file['size'], file['mtime_ns'])
                     offset, line = file['offset'], file['line']
                     owner, session = file['owner'], file['session']
+                    header_seen = connection.execute("SELECT 1 FROM records WHERE file=? AND kind IN ('session_meta','invalid_session_meta') LIMIT 1", (file['id'],)).fetchone() is not None
                     malformed, oversized, untimestamped = file['malformed'], file['oversized'], file['untimestamped']
                     status = 'pending'
                     try:
@@ -149,7 +151,9 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                 count += 1
                                 when = kind = call_id = None
                                 summary = {}
+                                previous_gaps = (malformed, oversized, untimestamped)
                                 if raw is None:
+                                    session = None
                                     oversized += 1
                                     kind = 'oversized_unparsed'
                                 else:
@@ -161,11 +165,15 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                         legacy_header = line == 1 and 'type' not in record and isinstance(record.get('id'), str) and when is not None
                                         if record.get('type') == 'session_meta' or legacy_header:
                                             payload = record if legacy_header else record.get('payload', {})
-                                            session = payload.get('id') if isinstance(payload, dict) else None
-                                            session = session if isinstance(session, str) else None
-                                            if owner is None:
+                                            identity = payload.get('id') if isinstance(payload, dict) else None
+                                            valid = isinstance(identity, str) and bool(identity.strip()) and '\0' not in identity
+                                            session = identity if valid else None
+                                            if not header_seen:
                                                 owner = session
-                                            kind = 'session_meta'
+                                            header_seen = True
+                                            kind = 'session_meta' if valid else 'invalid_session_meta'
+                                            if not valid:
+                                                malformed += 1
                                         else:
                                             decoded = _event(record)
                                             if decoded:
@@ -178,17 +186,22 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                     except (ValueError, TypeError, RecursionError):
                                         malformed += 1
                                         kind = 'malformed'
-                                connection.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?,?,?,?)',
+                                        session = None
+                                excluded = session in snapshot.get('exclude_sessions', [])
+                                if excluded:
+                                    malformed, oversized, untimestamped = previous_gaps
+                                connection.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                                     (file['id'], line, start, length, digest,
                                      when.isoformat(timespec='microseconds') if when else None,
                                      kind, session, call_id if isinstance(call_id, str) else None,
-                                     json.dumps(summary)))
-                                if owner in snapshot.get('exclude_sessions', []):
-                                    offset = file['size']
-                                    status = 'excluded'
-                                    break
+                                     json.dumps(summary), int(excluded)))
                             if offset == file['size']:
-                                status = 'excluded' if status == 'excluded' else 'complete'
+                                status = 'complete'
+                            if status == 'complete':
+                                hidden = connection.execute('SELECT 1 FROM records WHERE file=? AND excluded=1 LIMIT 1', (file['id'],)).fetchone()
+                                visible = connection.execute("SELECT 1 FROM records WHERE file=? AND excluded=0 AND kind IN ('user_message','assistant_message','tool_call','tool_result') LIMIT 1", (file['id'],)).fetchone()
+                                if hidden and not visible and not (malformed or oversized):
+                                    status = 'excluded'
                         if signature(path) != expected:
                             raise ValueError('Cache file changed')
                         if status in ('complete', 'excluded') and file_hash(path) != file['sha256']:
@@ -208,11 +221,11 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
 
 
 def file_scope(connection, snapshot, file):
-    header = connection.execute("SELECT stamp FROM records WHERE file=? AND kind='session_meta' ORDER BY line LIMIT 1", (file['id'],)).fetchone()
+    header = connection.execute("SELECT stamp,kind FROM records WHERE file=? AND kind IN ('session_meta','invalid_session_meta') ORDER BY line LIMIT 1", (file['id'],)).fetchone()
     source = snapshot['sources'].get(file['source'], {})
     return {'source': file['source'], 'source_host': source.get('identity', {}).get('hostname'),
             'source_area': file['area'], 'session_id': file['owner'],
-            'session_started_at': header['stamp'] if header else None,
+            'session_started_at': header['stamp'] if header and header['kind'] == 'session_meta' else None,
             'host_basis': 'verified_copy_source',
             'source_last_successful_pull': source.get('last_successful_pull')}
 
@@ -225,9 +238,9 @@ def record_scope(scope, activity_time, *, window_checked=False):
 
 
 def scope_at_record(connection, scope, row, *, window_checked=False):
-    header = connection.execute("SELECT stamp FROM records WHERE file=? AND kind='session_meta' AND line<=? ORDER BY line DESC LIMIT 1", (row['file'], row['line'])).fetchone()
+    header = connection.execute("SELECT stamp,kind FROM records WHERE file=? AND kind IN ('session_meta','invalid_session_meta') AND line<=? ORDER BY line DESC LIMIT 1", (row['file'], row['line'])).fetchone()
     current = {**scope, 'file_session_id': scope['session_id'], 'session_id': row['session'],
-               'session_started_at': header['stamp'] if header else None}
+               'session_started_at': header['stamp'] if header and header['kind'] == 'session_meta' else None}
     return record_scope(current, row['stamp'], window_checked=window_checked)
 
 
@@ -244,14 +257,20 @@ def report(cache, after, through):
             sources = {}
             for source, entry in snapshot['sources'].items():
                 rows = connection.execute('SELECT * FROM files WHERE listed=1 AND source=?', (source,)).fetchall()
-                selected = connection.execute("SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND f.status='complete' AND r.stamp>? AND r.stamp<=? AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')", (source, low, high)).fetchone()[0]
+                selected = connection.execute("SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND f.status='complete' AND r.stamp>? AND r.stamp<=? AND r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')", (source, low, high)).fetchone()[0]
                 pending = sum(r['status'] == 'pending' for r in rows)
                 changed = sum(r['status'] == 'changed' for r in rows)
                 parse_gaps = sum(r['malformed'] + r['oversized'] + r['untimestamped'] for r in rows if r['status'] != 'excluded')
+                coverage = _time(entry.get('coverage_through', entry.get('last_successful_pull')))
+                reaches_end = coverage is not None and stamp(through) <= coverage.isoformat(timespec='microseconds') and coverage <= dt.datetime.now(dt.timezone.utc)
+                excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
                 sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
                     'host_basis': 'verified_copy_source',
                     'pull_status': entry['status'], 'pull_error': entry.get('error'),
                     'last_successful_pull': entry.get('last_successful_pull'),
+                    'coverage_through': coverage.isoformat() if coverage else None,
+                    'inventory_reaches_window_end': reaches_end,
+                    'excluded_records': excluded_count,
                     'cached_files': len(rows), 'pending_files': pending, 'changed_files': changed,
                     'excluded_files': sum(r['status'] == 'excluded' for r in rows),
                     'bytes_scanned': sum(r['offset'] for r in rows),
@@ -262,7 +281,7 @@ def report(cache, after, through):
                     'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
                     'undated_files_with_session_time': sum(r['untimestamped'] > 0 and file_scope(connection, snapshot, r)['session_started_at'] is not None for r in rows),
                     'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
-                    'timestamp_selection_complete': entry['status'] == 'ok' and not pending and not changed and not parse_gaps,
+                    'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps,
                     'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
                     'new_archive_observations': sum(bool(f.get('archive_observed_after')) for f in entry.get('files', {}).values())}
             return {'window': {'after': low, 'through': high}, 'sources': sources,
@@ -285,7 +304,7 @@ def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=
             with connection:
                 snapshot = read_json(root / 'snapshot.json')
                 refresh_inventory(connection, snapshot)
-            query = "SELECT f.path,f.source,f.area,f.owner,r.* FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.status='complete' AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')"
+            query = "SELECT f.path,f.source,f.area,f.owner,r.* FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.status='complete' AND r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')"
             low, high = stamp(after), stamp(through)
             if low >= high:
                 raise ValueError('Empty or reversed window')
@@ -329,22 +348,22 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
             file = connection.execute("SELECT * FROM files WHERE path=? AND listed=1 AND status='complete'", (relative,)).fetchone()
             if file is None:
                 raise ValueError('File not completely indexed')
-            target = connection.execute('SELECT * FROM records WHERE file=? AND line=?', (file['id'], line)).fetchone()
+            target = connection.execute('SELECT * FROM records WHERE file=? AND line=? AND excluded=0', (file['id'], line)).fetchone()
             if target is None:
                 raise ValueError('Record not indexed')
             # Activity neighbors remain useful when token/trace metadata fills
             # many physical JSONL lines between a request and its response.
             rows = {target['line']: target}
-            activity = "kind IN ('user_message','assistant_message','tool_call','tool_result')"
+            activity = "excluded=0 AND kind IN ('user_message','assistant_message','tool_call','tool_result')"
             for op, order in (('<', 'DESC'), ('>', 'ASC')):
                 neighbors = connection.execute(f'SELECT * FROM records WHERE file=? AND line{op}? AND {activity} ORDER BY line {order} LIMIT ?', (file['id'], line, radius))
                 rows.update({r['line']: r for r in neighbors})
-            user = connection.execute("SELECT * FROM records WHERE file=? AND line<=? AND kind='user_message' ORDER BY line DESC LIMIT 1", (file['id'], line)).fetchone()
+            user = connection.execute("SELECT * FROM records WHERE file=? AND excluded=0 AND line<=? AND kind='user_message' ORDER BY line DESC LIMIT 1", (file['id'], line)).fetchone()
             if user:
                 rows[user['line']] = user
             if target['call_id']:
                 for kind, op, order in (('tool_call', '<=', 'DESC'), ('tool_result', '>=', 'ASC')):
-                    related = connection.execute(f'SELECT * FROM records WHERE file=? AND call_id=? AND kind=? AND line{op}? ORDER BY line {order} LIMIT 1', (file['id'], target['call_id'], kind, line)).fetchone()
+                    related = connection.execute(f'SELECT * FROM records WHERE file=? AND excluded=0 AND call_id=? AND kind=? AND line{op}? ORDER BY line {order} LIMIT 1', (file['id'], target['call_id'], kind, line)).fetchone()
                     if related:
                         rows[related['line']] = related
             path = cache_path(root, relative)

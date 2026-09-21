@@ -249,6 +249,47 @@ class TranscriptReviewTests(unittest.TestCase):
         self.scan()
         self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH)), 1)
 
+    def test_requested_window_cannot_extend_beyond_inventory(self):
+        self.write([record('user_message', message='dated')]); self.pull(); self.scan()
+        from transcript_cache import write_json
+        snapshot = read_json(self.cache / 'snapshot.json')
+        snapshot['sources']['source-a']['coverage_through'] = '2026-09-10T00:00:00Z'
+        write_json(self.cache / 'snapshot.json', snapshot)
+        state = self.report()['sources']['source-a']
+        self.assertFalse(state['timestamp_selection_complete'])
+        self.assertFalse(state['inventory_reaches_window_end'])
+        self.assertTrue(reader.report(self.cache, AFTER, '2026-09-09T00:00:00Z')['all_sources_covered'])
+
+    def test_excluded_child_is_hidden_without_losing_parent_or_later_child(self):
+        self.write([{'type':'session_meta','payload':{'id':'parent'}}, record('user_message',message='keep parent'),
+                    {'type':'session_meta','payload':{'id':'excluded-child'}}, record('user_message',message='hide child'),
+                    {'type':'session_meta','payload':{'id':'kept-child'}}, record('user_message',message='keep child')])
+        self.config['exclude_sessions']=['excluded-child']; self.pull(); self.scan(max_records=1)
+        rows=reader.candidates(self.cache,AFTER,THROUGH)
+        self.assertEqual([r['line'] for r in rows],[2,6])
+        self.assertEqual(self.report()['sources']['source-a']['excluded_records'],2)
+        with self.assertRaises(ValueError): reader.context(self.cache,self.relative,4)
+        self.assertNotIn(4,[r['line'] for r in reader.context(self.cache,self.relative,6,radius=20)['records']])
+
+    def test_excluded_parent_does_not_hide_later_included_child(self):
+        self.write([{'type':'session_meta','payload':{'id':'excluded-parent'}},record('user_message',message='hide'),
+                    {'type':'session_meta','payload':{'id':'included-child'}},record('user_message',message='keep')])
+        self.config['exclude_sessions']=['excluded-parent'];self.pull();self.scan(max_records=1)
+        self.assertEqual([r['line'] for r in reader.candidates(self.cache,AFTER,THROUGH)],[4])
+
+    def test_invalid_first_header_is_gap_and_not_reassigned_to_child(self):
+        for payload in (None, {}, {'id':2}, {'id':''}):
+            with self.subTest(payload=payload):
+                self.write([{'type':'session_meta','payload':payload},record('user_message',message='unknown owner'),
+                            {'type':'session_meta','payload':{'id':'child'}},record('user_message',message='child')])
+                self.pull();self.scan(max_records=1)
+                state=self.report()['sources']['source-a']
+                self.assertEqual(state['malformed_records'],1)
+                self.assertFalse(state['timestamp_selection_complete'])
+                rows=reader.candidates(self.cache,AFTER,THROUGH)
+                self.assertTrue(all(r['owner'] is None for r in rows))
+                self.assertIsNone(rows[0]['scope']['session_id'])
+
     def test_abandoned_rsync_staging_is_not_transcript_evidence(self):
         self.write([record('user_message', message='source record')])
         self.pull()
