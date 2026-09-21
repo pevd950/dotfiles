@@ -201,8 +201,11 @@ class IntakeTests(unittest.TestCase):
                 # duplicate complete sessions to create a genuine over-budget index.
                 extra = copy.deepcopy(bundle["sessions"][0])
                 extra["id"] = "second"
+                extra["source_files"][0]["relative_path"] = "second.jsonl"
+                extra["events"][0]["source_ref"]["relative_path"] = "second.jsonl"
                 bundle["sessions"].append(extra)
-                bundle["coverage"].update(emitted_events=2, sessions_included=2)
+                bundle["coverage"].update(emitted_events=2, sessions_included=2,
+                                           files_read=2, files_discovered=2, records_read=4)
                 bundle["limits"][limit] = 1
             else:
                 bundle["coverage"][counter] = bundle["limits"][limit] + 1

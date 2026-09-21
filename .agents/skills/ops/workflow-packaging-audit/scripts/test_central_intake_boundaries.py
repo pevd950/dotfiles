@@ -40,6 +40,109 @@ class IntakeBoundaryTests(unittest.TestCase):
         ledger = intake.decode(intake.read_private(state / "ledger.json"))
         self.assertEqual(ledger["acknowledged_collector_windows"], {})
 
+    def assert_cannot_acknowledge(self, state, result, bundle, run):
+        self.assertFalse(result["hosts"]["alpha"]["eligible"])
+        with self.assertRaises(ValueError):
+            intake.acknowledge(state, run, result["digest"], "alpha", bundle["window"]["after"])
+        ledger = intake.decode(intake.read_private(state / "ledger.json"))
+        self.assertEqual(ledger["acknowledged_collector_windows"], {})
+
+    def test_emitted_sessions_require_files_actually_read(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta("second"), fixtures.user("second")], name="second.jsonl")
+        original = self.collect(source_host="alpha")
+        self.assertTrue(self.submit(state, original, "valid")["hosts"]["alpha"]["eligible"])
+        for run, counts in (("no-files", {"files_read": 0, "files_discovered": 0}),
+                            ("too-few-files", {"files_read": 1})):
+            with self.subTest(run=run):
+                bundle = copy.deepcopy(original)
+                bundle["coverage"].update(counts)
+                result = self.submit(state, bundle, run)
+                self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
+                self.assert_cannot_acknowledge(state, result, bundle, run)
+
+    def test_empty_files_do_not_require_records_or_sessions(self):
+        state, _ = self.prepare()
+        self.write([])
+        self.write([], name="second.jsonl")
+        bundle = self.collect(source_host="alpha")
+        self.assertEqual(bundle["coverage"]["files_read"], 2)
+        self.assertEqual(bundle["coverage"]["records_read"], 0)
+        self.assertTrue(self.submit(state, bundle)["hosts"]["alpha"]["eligible"])
+
+    def test_signals_match_the_collected_event_kind(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.user("No, permission denied; retry"),
+                    fixtures.item("message", role="assistant", content="No, permission denied; retry"),
+                    fixtures.item("function_call_output", output="No, permission denied; retry")])
+        original = self.collect(source_host="alpha")
+        by_kind = {event["kind"]: event for event in original["sessions"][0]["events"]}
+        self.assertEqual(set(by_kind["user_message"]["signals"]), {"correction_candidate", "friction_candidate"})
+        self.assertEqual(by_kind["assistant_message"]["signals"], ["friction_candidate"])
+        self.assertEqual(set(by_kind["tool_result"]["signals"]), {"friction_candidate", "denial_candidate"})
+        self.assertTrue(self.submit(state, original, "valid")["hosts"]["alpha"]["eligible"])
+        for kind, signal in (("user_message", "denial_candidate"),
+                             ("assistant_message", "denial_candidate"),
+                             ("assistant_message", "correction_candidate"),
+                             ("tool_result", "correction_candidate")):
+            with self.subTest(kind=kind, signal=signal):
+                bundle = copy.deepcopy(original)
+                next(e for e in bundle["sessions"][0]["events"] if e["kind"] == kind)["signals"] = [signal]
+                run = kind + "-" + signal
+                result = self.submit(state, bundle, run)
+                self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
+                self.assert_cannot_acknowledge(state, result, bundle, run)
+
+    def test_unreadable_detail_limits_and_references_cannot_advance(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(), fixtures.user("same"),
+                    {"type": "event_msg", "timestamp": fixtures.NOW,
+                     "payload": {"type": "user_message", "message": "same"}},
+                    fixtures.item("function_call", fixtures.BEFORE, name="exec_command", call_id="one"),
+                    fixtures.item("function_call_output", call_id="one", output="exit code 0")])
+        original = self.collect(source_host="alpha", max_line_bytes=4096)
+        for run in ("limit", "primary", "mirror", "call"):
+            with self.subTest(run=run):
+                bundle = copy.deepcopy(original)
+                events = bundle["sessions"][0]["events"]
+                if run == "limit":
+                    bundle["limits"]["max_line_bytes"] = 1024 * 1024 + 1
+                else:
+                    user = next(e for e in events if e["kind"] == "user_message")
+                    result = next(e for e in events if e["kind"] == "tool_result")
+                    ref = {"primary": user["source_ref"], "mirror": user["mirror_source_refs"][0],
+                           "call": result["call"]["source_ref"]}[run]
+                    ref["byte_length"] = 4097
+                result = self.submit(state, bundle, run)
+                self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
+                self.assert_cannot_acknowledge(state, result, bundle, run)
+
+    def test_unknown_sources_stay_partial_even_without_declared_gaps(self):
+        state, _ = self.prepare()
+        self.write([fixtures.meta(source="future-source"), fixtures.user("candidate")])
+        bundle = self.collect(source_host="alpha")
+        for run in ("actual", "stripped-gap"):
+            with self.subTest(run=run):
+                if run == "stripped-gap":
+                    bundle["source_gaps"] = []
+                    bundle["complete_within_supported_scope"] = True
+                result = self.submit(state, bundle, run)
+                self.assertEqual(result["hosts"]["alpha"]["status"], "partial")
+                self.assertEqual(len(result["events"]), 1)
+                self.assert_cannot_acknowledge(state, result, bundle, run)
+
+    def test_excluded_sidecar_sessions_cannot_be_injected(self):
+        state, original = self.prepare()
+        original["sessions"][0]["source_class"] = "approval_sidecar"
+        result = self.submit(state, original, "injected")
+        self.assertEqual(result["hosts"]["alpha"]["status"], "invalid_or_denied")
+        self.assert_cannot_acknowledge(state, result, original, "injected")
+        self.write([fixtures.meta(source="approval"), fixtures.user("excluded")])
+        bundle = self.collect(source_host="alpha")
+        self.assertEqual(bundle["coverage"]["excluded_sidecar_files"], 1)
+        self.assertEqual(bundle["sessions"], [])
+        self.assertTrue(self.submit(state, bundle, "actual")["hosts"]["alpha"]["eligible"])
+
     def test_event_count_mismatch_cannot_be_acknowledged(self):
         state, bundle = self.prepare()
         bundle["coverage"]["emitted_events"] += 1

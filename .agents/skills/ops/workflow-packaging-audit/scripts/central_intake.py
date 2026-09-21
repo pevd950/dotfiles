@@ -11,7 +11,7 @@ import re
 import stat
 import uuid
 
-from scan_codex_sessions import SECRET
+from scan_codex_sessions import MAX_RECORD_BYTES, SECRET, SIGNAL_PATTERNS
 
 MAX_INPUT = 8 * 1024 * 1024
 MAX_LEDGER = 32 * 1024 * 1024
@@ -196,6 +196,8 @@ def validate(bundle, host, expected):
     limits = set("max_files max_scan_records max_bytes max_line_bytes max_events max_sessions max_pending_calls max_directory_entries max_archive_bytes max_archive_rows max_archive_query_steps".split())
     if not isinstance(bundle["limits"], dict) or set(bundle["limits"]) != limits or any(type(v) is not int or v <= 0 for v in bundle["limits"].values()):
         raise ValueError("Invalid collector limits")
+    if bundle["limits"]["max_line_bytes"] > MAX_RECORD_BYTES:
+        raise ValueError("Record limit exceeds detail retrieval ceiling")
     archive = bundle["archive_metadata"]
     fields(archive, "status rows_read selected_rollouts")
     if archive.get("status") not in ("disabled", "unavailable", "snapshot_read") or any(type(archive.get(k)) is not int or archive[k] < 0 for k in ("rows_read", "selected_rollouts")):
@@ -224,6 +226,7 @@ def validate(bundle, host, expected):
     within_limits = all(coverage[counter] <= bundle["limits"][limit] for counter, limit in bounded.items())
     if (coverage["records_read"] < coverage["emitted_events"]
             or coverage["files_read"] > coverage["files_discovered"]
+            or coverage["sessions_included"] > coverage["files_read"]
             or coverage["sessions_included"] > coverage["emitted_events"]):
         raise ValueError("Inconsistent coverage counters")
     if type(bundle.get("complete_within_supported_scope")) is not bool:
@@ -237,7 +240,7 @@ def validate(bundle, host, expected):
             raise ValueError("Invalid session")
         metadata_label(sid)
         seen.add(sid)
-        if session.get("source_class") not in ("primary", "subagent", "unknown", "approval_sidecar"):
+        if session.get("source_class") not in ("primary", "subagent", "unknown"):
             raise ValueError("Invalid source class")
         if not isinstance(session.get("source_files"), list):
             raise ValueError("Invalid session provenance")
@@ -246,6 +249,8 @@ def validate(bundle, host, expected):
         files = {(source["root_index"], source["relative_path"]) for source in session["source_files"]}
         def session_reference(ref):
             reference(ref, len(bundle["roots"]))
+            if ref["byte_length"] > bundle["limits"]["max_line_bytes"]:
+                raise ValueError("Reference exceeds collector record limit")
             if (ref["root_index"], ref["relative_path"]) not in files:
                 raise ValueError("Reference outside session provenance")
         if "archived_at" in session and type(session["archived_at"]) is not int:
@@ -279,8 +284,8 @@ def validate(bundle, host, expected):
                     raise ValueError("Invalid event metadata collection")
             if "signals" in event:
                 strings(event["signals"])
-                if not set(event["signals"]) <= {"correction_candidate", "friction_candidate", "denial_candidate"}:
-                    raise ValueError("Unknown event signal")
+                if not set(event["signals"]) <= {name for name, _ in SIGNAL_PATTERNS[event["kind"]]}:
+                    raise ValueError("Signals do not match event kind")
             for key in ("correlation_id", "pairing"):
                 if key in event and not isinstance(event[key], str):
                     raise ValueError("Invalid event metadata scalar")
@@ -330,7 +335,8 @@ def validate(bundle, host, expected):
     # Archive snapshots cannot prove freshness even if their gap was removed.
     return (bundle["complete_within_supported_scope"] and not bundle["source_gaps"]
             and not bundle["truncation"] and not errors and archive["status"] == "disabled"
-            and expected["through"] <= generated_at and within_limits)
+            and expected["through"] <= generated_at and within_limits
+            and all(session["source_class"] in ("primary", "subagent") for session in bundle["sessions"]))
 
 
 def persist(fd, ledger):

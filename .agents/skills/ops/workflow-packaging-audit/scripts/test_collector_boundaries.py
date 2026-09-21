@@ -15,6 +15,24 @@ class BoundaryTests(unittest.TestCase):
     collect = fixtures.ScannerTests.collect
     events = fixtures.ScannerTests.events
 
+    def test_collection_cannot_exceed_detail_record_ceiling(self):
+        with self.assertRaises(ValueError):
+            self.collect(max_line_bytes=1024 * 1024 + 1)
+
+    def test_record_at_detail_ceiling_is_collected_and_readable(self):
+        limit = 1024 * 1024
+        record = user("")
+        padding = limit - len(json.dumps(record).encode()) - 1
+        record["payload"]["content"][0]["text"] = "x" * padding
+        self.write([meta(), record])
+        result = self.collect(max_line_bytes=limit)
+        self.assertTrue(result["complete_within_supported_scope"])
+        ref = self.events(result)[0]["source_ref"]
+        self.assertEqual(ref["byte_length"], limit)
+        excerpt = scanner.detail([self.active, self.archive], ref, max_chars=40)
+        self.assertEqual(excerpt["text"], "x" * 40)
+        self.assertTrue(excerpt["truncated"])
+
     def test_recent_activity_has_priority_across_canonical_roots(self):
         old = self.write([meta("old"), user("old", fixtures.OLD)] * 30,
                          name="2026-01-old.jsonl")

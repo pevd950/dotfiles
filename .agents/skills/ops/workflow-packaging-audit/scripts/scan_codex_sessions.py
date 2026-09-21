@@ -29,6 +29,14 @@ SIDECARS = {"guardian", "approval", "approval_reviewer", "authorization", "sidec
 CORRECTION = re.compile(r"\b(?:no(?=$|[,\s.!?:;])|not that|incorrect|wrong|correction|actually|instead|already approved|asked me again)\b", re.I)
 FRICTION = re.compile(r"\b(?:retry|retried|failed|failure|error|timeout|workaround|denied)\b", re.I)
 DENIAL = re.compile(r"\b(?:permission denied|not permitted|approval required|authorization required|denied)\b", re.I)
+# Intake uses the same per-kind vocabulary that produces candidate signals.
+SIGNAL_PATTERNS = {
+    "user_message": (("correction_candidate", CORRECTION), ("friction_candidate", FRICTION)),
+    "assistant_message": (("friction_candidate", FRICTION),),
+    "tool_result": (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)),
+}
+# Every indexed record must remain inspectable through bounded detail retrieval.
+MAX_RECORD_BYTES = 1024 * 1024
 EXIT = re.compile(r"(?:exit(?:ed)?(?: with)?(?: code)?|Process exited with code)\s*[:=]?\s*(-?\d+)", re.I)
 # Defense in depth for opt-in detail, not publication clearance for private prose.
 SECRET = re.compile(r"\b(?:sk-[\w-]+|gh[pousr]_[\w]+|Bearer\s+\S+)|\b(?:password|secret|token|api[_-]?key)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)", re.I)
@@ -133,14 +141,12 @@ def _event(record: dict[str, Any]) -> tuple[dict[str, Any], Any] | None:
             status["exit_code_source"] = "output_text_candidate"
         if isinstance(structured.get("isError"), bool):
             status["is_error"] = structured["isError"]
-        signals = [name for name, regex in (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)) if regex.search(_tool_text(item))]
+        signals = [name for name, regex in SIGNAL_PATTERNS["tool_result"] if regex.search(_tool_text(item))]
         return {"kind": "tool_result", "status": status, "signals": signals}, item.get("call_id")
     role = item.get("role") if kind == "message" else {"user_message": "user", "agent_message": "assistant"}.get(kind)
     if role in ("user", "assistant"):
         text = _text(item)
-        signals = ["correction_candidate"] if role == "user" and CORRECTION.search(text) else []
-        if FRICTION.search(text):
-            signals.append("friction_candidate")
+        signals = [name for name, regex in SIGNAL_PATTERNS[role + "_message"] if regex.search(text)]
         return {"kind": role + "_message", "signals": signals}, None
     return None
 
@@ -169,7 +175,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             upper_bound: dt.datetime | None = None, exclude: set[str] | None = None,
             *, source_host: str = "local", max_files: int = 1000,
             max_scan_records: int = 100000, max_bytes: int = 64 * 1024 * 1024,
-            max_line_bytes: int = 1024 * 1024, max_events: int = 5000,
+            max_line_bytes: int = MAX_RECORD_BYTES, max_events: int = 5000,
             max_sessions: int = 500, max_pending_calls: int = 5000,
             max_directory_entries: int = 10000, archive_db: Path | None = None,
             archive_db_roots: list[Path] | None = None, max_archive_bytes: int = 64 * 1024 * 1024,
@@ -181,6 +187,8 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                   max_archive_query_steps=max_archive_query_steps)
     if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in limits.values()):
         raise ValueError("All limits must be positive integers")
+    if max_line_bytes > MAX_RECORD_BYTES:
+        raise ValueError("Record limit exceeds detail retrieval ceiling")
     if any(boundary is not None and boundary.tzinfo is None for boundary in (checkpoint, upper_bound)):
         raise ValueError("Window boundaries require an explicit timezone")
     if checkpoint and upper_bound and checkpoint >= upper_bound:
@@ -480,12 +488,12 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             "sessions": sorted(sessions.values(), key=lambda session: session["id"] or "")}
 
 
-def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 1024 * 1024,
+def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = MAX_RECORD_BYTES,
            max_chars: int = 4000) -> dict[str, Any]:
     """Read exactly one hash-bound reference under an approved root, without scanning."""
     if not isinstance(ref, dict):
         raise ValueError("Source reference must be an object")
-    if not 1 <= max_bytes <= 1024 * 1024 or not 1 <= max_chars <= 16000:
+    if not 1 <= max_bytes <= MAX_RECORD_BYTES or not 1 <= max_chars <= 16000:
         raise ValueError("Detail limits exceed allowed bounds")
     index, offset, length = (ref.get(key) for key in ("root_index", "byte_offset", "byte_length"))
     if any(not isinstance(value, int) or isinstance(value, bool) for value in (index, offset, length)):
@@ -571,7 +579,7 @@ def main() -> None:
     parser.add_argument("--archive-db", type=Path, help="optional approved standalone Codex state snapshot (WAL unsupported)")
     parser.add_argument("--archive-db-root", action="append", type=Path, default=[], help="approved database directory")
     for name, default in (("max-files", 1000), ("max-scan-records", 100000), ("max-bytes", 64 * 1024 * 1024),
-                          ("max-line-bytes", 1024 * 1024), ("max-events", 5000), ("max-sessions", 500),
+                          ("max-line-bytes", MAX_RECORD_BYTES), ("max-events", 5000), ("max-sessions", 500),
                           ("max-pending-calls", 5000), ("max-directory-entries", 10000),
                           ("max-archive-bytes", 64 * 1024 * 1024), ("max-archive-rows", 10000),
                           ("max-archive-query-steps", 1000000)):
