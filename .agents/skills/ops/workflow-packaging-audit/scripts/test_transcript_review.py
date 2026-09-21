@@ -165,6 +165,66 @@ class TranscriptReviewTests(unittest.TestCase):
         self.pull(); self.scan()
         self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
 
+    def test_legacy_scope_retains_session_time_and_verified_source_host(self):
+        self.write([{'id': 'legacy-session', 'timestamp': '2025-08-28T08:15:51Z', 'instructions': ''},
+                    {'type': 'message', 'role': 'user', 'content': [{'text': 'legacy request'}]}])
+        self.pull(); self.scan()
+        rows = reader.candidates(self.cache, AFTER, THROUGH)
+        self.assertEqual(len(rows), 1)
+        scope = rows[0]['scope']
+        self.assertEqual(scope['source_host'], socket.gethostname())
+        self.assertEqual(scope['session_id'], 'legacy-session')
+        self.assertEqual(scope['timestamp'], '2025-08-28T08:15:51.000000+00:00')
+        self.assertEqual(scope['timestamp_basis'], 'session_start')
+        self.assertIsNone(scope['activity_timestamp'])
+        self.assertEqual(scope['window_membership'], 'unknown')
+        self.assertEqual(reader.candidates(self.cache, AFTER, THROUGH, time_scope='dated'), [])
+        self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH, time_scope='undated')), 1)
+        state = self.report()['sources']['source-a']
+        self.assertEqual(state['undated_files_with_session_time'], 1)
+        self.assertFalse(state['timestamp_selection_complete'])
+        detail = reader.context(self.cache, self.relative, 2)
+        self.assertEqual(detail['source_host'], socket.gethostname())
+        self.assertEqual(detail['records'][-1]['scope']['timestamp_basis'], 'session_start')
+
+    def test_undated_fork_context_uses_its_current_session_header(self):
+        self.write([{'type': 'session_meta', 'timestamp': '2025-01-01T00:00:00Z', 'payload': {'id': 'parent'}},
+                    {'type': 'session_meta', 'timestamp': '2026-09-01T00:00:00Z', 'payload': {'id': 'child'}},
+                    {'type': 'message', 'role': 'user', 'content': [{'text': 'undated child'}]}])
+        self.pull(); self.scan()
+        scope = reader.candidates(self.cache, AFTER, THROUGH)[0]['scope']
+        self.assertEqual(scope['file_session_id'], 'parent')
+        self.assertEqual(scope['session_id'], 'child')
+        self.assertEqual(scope['timestamp'], '2026-09-01T00:00:00.000000+00:00')
+        self.assertEqual(scope['window_membership'], 'unknown')
+
+    def test_timestamp_scope_never_uses_filename_or_mtime(self):
+        self.write([{'type': 'message', 'role': 'user', 'content': [{'text': 'no header'}]},
+                    record('user_message', message='dated')])
+        self.pull(); self.scan()
+        rows = reader.candidates(self.cache, AFTER, THROUGH)
+        unknown = next(r for r in rows if r['stamp'] is None)
+        self.assertIsNone(unknown['scope']['timestamp'])
+        self.assertEqual(unknown['scope']['timestamp_basis'], 'unknown')
+        dated = next(r for r in rows if r['stamp'])
+        self.assertEqual(dated['scope']['timestamp_basis'], 'activity')
+        self.assertEqual(dated['scope']['window_membership'], 'confirmed')
+        self.assertEqual(dated['scope']['source_host'], socket.gethostname())
+
+    def test_scope_migration_reindexes_legacy_header_without_recopy(self):
+        self.write([{'id': 'legacy-session', 'timestamp': '2025-08-28T08:15:51Z'},
+                    {'type': 'message', 'role': 'user', 'content': [{'text': 'legacy'}]}])
+        self.pull(); self.scan()
+        db = reader.connect(self.cache)
+        with db:
+            db.execute("DELETE FROM settings WHERE key='reader_version'")
+            db.execute("UPDATE records SET kind='unknown' WHERE line=1")
+            db.execute('UPDATE files SET owner=NULL,session=NULL')
+        db.close()
+        self.assertEqual(reader.candidates(self.cache, AFTER, THROUGH), [])
+        self.scan()
+        self.assertEqual(reader.candidates(self.cache, AFTER, THROUGH)[0]['scope']['session_id'], 'legacy-session')
+
     def test_context_neighbors_skip_trace_metadata(self):
         self.write([record('user_message', message='request'),
                     record('function_call', name='exec', call_id='x', arguments='build'),

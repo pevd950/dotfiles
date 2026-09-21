@@ -45,6 +45,16 @@ def connect(root):
     connection.row_factory = sqlite3.Row
     connection.execute('PRAGMA trusted_schema=OFF')
     connection.executescript(SCHEMA)
+    version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
+    if version is None or version[0] != '2':
+        # Older indexes did not recognize the first-row legacy session header.
+        # Revisit only affected files; cached raw transcripts remain untouched.
+        with connection:
+            ids = connection.execute('SELECT id FROM files WHERE untimestamped>0').fetchall()
+            for row in ids:
+                connection.execute('DELETE FROM records WHERE file=?', (row['id'],))
+                connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0 WHERE id=?", (row['id'],))
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','2')")
     return connection
 
 
@@ -148,8 +158,9 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                         if not isinstance(record, dict):
                                             raise ValueError('Nonobject record')
                                         when = _time(record.get('timestamp'))
-                                        if record.get('type') == 'session_meta':
-                                            payload = record.get('payload', {})
+                                        legacy_header = line == 1 and 'type' not in record and isinstance(record.get('id'), str) and when is not None
+                                        if record.get('type') == 'session_meta' or legacy_header:
+                                            payload = record if legacy_header else record.get('payload', {})
                                             session = payload.get('id') if isinstance(payload, dict) else None
                                             session = session if isinstance(session, str) else None
                                             if owner is None:
@@ -196,6 +207,30 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
             connection.close()
 
 
+def file_scope(connection, snapshot, file):
+    header = connection.execute("SELECT stamp FROM records WHERE file=? AND kind='session_meta' ORDER BY line LIMIT 1", (file['id'],)).fetchone()
+    source = snapshot['sources'].get(file['source'], {})
+    return {'source': file['source'], 'source_host': source.get('identity', {}).get('hostname'),
+            'source_area': file['area'], 'session_id': file['owner'],
+            'session_started_at': header['stamp'] if header else None,
+            'host_basis': 'verified_copy_source',
+            'source_last_successful_pull': source.get('last_successful_pull')}
+
+
+def record_scope(scope, activity_time, *, window_checked=False):
+    return {**scope, 'timestamp': activity_time or scope['session_started_at'],
+            'timestamp_basis': 'activity' if activity_time else 'session_start' if scope['session_started_at'] else 'unknown',
+            'activity_timestamp': activity_time,
+            'window_membership': ('confirmed' if window_checked else 'not_evaluated') if activity_time else 'unknown'}
+
+
+def scope_at_record(connection, scope, row, *, window_checked=False):
+    header = connection.execute("SELECT stamp FROM records WHERE file=? AND kind='session_meta' AND line<=? ORDER BY line DESC LIMIT 1", (row['file'], row['line'])).fetchone()
+    current = {**scope, 'file_session_id': scope['session_id'], 'session_id': row['session'],
+               'session_started_at': header['stamp'] if header else None}
+    return record_scope(current, row['stamp'], window_checked=window_checked)
+
+
 def report(cache, after, through):
     low, high = stamp(after), stamp(through)
     if low >= high:
@@ -213,7 +248,9 @@ def report(cache, after, through):
                 pending = sum(r['status'] == 'pending' for r in rows)
                 changed = sum(r['status'] == 'changed' for r in rows)
                 parse_gaps = sum(r['malformed'] + r['oversized'] + r['untimestamped'] for r in rows if r['status'] != 'excluded')
-                sources[source] = {'pull_status': entry['status'], 'pull_error': entry.get('error'),
+                sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
+                    'host_basis': 'verified_copy_source',
+                    'pull_status': entry['status'], 'pull_error': entry.get('error'),
                     'last_successful_pull': entry.get('last_successful_pull'),
                     'cached_files': len(rows), 'pending_files': pending, 'changed_files': changed,
                     'excluded_files': sum(r['status'] == 'excluded' for r in rows),
@@ -222,6 +259,8 @@ def report(cache, after, through):
                     'malformed_records': sum(r['malformed'] for r in rows),
                     'oversized_unparsed': sum(r['oversized'] for r in rows),
                     'untimestamped_events': sum(r['untimestamped'] for r in rows),
+                    'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
+                    'undated_files_with_session_time': sum(r['untimestamped'] > 0 and file_scope(connection, snapshot, r)['session_started_at'] is not None for r in rows),
                     'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
                     'timestamp_selection_complete': entry['status'] == 'ok' and not pending and not changed and not parse_gaps,
                     'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
@@ -231,21 +270,31 @@ def report(cache, after, through):
                     'snapshot_observed_at': snapshot['observed_at'],
                     'all_sources_covered': all(s['timestamp_selection_complete'] for s in sources.values()),
                     'archive_history': snapshot['archive_history'],
+                    'time_scope': 'Candidate pages include dated in-window activity plus undated activity with explicit session-level or unknown time. Session start does not prove activity-window membership.',
                     'interpretation': 'Record occurrences preserve source/file attribution; copies and inherited fork history are not deduplicated. Coverage is not a completed model review.'}
         finally:
             connection.close()
 
 
-def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=None):
-    if not 1 <= limit <= 1000 or offset < 0:
+def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=None, time_scope='all'):
+    if not 1 <= limit <= 1000 or offset < 0 or time_scope not in ('all', 'dated', 'undated'):
         raise ValueError('Invalid result page')
     with locked_cache(cache) as root:
         connection = connect(root)
         try:
             with connection:
-                refresh_inventory(connection, read_json(root / 'snapshot.json'))
-            query = "SELECT f.path,f.source,f.area,f.owner,r.* FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.status='complete' AND r.stamp>? AND r.stamp<=? AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')"
-            args = [stamp(after), stamp(through)]
+                snapshot = read_json(root / 'snapshot.json')
+                refresh_inventory(connection, snapshot)
+            query = "SELECT f.path,f.source,f.area,f.owner,r.* FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.status='complete' AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')"
+            low, high = stamp(after), stamp(through)
+            if low >= high:
+                raise ValueError('Empty or reversed window')
+            if time_scope == 'undated':
+                query += ' AND r.stamp IS NULL'
+                args = []
+            else:
+                query += ' AND ((r.stamp>? AND r.stamp<=?)' + (' OR r.stamp IS NULL)' if time_scope == 'all' else ')')
+                args = [low, high]
             if kind:
                 query += ' AND r.kind=?'; args.append(kind)
             if signal:
@@ -253,7 +302,17 @@ def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=
             query += ' ORDER BY r.stamp,f.source,f.path,r.line LIMIT ? OFFSET ?'
             args.extend([limit, offset])
             rows = connection.execute(query, args).fetchall()
-            return [{k: row[k] for k in ('source', 'area', 'path', 'owner', 'line', 'stamp', 'kind', 'session', 'summary')} for row in rows]
+            output, scopes = [], {}
+            for row in rows:
+                if row['file'] not in scopes:
+                    file = connection.execute('SELECT * FROM files WHERE id=?', (row['file'],)).fetchone()
+                    scopes[row['file']] = file_scope(connection, snapshot, file)
+                item = {k: row[k] for k in ('source', 'area', 'path', 'owner', 'line', 'stamp', 'kind', 'session', 'summary')}
+                item['scope'] = scope_at_record(connection, scopes[row['file']], row, window_checked=True)
+                item['scope']['requested_window'] = {'after': low, 'through': high}
+                item['scope']['inventory_observed_at'] = snapshot['observed_at']
+                output.append(item)
+            return output
         finally:
             connection.close()
 
@@ -265,7 +324,8 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
         connection = connect(root)
         try:
             with connection:
-                refresh_inventory(connection, read_json(root / 'snapshot.json'))
+                snapshot = read_json(root / 'snapshot.json')
+                refresh_inventory(connection, snapshot)
             file = connection.execute("SELECT * FROM files WHERE path=? AND listed=1 AND status='complete'", (relative,)).fetchone()
             if file is None:
                 raise ValueError('File not completely indexed')
@@ -290,6 +350,7 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
             path = cache_path(root, relative)
             if signature(path) != (file['size'], file['mtime_ns']):
                 raise ValueError('Cache changed; pull and reindex')
+            scope = file_scope(connection, snapshot, file)
             output = []
             with private_file(path).open('rb') as handle:
                 for row in sorted(rows.values(), key=lambda r: r['line']):
@@ -306,9 +367,9 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
                         raise ValueError('Cache record changed')
                     text = prefix.decode('utf-8', errors='replace')
                     output.append({'line': row['line'], 'timestamp': row['stamp'], 'kind': row['kind'],
-                                   'record_session': row['session'], 'text': text[:max_chars],
+                                   'record_session': row['session'], 'scope': scope_at_record(connection, scope, row), 'text': text[:max_chars],
                                    'truncated': row['length'] > len(prefix) or len(text) > max_chars})
-            return {'source': file['source'], 'area': file['area'], 'path': relative,
+            return {'source': file['source'], 'source_host': scope['source_host'], 'session_started_at': scope['session_started_at'], 'area': file['area'], 'path': relative,
                     'file_session': file['owner'], 'records': output,
                     'privacy': 'Private raw context, not sanitized for publication. Forked/copied records retain file and header attribution.'}
         finally:
@@ -331,6 +392,7 @@ def main():
         if name == 'candidates':
             p.add_argument('--limit', type=int, default=100); p.add_argument('--offset', type=int, default=0)
             p.add_argument('--kind'); p.add_argument('--signal'); p.add_argument('--output', type=Path, required=True)
+            p.add_argument('--time-scope', choices=('all', 'dated', 'undated'), default='all')
     p = commands.add_parser('context')
     p.add_argument('--path', required=True); p.add_argument('--line', type=int, required=True)
     p.add_argument('--radius', type=int, default=3); p.add_argument('--max-chars', type=int, default=4000)
@@ -348,7 +410,7 @@ def main():
             print(json.dumps(report(args.cache, args.after, args.through), indent=2))
         else:
             result = (candidates(args.cache, args.after, args.through, limit=args.limit, offset=args.offset,
-                                 kind=args.kind, signal=args.signal) if args.command == 'candidates'
+                                 kind=args.kind, signal=args.signal, time_scope=args.time_scope) if args.command == 'candidates'
                       else context(args.cache, args.path, args.line, radius=args.radius, max_chars=args.max_chars))
             from transcript_cache import private_dir
             private_dir(args.output.parent)
