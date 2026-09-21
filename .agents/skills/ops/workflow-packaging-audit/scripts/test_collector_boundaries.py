@@ -15,67 +15,6 @@ class BoundaryTests(unittest.TestCase):
     collect = fixtures.ScannerTests.collect
     events = fixtures.ScannerTests.events
 
-    def test_collection_cannot_exceed_detail_record_ceiling(self):
-        with self.assertRaises(ValueError):
-            self.collect(max_line_bytes=1024 * 1024 + 1)
-
-    def test_record_at_detail_ceiling_is_collected_and_readable(self):
-        limit = 1024 * 1024
-        record = user("")
-        padding = limit - len(json.dumps(record).encode()) - 1
-        record["payload"]["content"][0]["text"] = "x" * padding
-        self.write([meta(), record])
-        result = self.collect(max_line_bytes=limit)
-        self.assertTrue(result["complete_within_supported_scope"])
-        ref = self.events(result)[0]["source_ref"]
-        self.assertEqual(ref["byte_length"], limit)
-        excerpt = scanner.detail([self.active, self.archive], ref, max_chars=40)
-        self.assertEqual(excerpt["text"], "x" * 40)
-        self.assertTrue(excerpt["truncated"])
-
-    def test_recent_activity_has_priority_across_canonical_roots(self):
-        old = self.write([meta("old"), user("old", fixtures.OLD)] * 30,
-                         name="2026-01-old.jsonl")
-        resumed = self.write([meta("resumed"), user("recent")],
-                             name="2025-01-resumed.jsonl", directory=self.archive)
-        os.utime(old, (100, 100))
-        os.utime(resumed, (200, 200))
-        result = self.collect(max_bytes=resumed.stat().st_size + 1)
-        self.assertEqual([s["id"] for s in result["sessions"]], ["resumed"])
-        self.assertIn("max_bytes", result["truncation"])
-        self.assertFalse(result["complete_within_supported_scope"])
-        self.assertEqual(scanner.detail([self.active, self.archive],
-                         self.events(result)[0]["source_ref"])["text"], "recent")
-
-    def test_stale_modification_time_never_excludes_in_window_activity(self):
-        stale = self.write([meta("stale-copy"), user("current")])
-        os.utime(stale, (1, 1))
-        self.write([meta("newer"), user("old", fixtures.OLD)], "newer.jsonl")
-        result = self.collect()
-        self.assertEqual([s["id"] for s in result["sessions"]], ["stale-copy"])
-        self.assertTrue(result["complete_within_supported_scope"])
-
-    def test_identity_change_stops_file_and_reports_partial_coverage(self):
-        self.write([meta("first"), user("first"), meta("second"), user("second")])
-        result = self.collect()
-        self.assertEqual([s["id"] for s in result["sessions"]], ["first"])
-        self.assertIn("session_identity_changed", [g["reason"] for g in result["source_gaps"]])
-        self.assertFalse(result["complete_within_supported_scope"])
-
-    def test_fork_header_does_not_reattribute_inherited_parent_history(self):
-        parent = meta("parent")
-        inherited = user("inherited")
-        fork = meta("child", {"subagent": {"spawn": {"parent_thread_id": "parent"}}})
-        fork["payload"].update(forked_from_id="parent", parent_thread_id="parent",
-                               subagent_history_start_ordinal=46)
-        self.write([parent, inherited], "parent.jsonl")
-        self.write([fork, parent, inherited, user("child activity")], "child.jsonl")
-        result = self.collect()
-        self.assertEqual([s["id"] for s in result["sessions"]], ["parent"])
-        self.assertEqual(len(self.events(result)), 1)
-        self.assertIn("session_identity_changed", [g["reason"] for g in result["source_gaps"]])
-        self.assertFalse(result["complete_within_supported_scope"])
-
     def test_no_correction_boundaries(self):
         for text in ("No", "no", "NO", "No?", "No:", "No;", "No,", "No.", "No!", "No thanks"):
             with self.subTest(text=text):

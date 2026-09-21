@@ -69,11 +69,11 @@ class CollectorSemanticsTests(unittest.TestCase):
                      "payload": {"type": "user_message", "message": "", "images": ["synthetic"]}}])
         self.assertEqual(len(self.events(self.collect())), 2)
 
-    def test_discovery_reports_missing_roots_before_content_limit(self):
+    def test_stop_does_not_probe_later_missing_root(self):
         self.write([meta(), user("one"), user("two")])
         result = scanner.collect([self.active, self.root / "missing"], max_events=1)
-        self.assertIn("max_events", result["truncation"])
-        self.assertIn("root_missing_or_not_directory", [g["reason"] for g in result["source_gaps"]])
+        self.assertIn("remaining_roots", result["truncation"])
+        self.assertNotIn("root_missing_or_not_directory", [g["reason"] for g in result["source_gaps"]])
 
     def test_many_completed_calls_do_not_consume_pending_capacity(self):
         records = [meta()]

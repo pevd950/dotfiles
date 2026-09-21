@@ -284,8 +284,7 @@ class ScannerTests(unittest.TestCase):
         self.assertEqual(len(result["sessions"]), 1)
         self.assertEqual(len(self.events(result)), 2)
         self.assertGreaterEqual(result["coverage"]["duplicate_records"], 1)
-        result_event = next(event for event in self.events(result) if event["kind"] == "tool_result")
-        self.assertEqual(result_event["call"]["name"], "exec_command")
+        self.assertEqual(self.events(result)[0]["call"]["name"], "exec_command")
         self.assertEqual(len(result["sessions"][0]["source_files"]), 3)
 
     def test_corrections_successful_friction_and_denials_are_candidates(self):

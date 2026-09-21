@@ -29,16 +29,6 @@ SIDECARS = {"guardian", "approval", "approval_reviewer", "authorization", "sidec
 CORRECTION = re.compile(r"\b(?:no(?=$|[,\s.!?:;])|not that|incorrect|wrong|correction|actually|instead|already approved|asked me again)\b", re.I)
 FRICTION = re.compile(r"\b(?:retry|retried|failed|failure|error|timeout|workaround|denied)\b", re.I)
 DENIAL = re.compile(r"\b(?:permission denied|not permitted|approval required|authorization required|denied)\b", re.I)
-# Intake uses the same per-kind vocabulary that produces candidate signals.
-SIGNAL_PATTERNS = {
-    "user_message": (("correction_candidate", CORRECTION), ("friction_candidate", FRICTION)),
-    "assistant_message": (("friction_candidate", FRICTION),),
-    "tool_result": (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)),
-}
-# Every indexed record must remain inspectable through bounded detail retrieval.
-MAX_RECORD_BYTES = 1024 * 1024
-# Shared serialized index ceiling, including JSON indentation and final newline.
-MAX_INDEX_BYTES = 8 * 1024 * 1024
 EXIT = re.compile(r"(?:exit(?:ed)?(?: with)?(?: code)?|Process exited with code)\s*[:=]?\s*(-?\d+)", re.I)
 # Defense in depth for opt-in detail, not publication clearance for private prose.
 SECRET = re.compile(r"\b(?:sk-[\w-]+|gh[pousr]_[\w]+|Bearer\s+\S+)|\b(?:password|secret|token|api[_-]?key)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)", re.I)
@@ -143,12 +133,14 @@ def _event(record: dict[str, Any]) -> tuple[dict[str, Any], Any] | None:
             status["exit_code_source"] = "output_text_candidate"
         if isinstance(structured.get("isError"), bool):
             status["is_error"] = structured["isError"]
-        signals = [name for name, regex in SIGNAL_PATTERNS["tool_result"] if regex.search(_tool_text(item))]
+        signals = [name for name, regex in (("friction_candidate", FRICTION), ("denial_candidate", DENIAL)) if regex.search(_tool_text(item))]
         return {"kind": "tool_result", "status": status, "signals": signals}, item.get("call_id")
     role = item.get("role") if kind == "message" else {"user_message": "user", "agent_message": "assistant"}.get(kind)
     if role in ("user", "assistant"):
         text = _text(item)
-        signals = [name for name, regex in SIGNAL_PATTERNS[role + "_message"] if regex.search(text)]
+        signals = ["correction_candidate"] if role == "user" and CORRECTION.search(text) else []
+        if FRICTION.search(text):
+            signals.append("friction_candidate")
         return {"kind": role + "_message", "signals": signals}, None
     return None
 
@@ -177,7 +169,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             upper_bound: dt.datetime | None = None, exclude: set[str] | None = None,
             *, source_host: str = "local", max_files: int = 1000,
             max_scan_records: int = 100000, max_bytes: int = 64 * 1024 * 1024,
-            max_line_bytes: int = MAX_RECORD_BYTES, max_events: int = 5000,
+            max_line_bytes: int = 1024 * 1024, max_events: int = 5000,
             max_sessions: int = 500, max_pending_calls: int = 5000,
             max_directory_entries: int = 10000, archive_db: Path | None = None,
             archive_db_roots: list[Path] | None = None, max_archive_bytes: int = 64 * 1024 * 1024,
@@ -189,8 +181,6 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                   max_archive_query_steps=max_archive_query_steps)
     if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in limits.values()):
         raise ValueError("All limits must be positive integers")
-    if max_line_bytes > MAX_RECORD_BYTES:
-        raise ValueError("Record limit exceeds detail retrieval ceiling")
     if any(boundary is not None and boundary.tzinfo is None for boundary in (checkpoint, upper_bound)):
         raise ValueError("Window boundaries require an explicit timezone")
     if checkpoint and upper_bound and checkpoint >= upper_bound:
@@ -253,189 +243,179 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
             except OSError:
                 gap("entry_unreadable", index, str(path.relative_to(root)))
 
-    # Discover within the directory-entry budget before spending the content
-    # budget. Modification time is an ordering hint only: it never excludes a
-    # file or proves window coverage, including for old resumed/copied sessions.
-    candidates = []
     for root_index, requested_root in enumerate(source_roots):
+        if stop:
+            truncated.add("remaining_roots")
+            break
         root = requested_root.resolve()
         if not root.is_dir():
             gap("root_missing_or_not_directory", root_index)
             continue
         for path in files(root, root_index):
+            if counts["files_discovered"] >= max_files:
+                truncated.add("max_files"); stop = True; break
+            counts["files_discovered"] += 1
+            relative = str(path.relative_to(root))
+            sid = None
+            archive_selection = archive["selected"].get((root_index, relative))
+            source_class = "unknown"
+            current_turn = None
+            file_occurrences: dict[tuple[str, str], int] = {}
             try:
-                stamp = path.stat(follow_symlinks=False).st_mtime_ns
-            except OSError:
-                gap("entry_unreadable", root_index, str(path.relative_to(root)))
-                continue
-            candidates.append((stamp, root_index, root, path))
-    candidates.sort(key=lambda row: (-row[0], row[1], str(row[3])))
-    for _, root_index, root, path in candidates:
-        if counts["files_discovered"] >= max_files:
-            truncated.add("max_files"); stop = True; break
-        counts["files_discovered"] += 1
-        relative = str(path.relative_to(root))
-        sid = None
-        archive_selection = archive["selected"].get((root_index, relative))
-        source_class = "unknown"
-        current_turn = None
-        file_occurrences: dict[tuple[str, str], int] = {}
-        try:
-            if not path.resolve().is_relative_to(root):
-                gap("path_outside_root", root_index, relative); continue
-            with _open_source(root, relative) as handle:
-                counts["files_read"] += 1
-                while True:
-                    remaining = max_bytes - counts["bytes_read"]
-                    if remaining <= 0 or counts["records_read"] >= max_scan_records:
-                        truncated.add("max_bytes" if remaining <= 0 else "max_scan_records")
-                        stop = True; break
-                    offset = handle.tell()
-                    raw = handle.readline(min(max_line_bytes + 1, remaining))
-                    if not raw:
-                        break
-                    counts["bytes_read"] += len(raw)
-                    if len(raw) > max_line_bytes:
-                        gap("oversized_record_file_stopped", root_index, relative)
-                        break
-                    eof_terminated = not raw.endswith(b"\n")
-                    if eof_terminated and len(raw) == remaining:
-                        # Reaching the byte cap is not evidence of EOF.
-                        truncated.add("max_bytes"); stop = True; break
-                    counts["records_read"] += 1
-                    try:
-                        record = json.loads(raw)
-                    except (ValueError, UnicodeDecodeError, RecursionError):
-                        if eof_terminated:
-                            counts["incomplete_trailing_records"] += 1
-                            gap("incomplete_trailing_record", root_index, relative)
+                if not path.resolve().is_relative_to(root):
+                    gap("path_outside_root", root_index, relative); continue
+                with _open_source(root, relative) as handle:
+                    counts["files_read"] += 1
+                    while True:
+                        remaining = max_bytes - counts["bytes_read"]
+                        if remaining <= 0 or counts["records_read"] >= max_scan_records:
+                            truncated.add("max_bytes" if remaining <= 0 else "max_scan_records")
+                            stop = True; break
+                        offset = handle.tell()
+                        raw = handle.readline(min(max_line_bytes + 1, remaining))
+                        if not raw:
                             break
-                        counts["malformed_records"] += 1
-                        gap("malformed_record", root_index, relative)
-                        continue
-                    if not isinstance(record, dict):
-                        counts["unsupported_records"] += 1; continue
-                    if record.get("type") == "session_meta":
-                        meta = record.get("payload")
-                        if not isinstance(meta, dict) or not isinstance(meta.get("id"), str):
-                            gap("invalid_session_metadata", root_index, relative); break
-                        if sid is not None and sid != meta["id"]:
-                            gap("session_identity_changed", root_index, relative); break
-                        sid = meta["id"]
-                        if archive_selection:
-                            archive_seen.add((root_index, relative))
-                            if archive_selection["id"] != sid:
-                                gap("archive_database_rollout_identity_mismatch", root_index, relative)
-                                archive_selection = None
-                        source_class = _source_class(meta.get("source"))
-                        if sid in exclude:
-                            counts["excluded_session_files"] += 1; break
-                        if source_class == "approval_sidecar":
-                            counts["excluded_sidecar_files"] += 1; break
-                        if source_class == "unknown":
-                            gap("unknown_session_source", root_index, relative)
-                        provenance = {"root_index": root_index, "relative_path": relative}
-                        if provenance not in source_files.setdefault(sid, []):
-                            source_files[sid].append(provenance)
-                        continue
-                    if sid is None:
-                        gap("missing_session_metadata", root_index, relative); break
-                    if record.get("type") == "turn_context" and isinstance(record.get("payload"), dict):
-                        current_turn = record["payload"].get("turn_id")
-                    try:
-                        canonical_hash = _hash(json.dumps(record, sort_keys=True, separators=(",", ":")))
-                        decoded = _event(record)
-                    except (ValueError, TypeError, RecursionError):
-                        counts["malformed_records"] += 1
-                        gap("record_decode_failed", root_index, relative)
-                        continue
-                    occurrence_key = (sid, canonical_hash)
-                    ordinal = file_occurrences.get(occurrence_key, 0) + 1
-                    file_occurrences[occurrence_key] = ordinal
-                    identity = (sid, canonical_hash, ordinal)
-                    reused_event = record_events.get(identity)
-                    if identity in seen_records:
-                        counts["duplicate_records"] += 1
-                        if not archive_selection:
-                            continue
-                    seen_records.add(identity)
-                    if decoded is None:
-                        counts["unsupported_records"] += 1; continue
-                    event, call_id = decoded
-                    if reused_event is not None:
-                        event = reused_event
-                    when = _time(record.get("timestamp"))
-                    if when is None:
-                        counts["untimestamped_events"] += 1
-                        gap("event_timestamp_missing_or_invalid", root_index, relative); continue
-                    if upper_bound and when > upper_bound:
-                        counts["out_of_window_events"] += 1; continue
-                    ref = {"root_index": root_index, "relative_path": relative,
-                           "byte_offset": offset, "byte_length": len(raw), "sha256": _hash(raw)}
-                    if reused_event is None and event["kind"] in ("user_message", "assistant_message") and record.get("type") in ("event_msg", "response_item"):
-                        # Match opposite envelopes one-for-one. Same-envelope
-                        # occurrences always remain separate logical messages.
+                        counts["bytes_read"] += len(raw)
+                        if len(raw) > max_line_bytes:
+                            gap("oversized_record_file_stopped", root_index, relative)
+                            break
+                        eof_terminated = not raw.endswith(b"\n")
+                        if eof_terminated and len(raw) == remaining:
+                            # Reaching the byte cap is not evidence of EOF.
+                            truncated.add("max_bytes"); stop = True; break
+                        counts["records_read"] += 1
                         try:
-                            payload = record["payload"]
-                            message_text = _text(payload)
-                            turn_id = payload.get("turn_id", record.get("turn_id", current_turn))
-                            message_key = (sid, event["kind"], _hash(message_text),
-                                           _hash(str(turn_id)) if turn_id is not None else None)
+                            record = json.loads(raw)
+                        except (ValueError, UnicodeDecodeError, RecursionError):
+                            if eof_terminated:
+                                counts["incomplete_trailing_records"] += 1
+                                gap("incomplete_trailing_record", root_index, relative)
+                                break
+                            counts["malformed_records"] += 1
+                            gap("malformed_record", root_index, relative)
+                            continue
+                        if not isinstance(record, dict):
+                            counts["unsupported_records"] += 1; continue
+                        if record.get("type") == "session_meta":
+                            meta = record.get("payload")
+                            if not isinstance(meta, dict) or not isinstance(meta.get("id"), str):
+                                gap("invalid_session_metadata", root_index, relative); break
+                            if sid is not None and sid != meta["id"]:
+                                gap("session_identity_changed", root_index, relative); break
+                            sid = meta["id"]
+                            if archive_selection:
+                                archive_seen.add((root_index, relative))
+                                if archive_selection["id"] != sid:
+                                    gap("archive_database_rollout_identity_mismatch", root_index, relative)
+                                    archive_selection = None
+                            source_class = _source_class(meta.get("source"))
+                            if sid in exclude:
+                                counts["excluded_session_files"] += 1; break
+                            if source_class == "approval_sidecar":
+                                counts["excluded_sidecar_files"] += 1; break
+                            if source_class == "unknown":
+                                gap("unknown_session_source", root_index, relative)
+                            provenance = {"root_index": root_index, "relative_path": relative}
+                            if provenance not in source_files.setdefault(sid, []):
+                                source_files[sid].append(provenance)
+                            continue
+                        if sid is None:
+                            gap("missing_session_metadata", root_index, relative); break
+                        if record.get("type") == "turn_context" and isinstance(record.get("payload"), dict):
+                            current_turn = record["payload"].get("turn_id")
+                        try:
+                            canonical_hash = _hash(json.dumps(record, sort_keys=True, separators=(",", ":")))
+                            decoded = _event(record)
                         except (ValueError, TypeError, RecursionError):
                             counts["malformed_records"] += 1
                             gap("record_decode_failed", root_index, relative)
                             continue
-                        mirrors = message_mirrors.setdefault(message_key, [])
-                        envelope = record["type"]
-                        match_index = next((i for i, (stamp, other, _) in enumerate(mirrors)
-                                            if message_text and other != envelope
-                                            and bool(checkpoint and when <= checkpoint) == bool(checkpoint and stamp <= checkpoint)
-                                            and abs((when - stamp).total_seconds()) <= 1), None)
-                        if match_index is not None:
-                            _, _, original = mirrors.pop(match_index)
-                            original.setdefault("mirror_source_refs", []).append(ref)
-                            original["canonical_sha256s"] = sorted(set(original["canonical_sha256s"]) | {canonical_hash})
+                        occurrence_key = (sid, canonical_hash)
+                        ordinal = file_occurrences.get(occurrence_key, 0) + 1
+                        file_occurrences[occurrence_key] = ordinal
+                        identity = (sid, canonical_hash, ordinal)
+                        reused_event = record_events.get(identity)
+                        if identity in seen_records:
                             counts["duplicate_records"] += 1
-                            event = original
-                            reused_event = original
-                        else:
-                            mirrors.append((when, envelope, event))
-                    record_events[identity] = event
-                    if reused_event is None:
-                        event.update(timestamp=when.isoformat(), source_ref=ref, canonical_sha256s=[canonical_hash])
-                    pair_key = (sid, call_id) if isinstance(call_id, str) else None
-                    prior = bool(checkpoint and when <= checkpoint)
-                    if reused_event is None and pair_key and event["kind"] in ("tool_call", "tool_result"):
-                        pairing_events.append((when, sid, call_id, event, prior))
-                    if prior and not archive_selection:
-                        counts["out_of_window_events"] += 1; continue
-                    if id(event) in emitted_event_ids:
+                            if not archive_selection:
+                                continue
+                        seen_records.add(identity)
+                        if decoded is None:
+                            counts["unsupported_records"] += 1; continue
+                        event, call_id = decoded
+                        if reused_event is not None:
+                            event = reused_event
+                        when = _time(record.get("timestamp"))
+                        if when is None:
+                            counts["untimestamped_events"] += 1
+                            gap("event_timestamp_missing_or_invalid", root_index, relative); continue
+                        if upper_bound and when > upper_bound:
+                            counts["out_of_window_events"] += 1; continue
+                        ref = {"root_index": root_index, "relative_path": relative,
+                               "byte_offset": offset, "byte_length": len(raw), "sha256": _hash(raw)}
+                        if reused_event is None and event["kind"] in ("user_message", "assistant_message") and record.get("type") in ("event_msg", "response_item"):
+                            # Match opposite envelopes one-for-one. Same-envelope
+                            # occurrences always remain separate logical messages.
+                            try:
+                                payload = record["payload"]
+                                message_text = _text(payload)
+                                turn_id = payload.get("turn_id", record.get("turn_id", current_turn))
+                                message_key = (sid, event["kind"], _hash(message_text),
+                                               _hash(str(turn_id)) if turn_id is not None else None)
+                            except (ValueError, TypeError, RecursionError):
+                                counts["malformed_records"] += 1
+                                gap("record_decode_failed", root_index, relative)
+                                continue
+                            mirrors = message_mirrors.setdefault(message_key, [])
+                            envelope = record["type"]
+                            match_index = next((i for i, (stamp, other, _) in enumerate(mirrors)
+                                                if message_text and other != envelope
+                                                and bool(checkpoint and when <= checkpoint) == bool(checkpoint and stamp <= checkpoint)
+                                                and abs((when - stamp).total_seconds()) <= 1), None)
+                            if match_index is not None:
+                                _, _, original = mirrors.pop(match_index)
+                                original.setdefault("mirror_source_refs", []).append(ref)
+                                counts["duplicate_records"] += 1
+                                event = original
+                                reused_event = original
+                            else:
+                                mirrors.append((when, envelope, event))
+                        record_events[identity] = event
+                        if reused_event is None:
+                            event.update(timestamp=when.isoformat(), source_ref=ref)
+                        pair_key = (sid, call_id) if isinstance(call_id, str) else None
+                        prior = bool(checkpoint and when <= checkpoint)
+                        if reused_event is None and pair_key and event["kind"] in ("tool_call", "tool_result"):
+                            pairing_events.append((when, sid, call_id, event, prior))
+                        if prior and not archive_selection:
+                            counts["out_of_window_events"] += 1; continue
+                        if id(event) in emitted_event_ids:
+                            if archive_selection:
+                                if "session_archived_in_window" not in event["selection_reasons"]:
+                                    event["selection_reasons"].append("session_archived_in_window")
+                                sessions[sid]["archived_at"] = archive_selection["archived_at"]
+                            continue
+                        if len(sessions) >= max_sessions and sid not in sessions:
+                            truncated.add("max_sessions"); stop = True; break
+                        if counts["emitted_events"] >= max_events:
+                            truncated.add("max_events"); stop = True; break
+                        if pair_key:
+                            event["correlation_id"] = _hash(source_host + "\0" + sid + "\0" + call_id)
+                        if event["kind"] == "tool_result":
+                            if not pair_key:
+                                event["pairing"] = "missing_call_id"
+                        session = sessions.setdefault(sid, {"id": _label(sid), "source_class": source_class, "events": []})
+                        event["selection_reasons"] = (["record_activity_in_window"] if not prior else [])
                         if archive_selection:
-                            if "session_archived_in_window" not in event["selection_reasons"]:
-                                event["selection_reasons"].append("session_archived_in_window")
-                            sessions[sid]["archived_at"] = archive_selection["archived_at"]
-                        continue
-                    if len(sessions) >= max_sessions and sid not in sessions:
-                        truncated.add("max_sessions"); stop = True; break
-                    if counts["emitted_events"] >= max_events:
-                        truncated.add("max_events"); stop = True; break
-                    if pair_key:
-                        event["correlation_id"] = _hash(source_host + "\0" + sid + "\0" + call_id)
-                    if event["kind"] == "tool_result":
-                        if not pair_key:
-                            event["pairing"] = "missing_call_id"
-                    session = sessions.setdefault(sid, {"id": _label(sid), "source_class": source_class, "events": []})
-                    event["selection_reasons"] = (["record_activity_in_window"] if not prior else [])
-                    if archive_selection:
-                        event["selection_reasons"].append("session_archived_in_window")
-                        session["archived_at"] = archive_selection["archived_at"]
-                    session["events"].append(event)
-                    emitted_event_ids.add(id(event))
-                    counts["emitted_events"] += 1
-        except (OSError, ValueError):
-            gap("file_unreadable", root_index, relative)
-        if stop:
-            break
+                            event["selection_reasons"].append("session_archived_in_window")
+                            session["archived_at"] = archive_selection["archived_at"]
+                        session["events"].append(event)
+                        emitted_event_ids.add(id(event))
+                        counts["emitted_events"] += 1
+            except (OSError, ValueError):
+                gap("file_unreadable", root_index, relative)
+            if stop:
+                break
     # Discovery order is not event order: archive fragments may contain earlier
     # calls than active files. This metadata buffer is bounded by scan limits.
     # Preserve source order for ties; a result discovered first can still pair
@@ -475,7 +455,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
     for sid, session in sessions.items():
         session["source_files"] = source_files[sid]
         session["events"].sort(key=lambda event: event["timestamp"])
-    bundle = {"schema": "codex-evidence-index.v3", "source_host": _label(source_host),
+    return {"schema": "codex-evidence-index.v2", "source_host": _label(source_host),
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "window": {"after": checkpoint.isoformat() if checkpoint else None, "through": upper_bound.isoformat() if upper_bound else None},
             "roots": [str(root.resolve()) for root in source_roots], "limits": limits,
@@ -490,73 +470,13 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             "unsupported record kinds are counted, not interpreted"],
             "sessions": sorted(sessions.values(), key=lambda session: session["id"] or "")}
 
-    return _bound_index(bundle)
 
-
-def _bound_index(bundle):
-    """Retain a prefix of whole events that fits the intake artifact ceiling.
-
-    Trimming never establishes completeness. References and pairing stay intact,
-    while emitted counters describe only retained events, not discarded evidence.
-    """
-    def fits():
-        size = 1  # final newline written by _write_private
-        for chunk in json.JSONEncoder(indent=2).iterencode(bundle):
-            size += len(chunk.encode("utf-8"))
-            if size > MAX_INDEX_BYTES:
-                return False
-        return True
-
-    if fits():
-        return bundle
-    bundle["complete_within_supported_scope"] = False
-    bundle["truncation"] = sorted(set(bundle["truncation"]) | {"max_output_bytes"})
-    sessions = bundle["sessions"]
-    gaps = bundle["source_gaps"]
-
-    def retain_events(count):
-        kept = []
-        for session in sessions:
-            events = session["events"][:count]
-            if events:
-                kept.append({**session, "events": events})
-                count -= len(events)
-            if not count:
-                break
-        bundle["sessions"] = kept
-        bundle["coverage"]["sessions_included"] = len(kept)
-        bundle["coverage"]["emitted_events"] = sum(len(s["events"]) for s in kept)
-
-    def largest_prefix(total, retain):
-        low, high = 0, total
-        while low < high:
-            middle = (low + high + 1) // 2
-            retain(middle)
-            if fits():
-                low = middle
-            else:
-                high = middle - 1
-        retain(low)
-
-    total = bundle["coverage"]["emitted_events"]
-    retain_events(0)
-    if not fits():
-        # Even diagnostic paths can fill the artifact; the truncation marker
-        # explicitly covers omitted gaps as well as omitted events.
-        bundle["source_gaps"] = []
-        if not fits():
-            raise ValueError("Index roots and fixed metadata exceed output ceiling")
-        largest_prefix(len(gaps), lambda n: bundle.update(source_gaps=gaps[:n]))
-    largest_prefix(total, retain_events)
-    return bundle
-
-
-def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = MAX_RECORD_BYTES,
+def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = 1024 * 1024,
            max_chars: int = 4000) -> dict[str, Any]:
     """Read exactly one hash-bound reference under an approved root, without scanning."""
     if not isinstance(ref, dict):
         raise ValueError("Source reference must be an object")
-    if not 1 <= max_bytes <= MAX_RECORD_BYTES or not 1 <= max_chars <= 16000:
+    if not 1 <= max_bytes <= 1024 * 1024 or not 1 <= max_chars <= 16000:
         raise ValueError("Detail limits exceed allowed bounds")
     index, offset, length = (ref.get(key) for key in ("root_index", "byte_offset", "byte_length"))
     if any(not isinstance(value, int) or isinstance(value, bool) for value in (index, offset, length)):
@@ -642,7 +562,7 @@ def main() -> None:
     parser.add_argument("--archive-db", type=Path, help="optional approved standalone Codex state snapshot (WAL unsupported)")
     parser.add_argument("--archive-db-root", action="append", type=Path, default=[], help="approved database directory")
     for name, default in (("max-files", 1000), ("max-scan-records", 100000), ("max-bytes", 64 * 1024 * 1024),
-                          ("max-line-bytes", MAX_RECORD_BYTES), ("max-events", 5000), ("max-sessions", 500),
+                          ("max-line-bytes", 1024 * 1024), ("max-events", 5000), ("max-sessions", 500),
                           ("max-pending-calls", 5000), ("max-directory-entries", 10000),
                           ("max-archive-bytes", 64 * 1024 * 1024), ("max-archive-rows", 10000),
                           ("max-archive-query-steps", 1000000)):

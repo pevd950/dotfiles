@@ -13,9 +13,9 @@ Order: recent Codex sessions and task summaries → Codex memories and rollout s
 
 Scan window: last 30 days by default, or all available history (say so). Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`; prefer structural JSONL reads over broad raw text search, pairing tool calls with tool outputs.
 
-For an explicitly authorized bounded session scan, use [the collector interface](references/collector.md), including its optional archive-state snapshot adapter when database access is authorized. The adapter rejects live WAL databases; the collector does not yet persist incremental offsets or reconstruct full archive/unarchive history. Report these gaps and do not treat a limited scan as a complete audit.
+For an authorized full-window review across approved hosts, use [private transcript pull and review](references/transcript-review.md). It copies active/archive transcripts into a private source-separated cache using existing SSH and rsync, resumes local batches until traversal finishes, and retrieves surrounding user/tool/response context. Keep unavailable sources, parse gaps, exclusions, and unknown archive history explicit; coverage is separate from completed contextual review.
 
-For authorized local intake of already-collected per-host indexes, use [central intake](references/central-intake.md). It records collector-window acknowledgments, not per-session offsets or all-source audit completion. It does not fetch remote evidence, run a model review, or replace existing schedules.
+For an explicitly bounded point scan, [the collector interface](references/collector.md) remains available. Its limits do not establish complete monthly or multi-host coverage.
 
 ## Candidate rules
 
