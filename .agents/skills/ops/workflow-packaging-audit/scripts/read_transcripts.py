@@ -48,6 +48,9 @@ def connect(root):
     columns = {r['name'] for r in connection.execute('PRAGMA table_info(records)')}
     if 'excluded' not in columns:
         connection.execute('ALTER TABLE records ADD COLUMN excluded INTEGER DEFAULT 0')
+    file_columns = {r['name'] for r in connection.execute('PRAGMA table_info(files)')}
+    if 'verified_stat' not in file_columns:
+        connection.execute('ALTER TABLE files ADD COLUMN verified_stat TEXT')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
     if version is None or version[0] != '5':
         # Rebuild derived cursors once to account for identity/envelope gaps
@@ -88,6 +91,30 @@ def refresh_inventory(connection, snapshot):
     connection.execute("INSERT OR REPLACE INTO settings VALUES('snapshot',?)", (snapshot['observed_at'],))
 
 
+def verify_index_bytes(connection, root, relative=None):
+    """Reuse a digest proof only while filesystem identity/change metadata agrees."""
+    query = "SELECT * FROM files WHERE listed=1 AND status IN ('complete','excluded')"
+    args = ()
+    if relative is not None:
+        query += ' AND path=?'
+        args = (relative,)
+    for file in connection.execute(query, args).fetchall():
+        try:
+            path = cache_path(root, file['path'])
+            info = private_file(path).stat()
+            proof = json.dumps([file['sha256'], info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns])
+            if proof == file['verified_stat']:
+                continue
+            digest = file_hash(path)
+            after = private_file(path).stat()
+            after_proof = json.dumps([file['sha256'], after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns])
+            if proof != after_proof or digest != file['sha256']:
+                raise ValueError('Cached transcript changed')
+            connection.execute('UPDATE files SET verified_stat=? WHERE id=?', (proof, file['id']))
+        except (OSError, ValueError):
+            connection.execute("UPDATE files SET status='changed',verified_stat=NULL WHERE id=?", (file['id'],))
+
+
 def read_record(handle, limit):
     """Read one whole record; over-limit records are drained, never hide the next."""
     raw = handle.readline(limit + 1)
@@ -117,6 +144,8 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
             with connection:
                 refresh_inventory(connection, snapshot)
                 old_limit = connection.execute("SELECT value FROM settings WHERE key='record_limit'").fetchone()
+                if old_limit and int(old_limit[0]) > max_record_bytes:
+                    raise ValueError('Record limit cannot decrease in an existing index; keep the prior limit or use a new cache')
                 if old_limit and int(old_limit[0]) < max_record_bytes:
                     affected = connection.execute('SELECT id FROM files WHERE oversized>0').fetchall()
                     for row in affected:
@@ -262,6 +291,7 @@ def report(cache, after, through):
         try:
             with connection:
                 refresh_inventory(connection, snapshot)
+                verify_index_bytes(connection, root)
             sources = {}
             for source, entry in snapshot['sources'].items():
                 rows = connection.execute('SELECT * FROM files WHERE listed=1 AND source=?', (source,)).fetchall()
@@ -321,6 +351,7 @@ def candidates(cache, after, through, *, limit=100, offset=0, kind=None, signal=
             with connection:
                 snapshot = read_json(root / 'snapshot.json')
                 refresh_inventory(connection, snapshot)
+                verify_index_bytes(connection, root)
             query = "SELECT f.path,f.source,f.area,f.owner,r.* FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.status='complete' AND r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')"
             low, high = stamp(after), stamp(through)
             if low >= high:
@@ -362,6 +393,7 @@ def context(cache, relative, line, *, radius=3, max_chars=4000):
             with connection:
                 snapshot = read_json(root / 'snapshot.json')
                 refresh_inventory(connection, snapshot)
+                verify_index_bytes(connection, root, relative)
             file = connection.execute("SELECT * FROM files WHERE path=? AND listed=1 AND status='complete'", (relative,)).fetchone()
             if file is None:
                 raise ValueError('File not completely indexed')

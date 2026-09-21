@@ -86,11 +86,16 @@ def rsync_command(spec, area, destination, exclude):
 
 
 def pull(cache, config):
+    if not isinstance(config, dict):
+        raise ValueError('Expected a configuration object')
     sources = config.get('sources', [])
-    if not sources or len({s['label'].casefold() for s in sources}) != len(sources):
-        raise ValueError('Supply uniquely labeled approved sources')
+    if not isinstance(sources, list) or not sources or not all(isinstance(s, dict) for s in sources):
+        raise ValueError('Supply a nonempty source list')
     for spec in sources:
         validate_source(spec)
+    if len({s['label'].casefold() for s in sources}) != len(sources):
+        raise ValueError('Supply uniquely labeled approved sources')
+    for spec in sources:
         if spec.get('ssh') is None:
             destination = Path(cache).resolve()
             for source in spec['roots'].values():

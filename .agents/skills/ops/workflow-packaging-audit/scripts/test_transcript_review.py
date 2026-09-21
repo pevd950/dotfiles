@@ -54,6 +54,30 @@ class TranscriptReviewTests(unittest.TestCase):
     def report(self):
         return reader.report(self.cache, AFTER, THROUGH)
 
+    def test_nonstring_source_labels_are_controlled_errors(self):
+        for value in (42,None,[],{}):
+            self.spec['label']=value
+            with self.subTest(value=value),self.assertRaises(ValueError):self.pull()
+        self.assertFalse(self.cache.exists())
+
+    def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
+        self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])
+        self.pull();self.scan();self.assertTrue(self.report()['all_sources_covered'])
+        path=self.cache/self.relative;old=path.stat()
+        path.write_text(path.read_text().replace('old','new'));os.utime(path,ns=(old.st_atime_ns,old.st_mtime_ns))
+        with self.assertRaises(ValueError):reader.context(self.cache,self.relative,2)
+        self.assertEqual(reader.candidates(self.cache,AFTER,THROUGH),[])
+        self.assertFalse(self.report()['all_sources_covered'])
+        self.assertEqual(self.report()['sources']['source-a']['changed_files'],1)
+
+    def test_record_limit_decrease_is_rejected(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}},record('user_message',message='x'*2000)])
+        self.pull();self.scan(max_record_bytes=4096)
+        with self.assertRaisesRegex(ValueError,'cannot decrease'):
+            reader.scan_batch(self.cache,max_record_bytes=1024)
+        self.scan(max_record_bytes=4096)
+        self.assertEqual(len(reader.candidates(self.cache,AFTER,THROUGH)),1)
+
     def test_case_colliding_source_labels_rejected(self):
         self.config['sources'].append({**self.spec,'label':'SOURCE-A'})
         with self.assertRaises(ValueError):self.pull()
