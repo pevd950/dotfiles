@@ -237,6 +237,31 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual([r['kind'] for r in rows], ['user_message', 'tool_call', 'tool_result', 'assistant_message'])
         self.assertIn('corrected', rows[-1]['text'])
 
+    def test_unknown_cache_file_cannot_acquire_verified_host_attribution(self):
+        self.write([record('user_message', message='source record')])
+        self.pull()
+        unknown = self.cache / 'source-a' / 'sessions' / 'unknown.jsonl'
+        unknown.write_text(json.dumps(record('user_message', message='unknown origin')) + '\n')
+        unknown.chmod(0o600)
+        result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'partial')
+        self.assertEqual(result['cached_files'], 1)
+        self.scan()
+        self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH)), 1)
+
+    def test_abandoned_rsync_staging_is_not_transcript_evidence(self):
+        self.write([record('user_message', message='source record')])
+        self.pull()
+        staging = self.cache / 'source-a' / 'sessions' / '.~tmp~'
+        staging.mkdir(mode=0o700)
+        abandoned = staging / 'abandoned.jsonl'
+        abandoned.write_text(json.dumps(record('user_message', message='unfinished transfer')) + '\n')
+        abandoned.chmod(0o600)
+        result = self.pull()
+        self.assertEqual(result['source-a']['cached_files'], 1)
+        self.scan()
+        self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
+
     def test_source_label_cannot_mix_different_roots(self):
         self.write([record('user_message', message='source one')])
         self.pull()

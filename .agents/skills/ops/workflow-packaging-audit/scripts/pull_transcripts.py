@@ -81,7 +81,7 @@ def rsync_command(spec, area, destination, exclude):
     if spec.get('ssh'):
         command += ['-e', shlex.join(SSH)]
     command += ['--exclude=*-' + sid + '.jsonl' for sid in exclude]
-    return command + ['--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
+    return command + ['--exclude=.~tmp~/', '--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
 
 
 def pull(cache, config):
@@ -145,15 +145,20 @@ def pull(cache, config):
                     if not directory.exists():
                         continue
                     for path in sorted(directory.rglob('*.jsonl')):
+                        if '.~tmp~' in path.relative_to(directory).parts:
+                            continue  # Uncommitted rsync staging is not a source copy.
                         relative = str(path.relative_to(root))
                         cache_path(root, relative)
+                        name = str(path.relative_to(directory))
+                        prior = old.get('files', {}).get(relative, {})
+                        present = name in now_files
+                        if not prior and not present and name not in before['roots'][area]['files']:
+                            transfer[area] = 'unattributed_cache_file'
+                            continue
                         first = signature(path)
                         digest = file_hash(path)
                         if signature(path) != first:
                             raise ValueError('Cache changed during inventory')
-                        prior = old.get('files', {}).get(relative, {})
-                        name = str(path.relative_to(directory))
-                        present = name in now_files
                         inventory[relative] = {
                             'area': area, 'sha256': digest, 'size': first[0], 'mtime_ns': first[1],
                             'present_at_source': present,
