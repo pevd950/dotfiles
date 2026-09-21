@@ -37,6 +37,8 @@ SIGNAL_PATTERNS = {
 }
 # Every indexed record must remain inspectable through bounded detail retrieval.
 MAX_RECORD_BYTES = 1024 * 1024
+# Shared serialized index ceiling, including JSON indentation and final newline.
+MAX_INDEX_BYTES = 8 * 1024 * 1024
 EXIT = re.compile(r"(?:exit(?:ed)?(?: with)?(?: code)?|Process exited with code)\s*[:=]?\s*(-?\d+)", re.I)
 # Defense in depth for opt-in detail, not publication clearance for private prose.
 SECRET = re.compile(r"\b(?:sk-[\w-]+|gh[pousr]_[\w]+|Bearer\s+\S+)|\b(?:password|secret|token|api[_-]?key)[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)", re.I)
@@ -392,6 +394,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                         if match_index is not None:
                             _, _, original = mirrors.pop(match_index)
                             original.setdefault("mirror_source_refs", []).append(ref)
+                            original["canonical_sha256s"] = sorted(set(original["canonical_sha256s"]) | {canonical_hash})
                             counts["duplicate_records"] += 1
                             event = original
                             reused_event = original
@@ -399,7 +402,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             mirrors.append((when, envelope, event))
                     record_events[identity] = event
                     if reused_event is None:
-                        event.update(timestamp=when.isoformat(), source_ref=ref)
+                        event.update(timestamp=when.isoformat(), source_ref=ref, canonical_sha256s=[canonical_hash])
                     pair_key = (sid, call_id) if isinstance(call_id, str) else None
                     prior = bool(checkpoint and when <= checkpoint)
                     if reused_event is None and pair_key and event["kind"] in ("tool_call", "tool_result"):
@@ -472,7 +475,7 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
     for sid, session in sessions.items():
         session["source_files"] = source_files[sid]
         session["events"].sort(key=lambda event: event["timestamp"])
-    return {"schema": "codex-evidence-index.v2", "source_host": _label(source_host),
+    bundle = {"schema": "codex-evidence-index.v3", "source_host": _label(source_host),
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "window": {"after": checkpoint.isoformat() if checkpoint else None, "through": upper_bound.isoformat() if upper_bound else None},
             "roots": [str(root.resolve()) for root in source_roots], "limits": limits,
@@ -486,6 +489,66 @@ def collect(source_roots: list[Path], checkpoint: dt.datetime | None = None,
                             "signals are candidates; authority and outcome require contextual review",
                             "unsupported record kinds are counted, not interpreted"],
             "sessions": sorted(sessions.values(), key=lambda session: session["id"] or "")}
+
+    return _bound_index(bundle)
+
+
+def _bound_index(bundle):
+    """Retain a prefix of whole events that fits the intake artifact ceiling.
+
+    Trimming never establishes completeness. References and pairing stay intact,
+    while emitted counters describe only retained events, not discarded evidence.
+    """
+    def fits():
+        size = 1  # final newline written by _write_private
+        for chunk in json.JSONEncoder(indent=2).iterencode(bundle):
+            size += len(chunk.encode("utf-8"))
+            if size > MAX_INDEX_BYTES:
+                return False
+        return True
+
+    if fits():
+        return bundle
+    bundle["complete_within_supported_scope"] = False
+    bundle["truncation"] = sorted(set(bundle["truncation"]) | {"max_output_bytes"})
+    sessions = bundle["sessions"]
+    gaps = bundle["source_gaps"]
+
+    def retain_events(count):
+        kept = []
+        for session in sessions:
+            events = session["events"][:count]
+            if events:
+                kept.append({**session, "events": events})
+                count -= len(events)
+            if not count:
+                break
+        bundle["sessions"] = kept
+        bundle["coverage"]["sessions_included"] = len(kept)
+        bundle["coverage"]["emitted_events"] = sum(len(s["events"]) for s in kept)
+
+    def largest_prefix(total, retain):
+        low, high = 0, total
+        while low < high:
+            middle = (low + high + 1) // 2
+            retain(middle)
+            if fits():
+                low = middle
+            else:
+                high = middle - 1
+        retain(low)
+
+    total = bundle["coverage"]["emitted_events"]
+    retain_events(0)
+    if not fits():
+        # Even diagnostic paths can fill the artifact; the truncation marker
+        # explicitly covers omitted gaps as well as omitted events.
+        bundle["source_gaps"] = []
+        if not fits():
+            raise ValueError("Index roots and fixed metadata exceed output ceiling")
+        largest_prefix(len(gaps), lambda n: bundle.update(source_gaps=gaps[:n]))
+    largest_prefix(total, retain_events)
+    return bundle
 
 
 def detail(source_roots: list[Path], ref: dict[str, Any], *, max_bytes: int = MAX_RECORD_BYTES,

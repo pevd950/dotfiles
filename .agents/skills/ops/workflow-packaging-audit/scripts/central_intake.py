@@ -11,14 +11,14 @@ import re
 import stat
 import uuid
 
-from scan_codex_sessions import MAX_RECORD_BYTES, SECRET, SIGNAL_PATTERNS
+from scan_codex_sessions import MAX_INDEX_BYTES, MAX_RECORD_BYTES, SECRET, SIGNAL_PATTERNS
 
-MAX_INPUT = 8 * 1024 * 1024
+MAX_INPUT = MAX_INDEX_BYTES
 MAX_LEDGER = 32 * 1024 * 1024
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z")
 OPAQUE = re.compile(r"opaque:[a-f0-9]{20}\Z")
 HEX = re.compile(r"[a-f0-9]{64}\Z")
-# Closed vocabulary of the paired collector v2 contract, not arbitrary narratives.
+# Closed vocabulary of the paired collector v3 contract, not arbitrary narratives.
 LIMITATIONS = {
     "bounded rescan; no persistent incremental offsets or checkpoint acknowledgment",
     "archive metadata database not integrated; window selects record activity only",
@@ -26,7 +26,7 @@ LIMITATIONS = {
     "signals are candidates; authority and outcome require contextual review",
     "unsupported record kinds are counted, not interpreted",
 }
-TRUNCATIONS = set("max_directory_entries remaining_roots max_files max_bytes max_scan_records max_sessions max_events max_pending_calls".split())
+TRUNCATIONS = set("max_directory_entries remaining_roots max_files max_bytes max_scan_records max_sessions max_events max_pending_calls max_output_bytes".split())
 GAPS = set("""directory_depth_limit directory_unreadable symlink_skipped entry_unreadable
 root_missing_or_not_directory path_outside_root oversized_record_file_stopped
 incomplete_trailing_record malformed_record invalid_session_metadata session_identity_changed
@@ -177,13 +177,19 @@ def source_file(value, roots, require_jsonl=False):
         raise ValueError("Source file must be JSONL")
 
 
-def validate(bundle, host, expected):
-    if not isinstance(bundle, dict) or bundle.get("schema") != "codex-evidence-index.v2" or bundle.get("source_host") != host:
+def clock_now():
+    """Trusted local UTC boundary; no future-clock allowance for acknowledgments."""
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def validate(bundle, host, expected, *, intake_time=None):
+    if not isinstance(bundle, dict) or bundle.get("schema") != "codex-evidence-index.v3" or bundle.get("source_host") != host:
         raise ValueError("Wrong collector schema or host")
     metadata_label(bundle.get("source_host"))
     fields(bundle, "schema source_host generated_at window roots limits coverage source_gaps truncation archive_metadata complete_within_supported_scope limitations sessions")
     fields(bundle["window"], "after through")
     generated_at = stamp(bundle["generated_at"])
+    intake_time = intake_time or clock_now()
     if window(bundle["window"]) != expected:
         raise ValueError("Collector window mismatch")
     for key in ("sessions", "roots", "source_gaps", "truncation", "limitations"):
@@ -231,6 +237,12 @@ def validate(bundle, host, expected):
             or coverage["sessions_included"] > coverage["files_read"]
             or coverage["sessions_included"] > coverage["emitted_events"]):
         raise ValueError("Inconsistent coverage counters")
+    record_categories = ("malformed_records", "incomplete_trailing_records", "duplicate_records",
+                         "untimestamped_events", "out_of_window_events", "unsupported_records",
+                         "pending_calls_evicted")
+    if (any(coverage[key] > coverage["records_read"] for key in record_categories)
+            or coverage["excluded_session_files"] + coverage["excluded_sidecar_files"] > coverage["files_read"]):
+        raise ValueError("Category counters exceed source totals")
     if type(bundle.get("complete_within_supported_scope")) is not bool:
         raise ValueError("Invalid completeness")
     seen = set()
@@ -261,10 +273,10 @@ def validate(bundle, host, expected):
             raise ValueError("Archive selection requires snapshot metadata")
         for event in session["events"]:
             total += 1
-            fields(event, "kind name status signals timestamp source_ref mirror_source_refs correlation_id pairing selection_reasons call")
+            fields(event, "kind name status signals timestamp source_ref mirror_source_refs canonical_sha256s correlation_id pairing selection_reasons call")
             if event.get("kind") not in ("tool_call", "tool_result", "user_message", "assistant_message"):
                 raise ValueError("Invalid event")
-            common = {"kind", "timestamp", "source_ref", "selection_reasons"}
+            common = {"kind", "timestamp", "source_ref", "selection_reasons", "canonical_sha256s"}
             required_fields, optional = {
                 "tool_call": ({"name"}, {"correlation_id"}),
                 "tool_result": ({"status", "signals"}, {"correlation_id", "call", "pairing"}),
@@ -273,6 +285,12 @@ def validate(bundle, host, expected):
             }[event["kind"]]
             if not common | required_fields <= set(event) or set(event) - common - required_fields - optional:
                 raise ValueError("Fields do not match event kind")
+            hashes = event["canonical_sha256s"]
+            if (not isinstance(hashes, list) or not 1 <= len(hashes) <= 2
+                    or any(not isinstance(h, str) or not HEX.fullmatch(h) for h in hashes)
+                    or hashes != sorted(set(hashes))
+                    or (len(hashes) == 2 and not event.get("mirror_source_refs"))):
+                raise ValueError("Invalid canonical record digests")
             if event["kind"] == "tool_result":
                 if ("call" in event) == ("pairing" in event):
                     raise ValueError("Result needs one pairing outcome")
@@ -338,7 +356,7 @@ def validate(bundle, host, expected):
     # Archive snapshots cannot prove freshness even if their gap was removed.
     return (bundle["complete_within_supported_scope"] and not bundle["source_gaps"]
             and not bundle["truncation"] and not errors and archive["status"] == "disabled"
-            and expected["through"] <= generated_at and within_limits
+            and expected["through"] <= generated_at <= intake_time and within_limits
             and all(session["source_class"] in ("primary", "subagent") for session in bundle["sessions"]))
 
 
@@ -390,6 +408,7 @@ def intake(state, run_id, hosts):
     if not isinstance(hosts, dict) or not 1 <= len(hosts) <= 32:
         raise ValueError("Supply 1..32 explicit hosts")
     with locked(state) as (fd, ledger):
+        intake_time = clock_now()
         result = {"hosts": {}, "events": {}, "all_sources_complete": False,
                   "unsupported": ["full archive history and freshness", "memory", "inventory", "automation", "repository context"]}
         for host, spec in sorted(hosts.items()):
@@ -408,7 +427,7 @@ def intake(state, run_id, hosts):
                 raw = read_private(spec["path"])
                 entry["input_sha256"] = hashlib.sha256(raw).hexdigest()
                 bundle = decode(raw)
-                eligible = validate(bundle, host, expected)
+                eligible = validate(bundle, host, expected, intake_time=intake_time)
             except (OSError, ValueError, KeyError, TypeError, RecursionError):
                 entry["status"] = "invalid_or_denied"
                 continue
@@ -416,10 +435,12 @@ def intake(state, run_id, hosts):
             for session in bundle["sessions"]:
                 occurrences = {}
                 for event in session["events"]:
-                    hashes = tuple(sorted({ref["sha256"] for ref in [event["source_ref"], *event.get("mirror_source_refs", [])]}))
+                    hashes = tuple(event["canonical_sha256s"])
+                    raw_hashes = {ref["sha256"] for ref in [event["source_ref"], *event.get("mirror_source_refs", [])]}
                     occurrences[hashes] = occurrences.get(hashes, 0) + 1
                     identity = digest([session["id"], hashes, occurrences[hashes]])
-                    record = result["events"].setdefault(identity, {"session": session["id"], "raw_sha256s": list(hashes), "occurrence": occurrences[hashes], "provenance": []})
+                    record = result["events"].setdefault(identity, {"session": session["id"], "canonical_sha256s": list(hashes), "raw_sha256s": [], "occurrence": occurrences[hashes], "provenance": []})
+                    record["raw_sha256s"] = sorted(set(record["raw_sha256s"]) | raw_hashes)
                     refs = [("primary", event["source_ref"])] + [("mirror", ref) for ref in event.get("mirror_source_refs", [])]
                     for role, ref in refs:
                         record["provenance"].append({"host": host, "source_ref": ref, "role": role,
@@ -450,7 +471,8 @@ def acknowledge(state, run_id, run_digest, host, previous):
         entry = run["hosts"][host]
         prior = stamp(previous)
         current = ledger["acknowledged_collector_windows"].get(host)
-        if run["digest"] != run_digest or not entry["eligible"] or entry["window"]["after"] != prior:
+        if (run["digest"] != run_digest or not entry["eligible"] or entry["window"]["after"] != prior
+                or stamp(entry["window"]["through"]) > clock_now()):
             raise ValueError("Acknowledgment requires complete input and matching window")
         target = {"through": entry["window"]["through"], "run": run_id, "digest": run_digest}
         if current == target:

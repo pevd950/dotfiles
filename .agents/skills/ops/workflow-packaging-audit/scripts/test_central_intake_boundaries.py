@@ -37,14 +37,14 @@ class IntakeBoundaryTests(unittest.TestCase):
         result = self.submit(state, bundle)
         self.assertTrue(result["hosts"]["alpha"]["eligible"])
         self.assertFalse(result["all_sources_complete"])
-        ledger = intake.decode(intake.read_private(state / "ledger.json"))
+        ledger = intake.decode(intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
         self.assertEqual(ledger["acknowledged_collector_windows"], {})
 
     def assert_cannot_acknowledge(self, state, result, bundle, run):
         self.assertFalse(result["hosts"]["alpha"]["eligible"])
         with self.assertRaises(ValueError):
             intake.acknowledge(state, run, result["digest"], "alpha", bundle["window"]["after"])
-        ledger = intake.decode(intake.read_private(state / "ledger.json"))
+        ledger = intake.decode(intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
         self.assertEqual(ledger["acknowledged_collector_windows"], {})
 
     def test_emitted_sessions_require_files_actually_read(self):
@@ -177,7 +177,7 @@ class IntakeBoundaryTests(unittest.TestCase):
             "alpha": {"status": "available", "window": bundle["window"], "path": str(path)},
             "beta": {"status": "offline", "window": bundle["window"]}})
         intake.acknowledge(state, "mixed", run["digest"], "alpha", bundle["window"]["after"])
-        ledger = intake.decode(intake.read_private(state / "ledger.json"))
+        ledger = intake.decode(intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
         self.assertEqual(set(ledger["acknowledged_collector_windows"]), {"alpha"})
         self.assertEqual(ledger["runs"]["mixed"]["hosts"]["beta"]["status"], "offline")
 
@@ -186,7 +186,7 @@ class IntakeBoundaryTests(unittest.TestCase):
         bundle["sessions"][0]["events"][0]["text"] = "synthetic-private-unexpected-text"
         result = self.submit(state, bundle)
         self.assertFalse(result["hosts"]["alpha"]["eligible"])
-        self.assertNotIn(b"synthetic-private-unexpected-text", intake.read_private(state / "ledger.json"))
+        self.assertNotIn(b"synthetic-private-unexpected-text", intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
 
     def test_unrepresentable_timestamp_is_invalid_input_not_a_crash(self):
         state, bundle = self.prepare()
@@ -243,7 +243,7 @@ class IntakeBoundaryTests(unittest.TestCase):
                 bundle[key] = ["SYNTHETIC UNEXPECTED PRIVATE TRANSCRIPT"]
                 result = self.submit(state, bundle, run=key)
                 self.assertFalse(result["hosts"]["alpha"]["eligible"])
-                self.assertNotIn(b"SYNTHETIC UNEXPECTED PRIVATE TRANSCRIPT", intake.read_private(state / "ledger.json"))
+                self.assertNotIn(b"SYNTHETIC UNEXPECTED PRIVATE TRANSCRIPT", intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
 
     def test_disabled_archive_cannot_select_pre_window_event(self):
         state, bundle = self.prepare()
@@ -420,7 +420,7 @@ class IntakeBoundaryTests(unittest.TestCase):
         accepted = subprocess.run(command, capture_output=True, text=True, timeout=10)
         self.assertEqual(accepted.returncode, 0, accepted.stderr)
         self.assertEqual(accepted.stdout, "")
-        ledger = intake.decode(intake.read_private(state / "ledger.json"))
+        ledger = intake.decode(intake.read_private(state / "ledger.json", intake.MAX_LEDGER))
         digest = ledger["runs"]["cli"]["digest"]
         ack = subprocess.run([sys.executable, intake.__file__, "--authorized", "--state", str(state),
                               "acknowledge", "--run", "cli", "--digest", digest, "--host", "alpha",
