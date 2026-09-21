@@ -54,6 +54,42 @@ class TranscriptReviewTests(unittest.TestCase):
     def report(self):
         return reader.report(self.cache, AFTER, THROUGH)
 
+    def test_cache_cannot_overlap_local_source(self):
+        for cache in (self.codex/'sessions', self.codex/'sessions'/'cache', self.codex):
+            with self.subTest(cache=cache), self.assertRaises(ValueError):
+                puller.pull(cache,self.config)
+        self.assertFalse((self.codex/'sessions'/'cache').exists())
+
+    def test_reserved_source_labels_rejected_before_cache_creation(self):
+        for label in ('index.sqlite3','snapshot.json','INDEX.SQLITE3','index.sqlite3-wal'):
+            self.spec['label']=label
+            with self.subTest(label=label),self.assertRaises(ValueError):self.pull()
+        self.assertFalse(self.cache.exists())
+
+    def test_interrupted_pull_invalidates_old_candidates(self):
+        path=self.write([{'type':'session_meta','payload':{'id':'keep'}},record('user_message',message='old')])
+        self.pull();self.scan();self.assertEqual(len(reader.candidates(self.cache,AFTER,THROUGH)),1)
+        path.write_text(path.read_text().replace('old','new'))
+        original=puller.subprocess.run
+        def interrupt(command,**kwargs):
+            result=original(command,**kwargs)
+            if command[0]=='rsync':raise KeyboardInterrupt()
+            return result
+        with patch.object(puller.subprocess,'run',side_effect=interrupt), self.assertRaises(KeyboardInterrupt):self.pull()
+        self.assertEqual(reader.candidates(self.cache,AFTER,THROUGH),[])
+        self.assertFalse(self.report()['all_sources_covered'])
+        self.pull();self.scan();self.assertIn('new',reader.context(self.cache,self.relative,2)['records'][-1]['text'])
+
+    def test_undated_time_count_uses_current_header(self):
+        for parent_time,child_time,expected in ((True,False,0),(False,True,1)):
+            parent={'type':'session_meta','payload':{'id':'parent'}}
+            child={'type':'session_meta','payload':{'id':'child'}}
+            if parent_time:parent['timestamp']='2026-09-01T00:00:00Z'
+            if child_time:child['timestamp']='2026-09-02T00:00:00Z'
+            activity=record('user_message',message='undated');activity.pop('timestamp')
+            self.write([parent,child,activity]);self.pull();self.scan()
+            self.assertEqual(self.report()['sources']['source-a']['undated_files_with_session_time'],expected)
+
     def test_excluded_filename_keeps_included_fork(self):
         self.config['exclude_sessions'] = ['excluded']
         self.write([{'type':'session_meta','payload':{'id':'excluded'}}, record('user_message',message='hide'),

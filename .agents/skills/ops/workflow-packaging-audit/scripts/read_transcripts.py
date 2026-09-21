@@ -272,6 +272,13 @@ def report(cache, after, through):
                 coverage = _time(entry.get('coverage_through', entry.get('last_successful_pull')))
                 reaches_end = coverage is not None and stamp(through) <= coverage.isoformat(timespec='microseconds') and coverage <= dt.datetime.now(dt.timezone.utc)
                 excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
+                undated_files = set()
+                for file in rows:
+                    for record in connection.execute("SELECT * FROM records WHERE file=? AND excluded=0 AND stamp IS NULL AND kind IN ('user_message','assistant_message','tool_call','tool_result')", (file['id'],)):
+                        scope = scope_at_record(connection, file_scope(connection, snapshot, file), record)
+                        if scope['session_started_at'] is not None:
+                            undated_files.add(file['id'])
+                            break
                 sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
                     'host_basis': 'verified_copy_source',
                     'pull_status': entry['status'], 'pull_error': entry.get('error'),
@@ -287,7 +294,7 @@ def report(cache, after, through):
                     'oversized_unparsed': sum(r['oversized'] for r in rows),
                     'untimestamped_events': sum(r['untimestamped'] for r in rows),
                     'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
-                    'undated_files_with_session_time': sum(r['untimestamped'] > 0 and file_scope(connection, snapshot, r)['session_started_at'] is not None for r in rows),
+                    'undated_files_with_session_time': len(undated_files),
                     'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
                     'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps,
                     'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),

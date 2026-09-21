@@ -47,6 +47,8 @@ def validate_source(spec):
     for field in ('label',):
         if not isinstance(spec.get(field), str) or not LABEL.fullmatch(spec[field]):
             raise ValueError('Invalid source label')
+    if spec['label'].lower() in {'snapshot.json', 'index.sqlite3', 'index.sqlite3-journal', 'index.sqlite3-wal', 'index.sqlite3-shm'}:
+        raise ValueError('Reserved cache-control source label')
     if spec.get('ssh') is not None and not LABEL.fullmatch(spec['ssh']):
         raise ValueError('Use an existing SSH host alias')
     if not isinstance(spec.get('hostnames'), list) or not spec['hostnames'] or not all(isinstance(h, str) and h for h in spec['hostnames']):
@@ -89,6 +91,12 @@ def pull(cache, config):
         raise ValueError('Supply uniquely labeled approved sources')
     for spec in sources:
         validate_source(spec)
+        if spec.get('ssh') is None:
+            destination = Path(cache).resolve()
+            for source in spec['roots'].values():
+                origin = Path(source).resolve()
+                if destination.is_relative_to(origin) or origin.is_relative_to(destination):
+                    raise ValueError('Cache and local transcript roots must not overlap')
     exclude = config.get('exclude_sessions', [])
     if not isinstance(exclude, list) or not all(isinstance(x, str) and LABEL.fullmatch(x) for x in exclude):
         raise ValueError('Invalid session exclusions')
@@ -113,6 +121,10 @@ def pull(cache, config):
                     raise ValueError('Source label was reused; use a new cache label')
                 entry['identity'] = identity
                 source_dir = private_dir(root / label)
+                # Publish invalidation before rsync can replace any cached bytes.
+                # Keep prior hashes only in the private in-memory recovery input.
+                entry.update(files={}, status='transferring')
+                write_json(metadata, snapshot)
                 transfer = {}
                 for area in ('sessions', 'archived_sessions'):
                     if before['roots'][area]['status'] != 'ok':
@@ -180,9 +192,9 @@ def pull(cache, config):
                 if entry['status'] == 'ok':
                     entry['last_successful_pull'] = dt.datetime.now(dt.timezone.utc).isoformat()
             except subprocess.TimeoutExpired:
-                entry['error'] = 'source_timeout'
+                entry.update(status='unavailable', error='source_timeout')
             except (OSError, ValueError, KeyError, TypeError):
-                entry['error'] = 'source_unavailable_or_invalid'
+                entry.update(status='unavailable', error='source_unavailable_or_invalid')
             write_json(metadata, snapshot)
         return {label: {'status': entry['status'], 'error': entry.get('error'),
                         'cached_files': len(entry.get('files', {})), 'transfer': entry.get('transfer', {})}
