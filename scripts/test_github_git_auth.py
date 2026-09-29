@@ -42,6 +42,11 @@ class GitHubGitAuthTests(unittest.TestCase):
             "assert os.environ.get('GH_PROMPT_DISABLED') == '1'\n"
             "assert not sys.stdin.isatty()\n"
             "root = pathlib.Path(__file__).parent.parent\n"
+            "if (root / 'needs-network-settings').exists():\n"
+            "    assert os.environ.get('HTTPS_PROXY') == 'http://proxy.example.invalid:8080'\n"
+            "    assert os.environ.get('NO_PROXY') == 'localhost'\n"
+            "    assert os.environ.get('SSL_CERT_FILE') == '/fixture/ca.pem'\n"
+            "    assert os.environ.get('GIT_SSL_CAINFO') == '/fixture/git-ca.pem'\n"
             "if (root / 'deny').exists():\n"
             "    print('secret-provider-diagnostic', file=sys.stderr)\n"
             "    sys.exit(1)\n"
@@ -72,6 +77,14 @@ class GitHubGitAuthTests(unittest.TestCase):
     def test_get_uses_existing_gh_identity_without_shell_tokens(self):
         result = self.helper()
         self.assertEqual(result.returncode, 0)
+        self.assertIn("password=fixture-secret", result.stdout)
+        self.assertEqual(result.stderr, "")
+
+    def test_provider_preserves_configured_proxy_and_ca(self):
+        (self.root / "needs-network-settings").touch()
+        self.env.update(HTTPS_PROXY="http://proxy.example.invalid:8080", NO_PROXY="localhost",
+                        SSL_CERT_FILE="/fixture/ca.pem", GIT_SSL_CAINFO="/fixture/git-ca.pem")
+        result = self.helper()
         self.assertIn("password=fixture-secret", result.stdout)
         self.assertEqual(result.stderr, "")
 
@@ -208,6 +221,17 @@ class GitHubGitAuthTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("linked worktrees", result.stderr)
         self.assertEqual((original / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_primary_checkout_with_siblings_preserves_shared_config(self):
+        self.call_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                      "commit", "--allow-empty", "-m", "fixture")
+        self.call_git("worktree", "add", "--detach", str(self.root / "sibling"))
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("linked worktrees", result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
         self.assertFalse((self.home / ".local").exists())
 
     def test_unsupported_remote_is_not_changed(self):

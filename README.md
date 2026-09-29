@@ -181,9 +181,10 @@ helper values, then installs a
 bounded credential adapter under `~/.local/libexec/dotfiles/` and pins that checkout's
 GitHub HTTPS helper to it. Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
 when preparing Xcode Cloud. The setup is idempotent and leaves other hosts and
-global Git configuration intact. Apply is limited to standalone checkouts:
-linked worktrees are rejected because their local Git config is shared with
-sibling checkouts. Check-only mode can inspect either kind of checkout.
+global Git configuration intact. Apply is limited to standalone checkouts without
+linked siblings: both linked worktrees and primary checkouts with siblings are
+rejected because their local Git config is shared. Check-only mode can inspect
+either kind of checkout. Existing proxy and custom CA settings are preserved.
 
 The adapter uses the existing `gh` identity, times out credential lookup after
 15 seconds, and stops Git from falling back to another helper or a password dialog

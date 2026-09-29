@@ -13,7 +13,13 @@ def gh_environment():
     # provisioned gh identity consistently, including in terminal preflights.
     environment = {
         key: os.environ[key]
-        for key in ("HOME", "USER", "XDG_CONFIG_HOME", "GH_CONFIG_DIR", "DBUS_SESSION_BUS_ADDRESS")
+        for key in (
+            "HOME", "USER", "XDG_CONFIG_HOME", "GH_CONFIG_DIR", "DBUS_SESSION_BUS_ADDRESS",
+            "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+            "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+            "SSL_CERT_FILE", "SSL_CERT_DIR", "GIT_SSL_CAINFO", "GIT_SSL_CAPATH",
+            "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
+        )
         if key in os.environ
     }
     environment.update(PATH="/usr/bin:/bin:/usr/sbin:/sbin", GH_PROMPT_DISABLED="1")

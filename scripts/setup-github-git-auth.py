@@ -68,8 +68,12 @@ def main():
             raise ValueError("Pass the checkout root as --repository")
         git_paths = run(command + ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"],
                         environment=environment, cwd=repository).splitlines()
-        if args.apply and Path(git_paths[0]).resolve() != Path(git_paths[1]).resolve():
-            raise ValueError("Apply requires a standalone checkout; linked worktrees share repository configuration")
+        if args.apply:
+            worktrees = run(command + ["worktree", "list", "--porcelain"],
+                            environment=environment, cwd=repository)
+            has_siblings = sum(line.startswith("worktree ") for line in worktrees.splitlines()) > 1
+            if has_siblings or Path(git_paths[0]).resolve() != Path(git_paths[1]).resolve():
+                raise ValueError("Apply requires a standalone checkout without linked worktrees; they share repository configuration")
         origin = run(command + ["remote", "get-url", "origin"], environment=environment, cwd=repository)
         url = urlsplit(origin)
         if (url.scheme != "https" or url.netloc != "github.com" or url.query or url.fragment
