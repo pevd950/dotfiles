@@ -164,6 +164,37 @@ Full yadm bootstrap:
 
 Both scripts are designed to be safe to re-run.
 
+### Unattended GitHub authentication
+
+Before native IDE or CI setup in an existing HTTPS GitHub checkout, run:
+
+```sh
+python3 scripts/setup-github-git-auth.py --repository /path/to/checkout
+python3 scripts/setup-github-git-auth.py --repository /path/to/checkout --apply
+```
+
+The first command checks the stored GitHub CLI identity and reads the origin with
+prompts disabled, without interactive shell token exports. `--apply` installs a
+bounded credential adapter under `~/.local/libexec/dotfiles/` and pins that checkout's
+GitHub HTTPS helper to it. Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
+when preparing Xcode Cloud. The setup is idempotent and leaves other hosts and
+global Git configuration intact.
+
+The adapter uses the existing `gh` identity, times out credential lookup after
+15 seconds, and stops Git from falling back to another helper or a password dialog
+when authentication is unavailable. Tokens are never copied to files or diagnostic
+output. This uses Git's documented [helper reset and quit behavior](https://git-scm.com/docs/gitcredentials)
+and the existing [GitHub CLI credential integration](https://cli.github.com/manual/gh_auth_setup-git).
+
+Provision the GitHub CLI identity once through the approved host authentication
+setup. A locked or revoked credential, a new host/account, or Apple's interactive
+account verification still needs recovery; this command reports failure instead
+of trying to sign in. Xcode may use its own account flow outside Git.
+
+To undo this checkout's override, remove only `credential.https://github.com.helper`
+from its local Git config. That restores inherited helpers. If the checkout had a
+custom local helper before setup, restore its previous values instead.
+
 ### Shared AI Skills
 - Canonical skill source lives in `.config/agent-skills/skills/`.
 - Bootstrap symlinks each shared skill folder into `CODEX_HOME/skills` (defaulting to `.codex/skills/`), `.claude/skills/`, and `.copilot/skills/`.
