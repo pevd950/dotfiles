@@ -230,6 +230,14 @@ class GitHubGitAuthTests(unittest.TestCase):
         result = self.setup_script("--apply")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_mixed_case_origin_host_passes_without_rewriting_remote(self):
+        origin = "https://GitHub.com/example/private.git"
+        self.call_git("remote", "set-url", "origin", origin)
+        for arguments in (("--apply",), ()):
+            result = self.setup_script(*arguments)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.call_git("remote", "get-url", "origin").stdout.strip(), origin)
+
     def test_failed_second_config_write_preserves_original_helpers(self):
         self.call_git("config", "credential.https://github.com.helper", "previous-provider")
         before = (self.repo / ".git/config").read_bytes()

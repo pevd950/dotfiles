@@ -61,11 +61,14 @@ def main():
     request = sys.stdin.buffer.read(65537)
     try:
         fields = dict(line.split(b"=", 1) for line in request.splitlines() if line)
-        allowed = fields.get(b"protocol") == b"https" and fields.get(b"host") in (
+        host = fields.get(b"host", b"").lower()
+        allowed = fields.get(b"protocol") == b"https" and host in (
             b"github.com", b"gist.github.com",
         )
         if len(request) > 65536 or not allowed:
             raise ValueError("unsupported credential request")
+        fields[b"host"] = host
+        request = b"\n".join(key + b"=" + value for key, value in fields.items()) + b"\n\n"
         code, response = bounded_run(
             [args.gh, "auth", "git-credential", "get"], input_data=request,
             environment=gh_environment(),

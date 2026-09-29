@@ -159,7 +159,7 @@ def main():
                 raise ValueError("Apply requires a standalone checkout without linked worktrees; they share repository configuration")
         origin = run(command + ["remote", "get-url", "origin"], environment=environment, cwd=repository)
         url = urlsplit(origin)
-        if (url.scheme != "https" or url.netloc != "github.com" or url.query or url.fragment
+        if (url.scheme != "https" or url.netloc.lower() != "github.com" or url.query or url.fragment
                 or len(url.path.strip("/").split("/")) != 2):
             raise ValueError("Origin must be a credential-free https://github.com/OWNER/REPO URL")
         # Check the existing stored identity before changing any configuration.
