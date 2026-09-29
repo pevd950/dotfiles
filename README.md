@@ -164,6 +164,54 @@ Full yadm bootstrap:
 
 Both scripts are designed to be safe to re-run.
 
+### Unattended GitHub authentication
+
+Before native IDE or CI setup in an existing HTTPS GitHub checkout, run:
+
+```sh
+python3 scripts/setup-github-git-auth.py --repository /path/to/checkout
+python3 scripts/setup-github-git-auth.py --repository /path/to/checkout --apply
+```
+
+The first command checks the stored GitHub CLI identity, exercises the selected
+credential helper even for public origins, and reads the origin with prompts
+disabled, without interactive shell token exports. Empty repositories are valid.
+`--apply` verifies the proposed helper and origin before changing existing local
+helper values, then installs a
+bounded credential adapter under `~/.local/libexec/dotfiles/` and pins that checkout's
+GitHub HTTPS helper to its immutable, content-addressed version. A failed later
+setup can leave an unused cached version, but cannot replace a helper used by
+another checkout. Keep older versions while any checkout still references them.
+Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
+when preparing Xcode Cloud. The setup is idempotent and leaves other hosts and
+global Git configuration intact. Apply is limited to standalone checkouts without
+linked siblings: both linked worktrees and primary checkouts with siblings are
+rejected because their local Git config is shared. Check-only mode can inspect
+either kind of checkout. Existing proxy and custom CA settings are preserved.
+The two helper values are installed atomically and the previous configuration is
+restored if verification fails or is interrupted. Setup uses a host Python interpreter outside active
+virtual environments. It discovers `gh` only through stable host locations, not
+an activated development environment's `PATH`. For another installation, pass
+`--gh /absolute/persistent/path/to/gh` and keep that executable path available.
+Check-only mode honors path-scoped origin helpers; apply
+rejects path-scoped or wildcard GitHub helpers before making changes and checks
+included and worktree settings before reporting success.
+
+The adapter uses the existing `gh` identity, times out credential lookup after
+15 seconds, and stops Git from falling back to another helper or a password dialog
+when authentication is unavailable. Tokens are never copied to files or diagnostic
+output. This uses Git's documented [helper reset and quit behavior](https://git-scm.com/docs/gitcredentials)
+and the existing [GitHub CLI credential integration](https://cli.github.com/manual/gh_auth_setup-git).
+
+Provision the GitHub CLI identity once through the approved host authentication
+setup. A locked or revoked credential, a new host/account, or Apple's interactive
+account verification still needs recovery; this command reports failure instead
+of trying to sign in. Xcode may use its own account flow outside Git.
+
+To undo this checkout's override, remove only `credential.https://github.com.helper`
+from its local Git config. That restores inherited helpers. If the checkout had a
+custom local helper before setup, restore its previous values instead.
+
 ### Shared AI Skills
 - Canonical skill source lives in `.config/agent-skills/skills/`.
 - Bootstrap symlinks each shared skill folder into `CODEX_HOME/skills` (defaulting to `.codex/skills/`), `.claude/skills/`, and `.copilot/skills/`.

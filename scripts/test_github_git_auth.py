@@ -1,0 +1,423 @@
+import importlib.util
+import os
+from pathlib import Path
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+
+
+SCRIPT_DIR = Path(__file__).parent
+HELPER = SCRIPT_DIR / "github-credential-helper.py"
+SETUP = SCRIPT_DIR / "setup-github-git-auth.py"
+spec = importlib.util.spec_from_file_location("github_auth_helper", HELPER)
+helper_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(helper_module)
+setup_spec = importlib.util.spec_from_file_location("github_auth_setup", SETUP)
+setup_module = importlib.util.module_from_spec(setup_spec)
+setup_spec.loader.exec_module(setup_module)
+
+
+class GitHubGitAuthTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="github-git-auth-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        self.home = self.root / "home"
+        self.home.mkdir()
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        self.gh = self.bin / "gh"
+        self.gh.write_text(
+            f"#!{sys.executable}\n"
+            "import os, pathlib, sys\n"
+            "assert not os.environ.get('GH_TOKEN')\n"
+            "assert not os.environ.get('GITHUB_TOKEN')\n"
+            "assert os.environ.get('GH_PROMPT_DISABLED') == '1'\n"
+            "assert not sys.stdin.isatty()\n"
+            "root = pathlib.Path(__file__).parent.parent\n"
+            "if (root / 'needs-network-settings').exists():\n"
+            "    assert os.environ.get('HTTPS_PROXY') == 'http://proxy.example.invalid:8080'\n"
+            "    assert os.environ.get('NO_PROXY') == 'localhost'\n"
+            "    assert os.environ.get('SSL_CERT_FILE') == '/fixture/ca.pem'\n"
+            "    assert os.environ.get('GIT_SSL_CAINFO') == '/fixture/git-ca.pem'\n"
+            "if (root / 'deny').exists():\n"
+            "    print('secret-provider-diagnostic', file=sys.stderr)\n"
+            "    sys.exit(1)\n"
+            "if sys.argv[1:3] == ['api', 'user']:\n"
+            "    print('fixture-user')\n"
+            "else:\n"
+            "    assert sys.argv[1:] == ['auth', 'git-credential', 'get']\n"
+            "    if (root / 'deny-helper').exists(): sys.exit(1)\n"
+            "    assert 'host=github.com' in sys.stdin.read()\n"
+            "    print('username=fixture-user\\npassword=fixture-secret\\n')\n"
+        )
+        self.gh.chmod(0o700)
+        self.env = {"HOME": str(self.home), "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
+                    "GH_TOKEN": "ignored-fixture-override", "GITHUB_TOKEN": "ignored-fixture-override",
+                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0"}
+        self.git = shutil.which("git")
+        self.call_git("init", "-q")
+        self.call_git("remote", "add", "origin", "https://github.com/example/private.git")
+
+    def call_git(self, *args, input_data=None, check=True):
+        return subprocess.run([self.git, "-C", str(self.repo), *args], input=input_data,
+                              capture_output=True, text=True, env=self.env, check=check)
+
+    def helper(self, operation="get", request="protocol=https\nhost=github.com\n\n"):
+        return subprocess.run([sys.executable, str(HELPER), "--gh", str(self.gh), operation],
+                              input=request, capture_output=True, text=True, env=self.env, timeout=5)
+
+    def test_get_uses_existing_gh_identity_without_shell_tokens(self):
+        result = self.helper()
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("password=fixture-secret", result.stdout)
+        self.assertEqual(result.stderr, "")
+
+    def test_provider_preserves_configured_proxy_and_ca(self):
+        (self.root / "needs-network-settings").touch()
+        self.env.update(HTTPS_PROXY="http://proxy.example.invalid:8080", NO_PROXY="localhost",
+                        SSL_CERT_FILE="/fixture/ca.pem", GIT_SSL_CAINFO="/fixture/git-ca.pem")
+        result = self.helper()
+        self.assertIn("password=fixture-secret", result.stdout)
+        self.assertEqual(result.stderr, "")
+
+    def test_store_and_erase_do_not_change_existing_identity(self):
+        self.gh.unlink()
+        for operation in ("store", "erase", "capability"):
+            with self.subTest(operation=operation):
+                result = self.helper(operation)
+                self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "", ""))
+
+    def test_unsupported_host_fails_without_calling_provider(self):
+        self.gh.unlink()
+        result = self.helper(request="protocol=https\nhost=unrelated.example\n\n")
+        self.assertEqual(result.stdout, "quit=1\n\n")
+
+    def test_provider_error_does_not_leak_or_prompt(self):
+        (self.root / "deny").touch()
+        result = self.helper()
+        self.assertEqual(result.stdout, "quit=1\n\n")
+        self.assertNotIn("secret-provider-diagnostic", result.stdout + result.stderr)
+
+    def test_git_does_not_fall_back_after_missing_credential(self):
+        (self.root / "deny").touch()
+        sentinel = self.root / "unexpected-fallback"
+        bounded = "!" + shlex.join([sys.executable, str(HELPER), "--gh", str(self.gh)])
+        self.call_git("config", "credential.https://github.com.helper", "")
+        self.call_git("config", "--add", "credential.https://github.com.helper", bounded)
+        self.call_git("config", "--add", "credential.https://github.com.helper", f"!touch {shlex.quote(str(sentinel))}")
+        self.call_git("config", "core.askPass", f"touch {shlex.quote(str(sentinel))}")
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n", check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(sentinel.exists())
+        self.assertNotIn("secret-provider-diagnostic", result.stdout + result.stderr)
+
+    def test_timeout_is_bounded_and_stops_its_child(self):
+        sentinel = self.root / "child-finished"
+        child = f"import time,pathlib; time.sleep(1); pathlib.Path({str(sentinel)!r}).touch()"
+        parent = f"import subprocess,time; subprocess.Popen([{sys.executable!r}, '-c', {child!r}]); time.sleep(5)"
+        start = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            helper_module.bounded_run([sys.executable, "-c", parent], timeout=0.2)
+        self.assertLess(time.monotonic() - start, 1.0)
+        time.sleep(1.1)
+        self.assertFalse(sentinel.exists())
+
+    def test_timeout_does_not_wait_for_detached_descendant_pipes(self):
+        pid_file = self.root / "detached-pid"
+        parent = (
+            "import subprocess,pathlib,time; "
+            f"child=subprocess.Popen([{sys.executable!r}, '-c', 'import time; time.sleep(10)'], start_new_session=True); "
+            f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid)); time.sleep(10)"
+        )
+        start = time.monotonic()
+        try:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                helper_module.bounded_run([sys.executable, "-c", parent], timeout=0.2)
+            self.assertLess(time.monotonic() - start, 1.0)
+        finally:
+            if pid_file.exists():
+                try:
+                    os.kill(int(pid_file.read_text()), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
+    def setup_script(self, *args, use_host_gh=False):
+        # Avoid network while still exercise real config parsing/writes. The live
+        # acceptance test separately reads a real private GitHub origin.
+        git_proxy = self.bin / "git-proxy"
+        git_proxy.write_text(
+            f"#!{sys.executable}\nimport os,pathlib,sys\n"
+            "if 'ls-remote' in sys.argv:\n"
+            "    root = pathlib.Path(__file__).parent.parent\n"
+            "    assert sys.argv[-2:] == ['origin', 'HEAD']\n"
+            "    if (root / 'deny-origin').exists(): sys.exit(1)\n"
+            "    if (root / 'deny-second-origin').exists():\n"
+            "        count = root / 'origin-count'\n"
+            "        calls = int(count.read_text()) + 1 if count.exists() else 1\n"
+            "        count.write_text(str(calls))\n"
+            "        if calls == 2: sys.exit(1)\n"
+            "    if (root / 'empty-origin').exists(): sys.exit(2 if '--exit-code' in sys.argv else 0)\n"
+            "    print('fixture-head HEAD')\n"
+            "    sys.exit(0)\n"
+            "if '--file' in sys.argv and '--add' in sys.argv:\n"
+            "    root = pathlib.Path(__file__).parent.parent\n"
+            "    if (root / 'deny-config-add').exists(): sys.exit(1)\n"
+            f"os.execv({self.git!r}, [{self.git!r}] + sys.argv[1:])\n"
+        )
+        git_proxy.chmod(0o700)
+        if not use_host_gh:
+            args = ("--gh", str(self.gh), *args)
+        return subprocess.run([sys.executable, str(SETUP), "--repository", str(self.repo),
+                               "--git", str(git_proxy), *args], capture_output=True, text=True, env=self.env, timeout=30)
+
+    def test_configure_is_idempotent_preserves_other_hosts_and_survives_no_global_config(self):
+        self.call_git("config", "credential.https://elsewhere.example.helper", "existing-provider")
+        first = self.setup_script("--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        config = (self.repo / ".git/config").read_bytes()
+        second = self.setup_script("--apply")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), config)
+        self.assertEqual(self.call_git("config", "credential.https://elsewhere.example.helper").stdout.strip(), "existing-provider")
+        self.assertFalse((self.home / ".gitconfig").exists())
+        installed = next((self.home / ".local/libexec/dotfiles").glob("github-credential-helper-*.py"))
+        self.assertEqual(installed.stat().st_mode & 0o777, 0o700)
+        self.env["GIT_CONFIG_GLOBAL"] = "/dev/null"
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
+        self.assertIn("password=fixture-secret", result.stdout)
+        self.assertNotIn(b"fixture-secret", config)
+
+    def test_missing_auth_does_not_change_config_or_install_helper(self):
+        (self.root / "deny").touch()
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+        self.assertNotIn("secret-provider-diagnostic", result.stdout + result.stderr)
+
+    def test_existing_install_needs_no_home_directory_writes(self):
+        first = self.setup_script("--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        arguments = [str(SETUP), "--repository", str(self.repo),
+                     "--git", str(self.bin / "git-proxy"), "--gh", str(self.gh), "--apply"]
+        # Model an agent that may configure this checkout but cannot modify the
+        # already installed helper in the user's home directory.
+        with patch.dict(os.environ, self.env, clear=True), patch.object(sys, "argv", arguments), \
+                patch.object(Path, "mkdir", side_effect=PermissionError("protected install")), \
+                patch.object(os, "chmod", side_effect=PermissionError("protected install")):
+            self.assertEqual(setup_module.main(), 0)
+
+    def test_origin_failure_preserves_existing_helpers_and_installation(self):
+        self.call_git("config", "--add", "credential.https://github.com.helper", "previous-provider")
+        self.call_git("config", "--add", "credential.https://github.com.helper", "previous-fallback")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_accessible_empty_origin_passes(self):
+        (self.root / "empty-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_mixed_case_origin_host_passes_without_rewriting_remote(self):
+        origin = "https://GitHub.com/example/private.git"
+        self.call_git("remote", "set-url", "origin", origin)
+        self.call_git("config", "credential.https://GitHub.com.helper", "previous-provider")
+        for arguments in (("--apply",), ()):
+            result = self.setup_script(*arguments)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.call_git("remote", "get-url", "origin").stdout.strip(), origin)
+
+    def test_default_gh_survives_removal_of_disposable_path_entry(self):
+        persistent = self.home / ".local/bin/gh"
+        persistent.parent.mkdir(parents=True)
+        shutil.copy2(self.gh, persistent)
+        self.gh.write_text("#!/bin/sh\nexit 99\n")
+        result = self.setup_script("--apply", use_host_gh=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = (self.repo / ".git/config").read_text()
+        self.assertIn(str(persistent), config)
+        self.assertNotIn(str(self.gh), config)
+        self.gh.unlink()
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
+        self.assertIn("password=fixture-secret", result.stdout)
+
+    def test_failed_version_update_keeps_existing_helper_consumers_working(self):
+        first = self.setup_script("--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = (self.repo / ".git/config").read_bytes()
+        cache = self.home / ".local/libexec/dotfiles"
+        installed = {path: path.read_bytes() for path in cache.iterdir()}
+        updated = self.root / "updated-tools"
+        updated.mkdir()
+        shutil.copy2(SETUP, updated / SETUP.name)
+        (updated / HELPER.name).write_bytes(HELPER.read_bytes() + b"\n# New helper version fixture.\n")
+        lock = self.repo / ".git/config.lock"
+        lock.write_text("another writer owns this lock")
+        result = subprocess.run(
+            [sys.executable, str(updated / SETUP.name), "--repository", str(self.repo),
+             "--git", str(self.bin / "git-proxy"), "--gh", str(self.gh), "--apply"],
+            capture_output=True, text=True, env=self.env, timeout=30,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertTrue(lock.exists())
+        for path, content in installed.items():
+            self.assertEqual(path.read_bytes(), content)
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
+        self.assertIn("password=fixture-secret", result.stdout)
+
+    def test_failed_second_config_write_preserves_original_helpers(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-config-add").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_another_config_writer_is_not_overwritten(self):
+        before = (self.repo / ".git/config").read_bytes()
+        lock = self.repo / ".git/config.lock"
+        lock.write_text("another writer")
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertEqual(lock.read_text(), "another writer")
+
+    def test_later_include_override_cannot_report_success(self):
+        self.assertEqual(self.setup_script("--apply").returncode, 0)
+        included = self.repo / ".git/extra-config"
+        included.write_text('[credential "https://github.com"]\n helper =\n helper = different-provider\n')
+        self.call_git("config", "include.path", str(included))
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Included or worktree", result.stderr)
+        self.assertNotIn("PASS:", result.stdout)
+
+    def test_worktree_scope_override_cannot_report_success(self):
+        self.assertEqual(self.setup_script("--apply").returncode, 0)
+        self.call_git("config", "extensions.worktreeConfig", "true")
+        self.call_git("config", "--worktree", "credential.https://github.com.helper", "")
+        self.call_git("config", "--worktree", "--add", "credential.https://github.com.helper", "different-provider")
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Included or worktree", result.stderr)
+        self.assertNotIn("PASS:", result.stdout)
+
+    def test_check_only_selects_a_path_scoped_origin_helper(self):
+        bounded = "!" + shlex.join([sys.executable, str(HELPER), "--gh", str(self.gh)])
+        self.call_git("config", "credential.https://github.com/example/private.git.helper", bounded)
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+
+    def test_apply_rejects_path_scoped_github_helpers_before_changes(self):
+        self.call_git("config", "credential.https://github.com/example/private.git.helper", "store")
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("path-scoped or wildcard", result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_post_write_access_failure_rolls_back_previous_config(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-second-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_interrupted_post_write_verification_restores_config(self):
+        before = (self.repo / ".git/config").read_bytes()
+        with patch.object(setup_module, "verify_helper_configuration", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                setup_module.configure_helpers(
+                    [self.git, "-C", str(self.repo)], environment=self.env, repository=self.repo,
+                    config=self.repo / ".git/config", key="credential.https://github.com.helper",
+                    value="new-provider", origin="https://github.com/example/private.git",
+                )
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_later_generic_include_override_rolls_back_previous_config(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        included = self.repo / ".git/extra-config"
+        included.write_text('[credential]\n helper =\n helper = different-provider\n')
+        self.call_git("config", "include.path", str(included))
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+
+    def test_apply_uses_host_python_outside_an_active_virtual_environment(self):
+        venv = self.root / "venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = fixture\n")
+        (venv / "bin/python3").symlink_to(sys.executable)
+        self.env["VIRTUAL_ENV"] = str(venv)
+        self.env["PATH"] = str(venv / "bin") + os.pathsep + self.env["PATH"]
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(str(venv), (self.repo / ".git/config").read_text())
+
+    def test_anonymous_origin_does_not_hide_broken_credential_helper(self):
+        (self.root / "deny-helper").touch()
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertNotIn("fixture-secret", result.stdout + result.stderr)
+
+    def test_linked_worktree_apply_does_not_change_shared_config(self):
+        self.call_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                      "commit", "--allow-empty", "-m", "fixture")
+        original = self.repo
+        linked = self.root / "linked"
+        self.call_git("worktree", "add", "--detach", str(linked))
+        before = (original / ".git/config").read_bytes()
+        self.repo = linked
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("linked worktrees", result.stderr)
+        self.assertEqual((original / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_primary_checkout_with_siblings_preserves_shared_config(self):
+        self.call_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                      "commit", "--allow-empty", "-m", "fixture")
+        self.call_git("worktree", "add", "--detach", str(self.root / "sibling"))
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("linked worktrees", result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_unsupported_remote_is_not_changed(self):
+        self.call_git("remote", "set-url", "origin", "https://username:fixture-secret@github.com/example/repo.git")
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertNotIn("fixture-secret", result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()
