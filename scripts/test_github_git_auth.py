@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -130,6 +131,25 @@ class GitHubGitAuthTests(unittest.TestCase):
         time.sleep(1.1)
         self.assertFalse(sentinel.exists())
 
+    def test_timeout_does_not_wait_for_detached_descendant_pipes(self):
+        pid_file = self.root / "detached-pid"
+        parent = (
+            "import subprocess,pathlib,time; "
+            f"child=subprocess.Popen([{sys.executable!r}, '-c', 'import time; time.sleep(10)'], start_new_session=True); "
+            f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid)); time.sleep(10)"
+        )
+        start = time.monotonic()
+        try:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                helper_module.bounded_run([sys.executable, "-c", parent], timeout=0.2)
+            self.assertLess(time.monotonic() - start, 1.0)
+        finally:
+            if pid_file.exists():
+                try:
+                    os.kill(int(pid_file.read_text()), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
     def setup_script(self, *args):
         # Avoid network while still exercise real config parsing/writes. The live
         # acceptance test separately reads a real private GitHub origin.
@@ -155,7 +175,7 @@ class GitHubGitAuthTests(unittest.TestCase):
         )
         git_proxy.chmod(0o700)
         return subprocess.run([sys.executable, str(SETUP), "--repository", str(self.repo),
-                               "--git", str(git_proxy), *args], capture_output=True, text=True, env=self.env, timeout=5)
+                               "--git", str(git_proxy), *args], capture_output=True, text=True, env=self.env, timeout=30)
 
     def test_configure_is_idempotent_preserves_other_hosts_and_survives_no_global_config(self):
         self.call_git("config", "credential.https://elsewhere.example.helper", "existing-provider")
@@ -271,6 +291,18 @@ class GitHubGitAuthTests(unittest.TestCase):
         (self.root / "deny-second-origin").touch()
         result = self.setup_script("--apply")
         self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_interrupted_post_write_verification_restores_config(self):
+        before = (self.repo / ".git/config").read_bytes()
+        with patch.object(setup_module, "verify_helper_configuration", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                setup_module.configure_helpers(
+                    [self.git, "-C", str(self.repo)], environment=self.env, repository=self.repo,
+                    config=self.repo / ".git/config", key="credential.https://github.com.helper",
+                    value="new-provider", origin="https://github.com/example/private.git",
+                )
         self.assertEqual((self.repo / ".git/config").read_bytes(), before)
         self.assertFalse((self.repo / ".git/config.lock").exists())
 

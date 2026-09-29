@@ -33,11 +33,18 @@ def bounded_run(command, *, input_data=None, timeout=15, environment=None, cwd=N
     )
     try:
         stdout, _ = process.communicate(input_data, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, KeyboardInterrupt):
         # Kill only the process group created by this invocation, including a
         # blocked credential-provider child. Never retain provider diagnostics.
-        os.killpg(process.pid, signal.SIGKILL)
-        process.communicate()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        # A provider may detach a descendant that inherits these pipes. Do not
+        # wait for that unrelated session to close them before returning.
+        for stream in (process.stdin, process.stdout, process.stderr):
+            stream.close()
+        process.wait(timeout=1)
         raise
     return process.returncode, stdout
 

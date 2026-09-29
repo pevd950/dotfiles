@@ -100,7 +100,7 @@ def configure_helpers(command, *, environment, repository, config, key, value, o
             replaced = True
             verify_helper_configuration(command, environment=environment, repository=repository,
                                         value=value, origin=origin)
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             if replaced:
                 # Keep the config lock through verification and rollback, so a
                 # failing probe cannot overwrite another Git writer's update.
