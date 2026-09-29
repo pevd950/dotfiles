@@ -150,7 +150,7 @@ class GitHubGitAuthTests(unittest.TestCase):
                 except ProcessLookupError:
                     pass
 
-    def setup_script(self, *args):
+    def setup_script(self, *args, use_host_gh=False):
         # Avoid network while still exercise real config parsing/writes. The live
         # acceptance test separately reads a real private GitHub origin.
         git_proxy = self.bin / "git-proxy"
@@ -174,6 +174,8 @@ class GitHubGitAuthTests(unittest.TestCase):
             f"os.execv({self.git!r}, [{self.git!r}] + sys.argv[1:])\n"
         )
         git_proxy.chmod(0o700)
+        if not use_host_gh:
+            args = ("--gh", str(self.gh), *args)
         return subprocess.run([sys.executable, str(SETUP), "--repository", str(self.repo),
                                "--git", str(git_proxy), *args], capture_output=True, text=True, env=self.env, timeout=30)
 
@@ -187,7 +189,7 @@ class GitHubGitAuthTests(unittest.TestCase):
         self.assertEqual((self.repo / ".git/config").read_bytes(), config)
         self.assertEqual(self.call_git("config", "credential.https://elsewhere.example.helper").stdout.strip(), "existing-provider")
         self.assertFalse((self.home / ".gitconfig").exists())
-        installed = self.home / ".local/libexec/dotfiles/github-credential-helper.py"
+        installed = next((self.home / ".local/libexec/dotfiles").glob("github-credential-helper-*.py"))
         self.assertEqual(installed.stat().st_mode & 0o777, 0o700)
         self.env["GIT_CONFIG_GLOBAL"] = "/dev/null"
         result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
@@ -207,7 +209,7 @@ class GitHubGitAuthTests(unittest.TestCase):
         first = self.setup_script("--apply")
         self.assertEqual(first.returncode, 0, first.stderr)
         arguments = [str(SETUP), "--repository", str(self.repo),
-                     "--git", str(self.bin / "git-proxy"), "--apply"]
+                     "--git", str(self.bin / "git-proxy"), "--gh", str(self.gh), "--apply"]
         # Model an agent that may configure this checkout but cannot modify the
         # already installed helper in the user's home directory.
         with patch.dict(os.environ, self.env, clear=True), patch.object(sys, "argv", arguments), \
@@ -233,10 +235,50 @@ class GitHubGitAuthTests(unittest.TestCase):
     def test_mixed_case_origin_host_passes_without_rewriting_remote(self):
         origin = "https://GitHub.com/example/private.git"
         self.call_git("remote", "set-url", "origin", origin)
+        self.call_git("config", "credential.https://GitHub.com.helper", "previous-provider")
         for arguments in (("--apply",), ()):
             result = self.setup_script(*arguments)
             self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.call_git("remote", "get-url", "origin").stdout.strip(), origin)
+
+    def test_default_gh_survives_removal_of_disposable_path_entry(self):
+        persistent = self.home / ".local/bin/gh"
+        persistent.parent.mkdir(parents=True)
+        shutil.copy2(self.gh, persistent)
+        self.gh.write_text("#!/bin/sh\nexit 99\n")
+        result = self.setup_script("--apply", use_host_gh=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        config = (self.repo / ".git/config").read_text()
+        self.assertIn(str(persistent), config)
+        self.assertNotIn(str(self.gh), config)
+        self.gh.unlink()
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
+        self.assertIn("password=fixture-secret", result.stdout)
+
+    def test_failed_version_update_keeps_existing_helper_consumers_working(self):
+        first = self.setup_script("--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = (self.repo / ".git/config").read_bytes()
+        cache = self.home / ".local/libexec/dotfiles"
+        installed = {path: path.read_bytes() for path in cache.iterdir()}
+        updated = self.root / "updated-tools"
+        updated.mkdir()
+        shutil.copy2(SETUP, updated / SETUP.name)
+        (updated / HELPER.name).write_bytes(HELPER.read_bytes() + b"\n# New helper version fixture.\n")
+        lock = self.repo / ".git/config.lock"
+        lock.write_text("another writer owns this lock")
+        result = subprocess.run(
+            [sys.executable, str(updated / SETUP.name), "--repository", str(self.repo),
+             "--git", str(self.bin / "git-proxy"), "--gh", str(self.gh), "--apply"],
+            capture_output=True, text=True, env=self.env, timeout=30,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertTrue(lock.exists())
+        for path, content in installed.items():
+            self.assertEqual(path.read_bytes(), content)
+        result = self.call_git("credential", "fill", input_data="protocol=https\nhost=github.com\n\n")
+        self.assertIn("password=fixture-secret", result.stdout)
 
     def test_failed_second_config_write_preserves_original_helpers(self):
         self.call_git("config", "credential.https://github.com.helper", "previous-provider")

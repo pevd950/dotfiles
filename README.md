@@ -179,15 +179,21 @@ disabled, without interactive shell token exports. Empty repositories are valid.
 `--apply` verifies the proposed helper and origin before changing existing local
 helper values, then installs a
 bounded credential adapter under `~/.local/libexec/dotfiles/` and pins that checkout's
-GitHub HTTPS helper to it. Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
+GitHub HTTPS helper to its immutable, content-addressed version. A failed later
+setup can leave an unused cached version, but cannot replace a helper used by
+another checkout. Keep older versions while any checkout still references them.
+Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
 when preparing Xcode Cloud. The setup is idempotent and leaves other hosts and
 global Git configuration intact. Apply is limited to standalone checkouts without
 linked siblings: both linked worktrees and primary checkouts with siblings are
 rejected because their local Git config is shared. Check-only mode can inspect
 either kind of checkout. Existing proxy and custom CA settings are preserved.
 The two helper values are installed atomically and the previous configuration is
-restored if verification fails. Setup uses a host Python interpreter outside active
-virtual environments. Check-only mode honors path-scoped origin helpers; apply
+restored if verification fails or is interrupted. Setup uses a host Python interpreter outside active
+virtual environments. It discovers `gh` only through stable host locations, not
+an activated development environment's `PATH`. For another installation, pass
+`--gh /absolute/persistent/path/to/gh` and keep that executable path available.
+Check-only mode honors path-scoped origin helpers; apply
 rejects path-scoped or wildcard GitHub helpers before making changes and checks
 included and worktree settings before reporting success.
 

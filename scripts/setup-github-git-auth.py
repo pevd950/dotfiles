@@ -3,6 +3,7 @@
 
 import argparse
 import fnmatch
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -27,6 +28,48 @@ def tool_path(name):
         raise ValueError(f"Required tool unavailable: {name}")
     # Keep stable package-manager symlinks instead of versioned Cellar paths.
     return os.path.abspath(path)
+
+
+def github_cli_path(explicit):
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.is_absolute():
+            raise ValueError("--gh must name an absolute persistent executable path")
+        return tool_path(str(path))
+    # Keep stable host shims, never a disposable development PATH entry or its
+    # resolved versioned target. Explicit overrides own their installation lifetime.
+    for directory in (Path.home() / ".local/bin", Path("/opt/homebrew/bin"),
+                      Path("/usr/local/bin"), Path("/usr/bin")):
+        candidate = directory / "gh"
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    raise ValueError("A durable GitHub CLI installation is required; pass its persistent absolute path with --gh")
+
+
+def install_helper(source):
+    # Immutable versions isolate checkouts: a later failed setup must not change
+    # the helper executable used by an already configured checkout.
+    digest = hashlib.sha256(source).hexdigest()
+    destination = Path.home() / ".local/libexec/dotfiles" / f"github-credential-helper-{digest}.py"
+    if not destination.parent.is_dir():
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError("Refusing a symlinked credential helper")
+    if destination.exists():
+        if destination.read_bytes() != source:
+            raise ValueError("Installed credential helper does not match its content hash; inspect the helper cache before retrying")
+    else:
+        temporary = destination.with_name(destination.name + f".{os.getpid()}.tmp")
+        try:
+            with temporary.open("xb") as stream:
+                os.chmod(temporary, 0o700)
+                stream.write(source)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    if stat.S_IMODE(destination.stat().st_mode) != 0o700:
+        os.chmod(destination, 0o700)
+    return destination
 
 
 def run(command, *, environment, cwd, timeout=20):
@@ -64,7 +107,7 @@ def helper_entries(command, *, environment, repository):
 def github_helper_values(command, *, environment, repository):
     values = []
     for key, value in helper_entries(command, environment=environment, repository=repository):
-        if key in ("credential.helper", "credential.https://github.com.helper"):
+        if key.lower() in ("credential.helper", "credential.https://github.com.helper"):
             values.append(value)
             continue
         context = urlsplit(key[len("credential."):-len(".helper")])
@@ -133,12 +176,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True, type=Path)
     parser.add_argument("--git", default="git", help="Git executable, including Xcode's bundled Git")
+    parser.add_argument("--gh", help="Persistent absolute GitHub CLI path; defaults to a stable host installation")
     parser.add_argument("--apply", action="store_true", help="Install the bounded helper and pin this checkout")
     args = parser.parse_args()
     try:
         repository = args.repository.resolve(strict=True)
         git = tool_path(args.git)
-        gh = tool_path("gh")
+        gh = github_cli_path(args.gh)
         # Prefer the host interpreter outside an activated virtual environment.
         python = tool_path(shutil.which("python3", path=os.defpath) or "python3")
         if (Path(python).parent.parent / "pyvenv.cfg").exists():
@@ -170,24 +214,7 @@ def main():
             candidate = "!" + shlex.join([python, str(HELPER_SOURCE.resolve()), "--gh", gh])
             verify_access(command + ["-c", key + "=", "-c", key + "=" + candidate],
                           environment=environment, repository=repository, origin=origin)
-            destination = Path.home() / ".local/libexec/dotfiles/github-credential-helper.py"
-            if not destination.parent.is_dir():
-                destination.parent.mkdir(parents=True, exist_ok=True)
-            if destination.is_symlink():
-                raise ValueError("Refusing to replace a symlinked credential helper")
-            source = HELPER_SOURCE.read_bytes()
-            if not destination.exists() or destination.read_bytes() != source:
-                # Never install a partially written helper while Git is using it.
-                temporary = destination.with_name(destination.name + f".{os.getpid()}.tmp")
-                try:
-                    with temporary.open("xb") as stream:
-                        os.chmod(temporary, 0o700)
-                        stream.write(source)
-                    os.replace(temporary, destination)
-                finally:
-                    temporary.unlink(missing_ok=True)
-            if stat.S_IMODE(destination.stat().st_mode) != 0o700:
-                os.chmod(destination, 0o700)
+            destination = install_helper(HELPER_SOURCE.read_bytes())
             value = "!" + shlex.join([python, str(destination), "--gh", gh])
             current_code, current = helper.bounded_run(
                 command + ["config", "--local", "--get-all", key],
