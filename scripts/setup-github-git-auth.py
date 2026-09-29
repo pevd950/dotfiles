@@ -2,6 +2,7 @@
 """Check or configure unattended GitHub HTTPS access for one checkout."""
 
 import argparse
+import fnmatch
 import importlib.util
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 from urllib.parse import urlsplit
 
 
@@ -34,12 +36,12 @@ def run(command, *, environment, cwd, timeout=20):
     return output.decode().strip()
 
 
-def verify_access(command, *, environment, repository):
+def verify_access(command, *, environment, repository, origin):
     # Public origins can be read anonymously. Exercise the selected helper as
     # well as transport, and retain its credential response only in memory.
     code, response = helper.bounded_run(
         command + ["credential", "fill"],
-        input_data=b"protocol=https\nhost=github.com\n\n",
+        input_data=("url=" + origin + "\n\n").encode(),
         environment=environment, cwd=repository, timeout=20,
     )
     fields = dict(line.split(b"=", 1) for line in response.splitlines() if b"=" in line)
@@ -49,40 +51,82 @@ def verify_access(command, *, environment, repository):
     run(command + ["ls-remote", "origin", "HEAD"], environment=environment, cwd=repository, timeout=25)
 
 
-def configure_helpers(command, *, environment, repository, config, key, value):
+def helper_entries(command, *, environment, repository):
+    code, output = helper.bounded_run(
+        command + ["config", "--includes", "--null", "--get-regexp", r"^credential(\..*)?\.helper$"],
+        environment=environment, cwd=repository,
+    )
+    if code not in (0, 1):
+        raise ValueError("Unable to inspect effective credential configuration")
+    return [entry.decode().split("\n", 1) for entry in output.split(b"\0") if entry]
+
+
+def github_helper_values(command, *, environment, repository):
+    values = []
+    for key, value in helper_entries(command, environment=environment, repository=repository):
+        if key in ("credential.helper", "credential.https://github.com.helper"):
+            values.append(value)
+            continue
+        context = urlsplit(key[len("credential."):-len(".helper")])
+        # Applying a host-level route deliberately supports a narrow context.
+        # Reject path/wildcard variants before mutation rather than approximating
+        # Git's URL matching and overlooking helpers that receive store/erase.
+        if context.hostname and fnmatch.fnmatchcase("github.com", context.hostname.lower()):
+            raise ValueError("Apply does not support path-scoped or wildcard GitHub helpers; use check-only or simplify the configuration")
+    return values
+
+
+def configure_helpers(command, *, environment, repository, config, key, value, origin):
     """Commit the reset and helper together using Git's own config lock."""
     if config.is_symlink():
         raise ValueError("Refusing to replace a symlinked repository configuration")
     lock = config.with_name(config.name + ".lock")
     # Git writers honor this lock. Prepare both values off to the side so an
     # interruption or failure never leaves only the reset in the live config.
-    with lock.open("xb") as stream:
+    with lock.open("xb"):
+        candidate = None
+        replaced = False
         try:
-            os.fchmod(stream.fileno(), stat.S_IMODE(config.stat().st_mode))
-            stream.write(config.read_bytes())
-            stream.flush()
+            original = config.read_bytes()
+            mode = stat.S_IMODE(config.stat().st_mode)
+            with tempfile.NamedTemporaryFile(dir=config.parent, prefix="github-auth-", delete=False) as stream:
+                candidate = Path(stream.name)
+                os.fchmod(stream.fileno(), mode)
+                stream.write(original)
             for operation in (("--replace-all", key, ""), ("--add", key, value)):
-                run(command + ["config", "--file", str(lock), *operation],
+                run(command + ["config", "--file", str(candidate), *operation],
                     environment=environment, cwd=repository)
-            os.replace(lock, config)
+            os.replace(candidate, config)
+            replaced = True
+            verify_helper_configuration(command, environment=environment, repository=repository,
+                                        value=value, origin=origin)
+        except Exception:
+            if replaced:
+                # Keep the config lock through verification and rollback, so a
+                # failing probe cannot overwrite another Git writer's update.
+                with candidate.open("xb") as stream:
+                    os.fchmod(stream.fileno(), mode)
+                    stream.write(original)
+                os.replace(candidate, config)
+            raise
         finally:
+            if candidate is not None:
+                candidate.unlink(missing_ok=True)
             lock.unlink(missing_ok=True)
 
 
-def verify_helper_configuration(command, *, environment, repository, key, value):
+def verify_helper_configuration(command, *, environment, repository, value, origin):
     # Includes and worktree configuration participate in the effective ordered
     # values. Every helper before the last empty value is reset by Git.
-    output = run(command + ["config", "--includes", "--get-all", key],
-                 environment=environment, cwd=repository)
     active = []
-    for entry in output.splitlines():
+    for entry in github_helper_values(command, environment=environment, repository=repository):
         if not entry:
             active.clear()
         else:
             active.append(entry)
     if active != [value]:
         raise ValueError("Included or worktree GitHub helpers override this checkout; resolve those settings before retrying")
-    verify_access(command, environment=environment, repository=repository)
+    verify_access(command, environment=environment, repository=repository, origin=origin)
 
 
 def main():
@@ -95,7 +139,10 @@ def main():
         repository = args.repository.resolve(strict=True)
         git = tool_path(args.git)
         gh = tool_path("gh")
-        python = tool_path("python3")
+        # Prefer the host interpreter outside an activated virtual environment.
+        python = tool_path(shutil.which("python3", path=os.defpath) or "python3")
+        if (Path(python).parent.parent / "pyvenv.cfg").exists():
+            raise ValueError("A durable host Python interpreter is required; deactivate the virtual environment")
         environment = helper.gh_environment()
         environment.update(GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="/usr/bin/false", SSH_ASKPASS="/usr/bin/false")
         command = [git, "-C", str(repository)]
@@ -119,9 +166,10 @@ def main():
         run([gh, "api", "user", "--jq", ".login"], environment=environment, cwd=repository)
         if args.apply:
             key = "credential.https://github.com.helper"
+            github_helper_values(command, environment=environment, repository=repository)
             candidate = "!" + shlex.join([python, str(HELPER_SOURCE.resolve()), "--gh", gh])
             verify_access(command + ["-c", key + "=", "-c", key + "=" + candidate],
-                          environment=environment, repository=repository)
+                          environment=environment, repository=repository, origin=origin)
             destination = Path.home() / ".local/libexec/dotfiles/github-credential-helper.py"
             if not destination.parent.is_dir():
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -152,12 +200,13 @@ def main():
                 # An empty first helper resets inherited helpers. Keep other
                 # hosts, the remote URL, and global/home configuration intact.
                 configure_helpers(command, environment=environment, repository=repository,
-                                  config=Path(git_paths[1]) / "config", key=key, value=value)
-            verify_helper_configuration(command, environment=environment, repository=repository,
-                                        key=key, value=value)
+                                  config=Path(git_paths[1]) / "config", key=key, value=value, origin=origin)
+            else:
+                verify_helper_configuration(command, environment=environment, repository=repository,
+                                            value=value, origin=origin)
             print("Checkout GitHub helper configured.")
         else:
-            verify_access(command, environment=environment, repository=repository)
+            verify_access(command, environment=environment, repository=repository, origin=origin)
         print("PASS: GitHub identity, selected credential helper and origin verified with prompts disabled and no shell token exports.")
         return 0
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:

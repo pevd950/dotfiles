@@ -140,6 +140,11 @@ class GitHubGitAuthTests(unittest.TestCase):
             "    root = pathlib.Path(__file__).parent.parent\n"
             "    assert sys.argv[-2:] == ['origin', 'HEAD']\n"
             "    if (root / 'deny-origin').exists(): sys.exit(1)\n"
+            "    if (root / 'deny-second-origin').exists():\n"
+            "        count = root / 'origin-count'\n"
+            "        calls = int(count.read_text()) + 1 if count.exists() else 1\n"
+            "        count.write_text(str(calls))\n"
+            "        if calls == 2: sys.exit(1)\n"
             "    if (root / 'empty-origin').exists(): sys.exit(2 if '--exit-code' in sys.argv else 0)\n"
             "    print('fixture-head HEAD')\n"
             "    sys.exit(0)\n"
@@ -242,6 +247,53 @@ class GitHubGitAuthTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Included or worktree", result.stderr)
         self.assertNotIn("PASS:", result.stdout)
+
+    def test_check_only_selects_a_path_scoped_origin_helper(self):
+        bounded = "!" + shlex.join([sys.executable, str(HELPER), "--gh", str(self.gh)])
+        self.call_git("config", "credential.https://github.com/example/private.git.helper", bounded)
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+
+    def test_apply_rejects_path_scoped_github_helpers_before_changes(self):
+        self.call_git("config", "credential.https://github.com/example/private.git.helper", "store")
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("path-scoped or wildcard", result.stderr)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_post_write_access_failure_rolls_back_previous_config(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-second-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_later_generic_include_override_rolls_back_previous_config(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        included = self.repo / ".git/extra-config"
+        included.write_text('[credential]\n helper =\n helper = different-provider\n')
+        self.call_git("config", "include.path", str(included))
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+
+    def test_apply_uses_host_python_outside_an_active_virtual_environment(self):
+        venv = self.root / "venv"
+        (venv / "bin").mkdir(parents=True)
+        (venv / "pyvenv.cfg").write_text("home = fixture\n")
+        (venv / "bin/python3").symlink_to(sys.executable)
+        self.env["VIRTUAL_ENV"] = str(venv)
+        self.env["PATH"] = str(venv / "bin") + os.pathsep + self.env["PATH"]
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(str(venv), (self.repo / ".git/config").read_text())
 
     def test_anonymous_origin_does_not_hide_broken_credential_helper(self):
         (self.root / "deny-helper").touch()

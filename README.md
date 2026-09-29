@@ -185,6 +185,11 @@ global Git configuration intact. Apply is limited to standalone checkouts withou
 linked siblings: both linked worktrees and primary checkouts with siblings are
 rejected because their local Git config is shared. Check-only mode can inspect
 either kind of checkout. Existing proxy and custom CA settings are preserved.
+The two helper values are installed atomically and the previous configuration is
+restored if verification fails. Setup uses a host Python interpreter outside active
+virtual environments. Check-only mode honors path-scoped origin helpers; apply
+rejects path-scoped or wildcard GitHub helpers before making changes and checks
+included and worktree settings before reporting success.
 
 The adapter uses the existing `gh` identity, times out credential lookup after
 15 seconds, and stops Git from falling back to another helper or a password dialog
