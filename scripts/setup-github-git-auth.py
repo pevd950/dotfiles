@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 from urllib.parse import urlsplit
@@ -59,7 +60,8 @@ def main():
         run([gh, "api", "user", "--jq", ".login"], environment=environment, cwd=repository)
         if args.apply:
             destination = Path.home() / ".local/libexec/dotfiles/github-credential-helper.py"
-            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.parent.is_dir():
+                destination.parent.mkdir(parents=True, exist_ok=True)
             if destination.is_symlink():
                 raise ValueError("Refusing to replace a symlinked credential helper")
             source = HELPER_SOURCE.read_bytes()
@@ -73,7 +75,8 @@ def main():
                     os.replace(temporary, destination)
                 finally:
                     temporary.unlink(missing_ok=True)
-            os.chmod(destination, 0o700)
+            if stat.S_IMODE(destination.stat().st_mode) != 0o700:
+                os.chmod(destination, 0o700)
             value = "!" + shlex.join([python, str(destination), "--gh", gh])
             key = "credential.https://github.com.helper"
             current_code, current = helper.bounded_run(
@@ -97,6 +100,8 @@ def main():
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.TimeoutExpired):
             message = "Authentication check timed out; only this probe's child processes were stopped"
+        elif isinstance(error, PermissionError):
+            message = "Permission denied configuring the local helper or checkout; use a session allowed to write those paths"
         elif isinstance(error, OSError):
             message = "A required local file or executable is unavailable"
         else:

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT_DIR = Path(__file__).parent
@@ -16,6 +17,9 @@ SETUP = SCRIPT_DIR / "setup-github-git-auth.py"
 spec = importlib.util.spec_from_file_location("github_auth_helper", HELPER)
 helper_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper_module)
+setup_spec = importlib.util.spec_from_file_location("github_auth_setup", SETUP)
+setup_module = importlib.util.module_from_spec(setup_spec)
+setup_spec.loader.exec_module(setup_module)
 
 
 class GitHubGitAuthTests(unittest.TestCase):
@@ -152,6 +156,18 @@ class GitHubGitAuthTests(unittest.TestCase):
         self.assertEqual((self.repo / ".git/config").read_bytes(), before)
         self.assertFalse((self.home / ".local").exists())
         self.assertNotIn("secret-provider-diagnostic", result.stdout + result.stderr)
+
+    def test_existing_install_needs_no_home_directory_writes(self):
+        first = self.setup_script("--apply")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        arguments = [str(SETUP), "--repository", str(self.repo),
+                     "--git", str(self.bin / "git-proxy"), "--apply"]
+        # Model an agent that may configure this checkout but cannot modify the
+        # already installed helper in the user's home directory.
+        with patch.dict(os.environ, self.env, clear=True), patch.object(sys, "argv", arguments), \
+                patch.object(Path, "mkdir", side_effect=PermissionError("protected install")), \
+                patch.object(os, "chmod", side_effect=PermissionError("protected install")):
+            self.assertEqual(setup_module.main(), 0)
 
     def test_unsupported_remote_is_not_changed(self):
         self.call_git("remote", "set-url", "origin", "https://username:fixture-secret@github.com/example/repo.git")
