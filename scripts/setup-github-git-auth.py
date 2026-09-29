@@ -46,7 +46,43 @@ def verify_access(command, *, environment, repository):
     if code or not fields.get(b"username") or not fields.get(b"password"):
         raise ValueError("The selected GitHub credential helper is unavailable")
     # An accessible empty repository is valid; no matching HEAD is required.
-    run(command + ["ls-remote", "origin"], environment=environment, cwd=repository, timeout=25)
+    run(command + ["ls-remote", "origin", "HEAD"], environment=environment, cwd=repository, timeout=25)
+
+
+def configure_helpers(command, *, environment, repository, config, key, value):
+    """Commit the reset and helper together using Git's own config lock."""
+    if config.is_symlink():
+        raise ValueError("Refusing to replace a symlinked repository configuration")
+    lock = config.with_name(config.name + ".lock")
+    # Git writers honor this lock. Prepare both values off to the side so an
+    # interruption or failure never leaves only the reset in the live config.
+    with lock.open("xb") as stream:
+        try:
+            os.fchmod(stream.fileno(), stat.S_IMODE(config.stat().st_mode))
+            stream.write(config.read_bytes())
+            stream.flush()
+            for operation in (("--replace-all", key, ""), ("--add", key, value)):
+                run(command + ["config", "--file", str(lock), *operation],
+                    environment=environment, cwd=repository)
+            os.replace(lock, config)
+        finally:
+            lock.unlink(missing_ok=True)
+
+
+def verify_helper_configuration(command, *, environment, repository, key, value):
+    # Includes and worktree configuration participate in the effective ordered
+    # values. Every helper before the last empty value is reset by Git.
+    output = run(command + ["config", "--includes", "--get-all", key],
+                 environment=environment, cwd=repository)
+    active = []
+    for entry in output.splitlines():
+        if not entry:
+            active.clear()
+        else:
+            active.append(entry)
+    if active != [value]:
+        raise ValueError("Included or worktree GitHub helpers override this checkout; resolve those settings before retrying")
+    verify_access(command, environment=environment, repository=repository)
 
 
 def main():
@@ -115,8 +151,10 @@ def main():
             if current != expected:
                 # An empty first helper resets inherited helpers. Keep other
                 # hosts, the remote URL, and global/home configuration intact.
-                run(command + ["config", "--local", "--replace-all", key, ""], environment=environment, cwd=repository)
-                run(command + ["config", "--local", "--add", key, value], environment=environment, cwd=repository)
+                configure_helpers(command, environment=environment, repository=repository,
+                                  config=Path(git_paths[1]) / "config", key=key, value=value)
+            verify_helper_configuration(command, environment=environment, repository=repository,
+                                        key=key, value=value)
             print("Checkout GitHub helper configured.")
         else:
             verify_access(command, environment=environment, repository=repository)

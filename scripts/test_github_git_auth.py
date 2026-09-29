@@ -138,10 +138,14 @@ class GitHubGitAuthTests(unittest.TestCase):
             f"#!{sys.executable}\nimport os,pathlib,sys\n"
             "if 'ls-remote' in sys.argv:\n"
             "    root = pathlib.Path(__file__).parent.parent\n"
+            "    assert sys.argv[-2:] == ['origin', 'HEAD']\n"
             "    if (root / 'deny-origin').exists(): sys.exit(1)\n"
             "    if (root / 'empty-origin').exists(): sys.exit(2 if '--exit-code' in sys.argv else 0)\n"
             "    print('fixture-head HEAD')\n"
             "    sys.exit(0)\n"
+            "if '--file' in sys.argv and '--add' in sys.argv:\n"
+            "    root = pathlib.Path(__file__).parent.parent\n"
+            "    if (root / 'deny-config-add').exists(): sys.exit(1)\n"
             f"os.execv({self.git!r}, [{self.git!r}] + sys.argv[1:])\n"
         )
         git_proxy.chmod(0o700)
@@ -200,6 +204,44 @@ class GitHubGitAuthTests(unittest.TestCase):
         (self.root / "empty-origin").touch()
         result = self.setup_script("--apply")
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_failed_second_config_write_preserves_original_helpers(self):
+        self.call_git("config", "credential.https://github.com.helper", "previous-provider")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-config-add").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.repo / ".git/config.lock").exists())
+
+    def test_another_config_writer_is_not_overwritten(self):
+        before = (self.repo / ".git/config").read_bytes()
+        lock = self.repo / ".git/config.lock"
+        lock.write_text("another writer")
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertEqual(lock.read_text(), "another writer")
+
+    def test_later_include_override_cannot_report_success(self):
+        self.assertEqual(self.setup_script("--apply").returncode, 0)
+        included = self.repo / ".git/extra-config"
+        included.write_text('[credential "https://github.com"]\n helper =\n helper = different-provider\n')
+        self.call_git("config", "include.path", str(included))
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Included or worktree", result.stderr)
+        self.assertNotIn("PASS:", result.stdout)
+
+    def test_worktree_scope_override_cannot_report_success(self):
+        self.assertEqual(self.setup_script("--apply").returncode, 0)
+        self.call_git("config", "extensions.worktreeConfig", "true")
+        self.call_git("config", "--worktree", "credential.https://github.com.helper", "")
+        self.call_git("config", "--worktree", "--add", "credential.https://github.com.helper", "different-provider")
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Included or worktree", result.stderr)
+        self.assertNotIn("PASS:", result.stdout)
 
     def test_anonymous_origin_does_not_hide_broken_credential_helper(self):
         (self.root / "deny-helper").touch()
