@@ -49,6 +49,7 @@ class GitHubGitAuthTests(unittest.TestCase):
             "    print('fixture-user')\n"
             "else:\n"
             "    assert sys.argv[1:] == ['auth', 'git-credential', 'get']\n"
+            "    if (root / 'deny-helper').exists(): sys.exit(1)\n"
             "    assert 'host=github.com' in sys.stdin.read()\n"
             "    print('username=fixture-user\\npassword=fixture-secret\\n')\n"
         )
@@ -121,8 +122,11 @@ class GitHubGitAuthTests(unittest.TestCase):
         # acceptance test separately reads a real private GitHub origin.
         git_proxy = self.bin / "git-proxy"
         git_proxy.write_text(
-            f"#!{sys.executable}\nimport os,sys\n"
+            f"#!{sys.executable}\nimport os,pathlib,sys\n"
             "if 'ls-remote' in sys.argv:\n"
+            "    root = pathlib.Path(__file__).parent.parent\n"
+            "    if (root / 'deny-origin').exists(): sys.exit(1)\n"
+            "    if (root / 'empty-origin').exists(): sys.exit(2 if '--exit-code' in sys.argv else 0)\n"
             "    print('fixture-head HEAD')\n"
             "    sys.exit(0)\n"
             f"os.execv({self.git!r}, [{self.git!r}] + sys.argv[1:])\n"
@@ -168,6 +172,43 @@ class GitHubGitAuthTests(unittest.TestCase):
                 patch.object(Path, "mkdir", side_effect=PermissionError("protected install")), \
                 patch.object(os, "chmod", side_effect=PermissionError("protected install")):
             self.assertEqual(setup_module.main(), 0)
+
+    def test_origin_failure_preserves_existing_helpers_and_installation(self):
+        self.call_git("config", "--add", "credential.https://github.com.helper", "previous-provider")
+        self.call_git("config", "--add", "credential.https://github.com.helper", "previous-fallback")
+        before = (self.repo / ".git/config").read_bytes()
+        (self.root / "deny-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
+
+    def test_accessible_empty_origin_passes(self):
+        (self.root / "empty-origin").touch()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_anonymous_origin_does_not_hide_broken_credential_helper(self):
+        (self.root / "deny-helper").touch()
+        before = (self.repo / ".git/config").read_bytes()
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((self.repo / ".git/config").read_bytes(), before)
+        self.assertNotIn("fixture-secret", result.stdout + result.stderr)
+
+    def test_linked_worktree_apply_does_not_change_shared_config(self):
+        self.call_git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                      "commit", "--allow-empty", "-m", "fixture")
+        original = self.repo
+        linked = self.root / "linked"
+        self.call_git("worktree", "add", "--detach", str(linked))
+        before = (original / ".git/config").read_bytes()
+        self.repo = linked
+        result = self.setup_script("--apply")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("linked worktrees", result.stderr)
+        self.assertEqual((original / ".git/config").read_bytes(), before)
+        self.assertFalse((self.home / ".local").exists())
 
     def test_unsupported_remote_is_not_changed(self):
         self.call_git("remote", "set-url", "origin", "https://username:fixture-secret@github.com/example/repo.git")

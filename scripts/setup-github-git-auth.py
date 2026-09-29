@@ -34,6 +34,21 @@ def run(command, *, environment, cwd, timeout=20):
     return output.decode().strip()
 
 
+def verify_access(command, *, environment, repository):
+    # Public origins can be read anonymously. Exercise the selected helper as
+    # well as transport, and retain its credential response only in memory.
+    code, response = helper.bounded_run(
+        command + ["credential", "fill"],
+        input_data=b"protocol=https\nhost=github.com\n\n",
+        environment=environment, cwd=repository, timeout=20,
+    )
+    fields = dict(line.split(b"=", 1) for line in response.splitlines() if b"=" in line)
+    if code or not fields.get(b"username") or not fields.get(b"password"):
+        raise ValueError("The selected GitHub credential helper is unavailable")
+    # An accessible empty repository is valid; no matching HEAD is required.
+    run(command + ["ls-remote", "origin"], environment=environment, cwd=repository, timeout=25)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", required=True, type=Path)
@@ -51,6 +66,10 @@ def main():
         top = Path(run(command + ["rev-parse", "--show-toplevel"], environment=environment, cwd=repository))
         if top.resolve() != repository:
             raise ValueError("Pass the checkout root as --repository")
+        git_paths = run(command + ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"],
+                        environment=environment, cwd=repository).splitlines()
+        if args.apply and Path(git_paths[0]).resolve() != Path(git_paths[1]).resolve():
+            raise ValueError("Apply requires a standalone checkout; linked worktrees share repository configuration")
         origin = run(command + ["remote", "get-url", "origin"], environment=environment, cwd=repository)
         url = urlsplit(origin)
         if (url.scheme != "https" or url.netloc != "github.com" or url.query or url.fragment
@@ -59,6 +78,10 @@ def main():
         # Check the existing stored identity before changing any configuration.
         run([gh, "api", "user", "--jq", ".login"], environment=environment, cwd=repository)
         if args.apply:
+            key = "credential.https://github.com.helper"
+            candidate = "!" + shlex.join([python, str(HELPER_SOURCE.resolve()), "--gh", gh])
+            verify_access(command + ["-c", key + "=", "-c", key + "=" + candidate],
+                          environment=environment, repository=repository)
             destination = Path.home() / ".local/libexec/dotfiles/github-credential-helper.py"
             if not destination.parent.is_dir():
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +101,6 @@ def main():
             if stat.S_IMODE(destination.stat().st_mode) != 0o700:
                 os.chmod(destination, 0o700)
             value = "!" + shlex.join([python, str(destination), "--gh", gh])
-            key = "credential.https://github.com.helper"
             current_code, current = helper.bounded_run(
                 command + ["config", "--local", "--get-all", key],
                 environment=environment, cwd=repository,
@@ -92,10 +114,9 @@ def main():
                 run(command + ["config", "--local", "--replace-all", key, ""], environment=environment, cwd=repository)
                 run(command + ["config", "--local", "--add", key, value], environment=environment, cwd=repository)
             print("Checkout GitHub helper configured.")
-        # A real private origin read proves transport + authentication together.
-        # Suppress hashes, usernames and all provider output from diagnostics.
-        run(command + ["ls-remote", "--exit-code", "origin", "HEAD"], environment=environment, cwd=repository, timeout=25)
-        print("PASS: GitHub API and checkout origin accessible with prompts disabled and no shell token exports.")
+        else:
+            verify_access(command, environment=environment, repository=repository)
+        print("PASS: GitHub identity, selected credential helper and origin verified with prompts disabled and no shell token exports.")
         return 0
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.TimeoutExpired):

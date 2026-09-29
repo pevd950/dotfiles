@@ -173,12 +173,17 @@ python3 scripts/setup-github-git-auth.py --repository /path/to/checkout
 python3 scripts/setup-github-git-auth.py --repository /path/to/checkout --apply
 ```
 
-The first command checks the stored GitHub CLI identity and reads the origin with
-prompts disabled, without interactive shell token exports. `--apply` installs a
+The first command checks the stored GitHub CLI identity, exercises the selected
+credential helper even for public origins, and reads the origin with prompts
+disabled, without interactive shell token exports. Empty repositories are valid.
+`--apply` verifies the proposed helper and origin before changing existing local
+helper values, then installs a
 bounded credential adapter under `~/.local/libexec/dotfiles/` and pins that checkout's
 GitHub HTTPS helper to it. Repeat the check with `--git /path/to/Xcode.app/Contents/Developer/usr/bin/git`
 when preparing Xcode Cloud. The setup is idempotent and leaves other hosts and
-global Git configuration intact.
+global Git configuration intact. Apply is limited to standalone checkouts:
+linked worktrees are rejected because their local Git config is shared with
+sibling checkouts. Check-only mode can inspect either kind of checkout.
 
 The adapter uses the existing `gh` identity, times out credential lookup after
 15 seconds, and stops Git from falling back to another helper or a password dialog
