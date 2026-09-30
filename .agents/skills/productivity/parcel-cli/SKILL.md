@@ -1,6 +1,6 @@
 ---
 name: parcel-cli
-description: Manage Parcel shipments through the official API and supported app interfaces. Use when Codex needs to inspect active or recent deliveries, search carrier codes, add deliveries, edit existing tracking details, or build shipment automations.
+description: Work with Parcel package tracking through the official Parcel API. Use when Codex needs to inspect active or recent Parcel deliveries, search Parcel carrier codes, add a package delivery after explicit confirmation, or build package-delivery automations from tracking numbers.
 ---
 
 # Parcel CLI
@@ -38,15 +38,3 @@ For a separately installed remote MCP connector, verify fresh client discovery a
 4. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.
-
-## Editing existing shipments
-
-The documented API has no existing-delivery edit endpoint. Use the supported native Parcel app through the Computer Use skill, or authenticated Parcel Web Access through the browser skill. Keep sessions on their owning host; never export cookies or invent private HTTP endpoints.
-
-1. Inspect the current app and match the exact shipment by its tracking number, carrier and description. An authenticated native app can expose an Edit secondary action on each shipment row; verify the current UI instead of assuming availability from app metadata.
-2. Open Edit without saving. Inspect available tracking number, carrier and description controls. State the exact before/after change. Existing authorization for that target and change remains valid; ask only for missing target, values or authority.
-3. Before saving, recheck the shipment identity and current form values against the agreed change. Stop if the user or another operation changed the selection or fields.
-4. Save once, then reopen/read back the same shipment to verify the change. If the save result is uncertain, inspect the app and read back before considering any further action; never blindly repeat a save.
-5. Cancel an inspection or abandoned form. Keep shipment contents and screenshots private unless explicitly authorized for publication.
-
-Treat deletion as a separate destructive operation requiring exact authority. Completed/All Deliveries may provide the desired archive view without mutating a shipment; inspect the supported filter before promising an archive operation. A local UI edit does not prove that an unattended remote MCP edit tool exists or works. Validate each advertised remote capability independently.
