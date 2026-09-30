@@ -6,11 +6,12 @@ Heartbeat state is only a wakeup mechanism. Each heartbeat run must re-verify th
 
 At the start of every heartbeat:
 
-1. Fetch the live PR snapshot first (or the GitHub connector equivalent if `gh` is unavailable). If the verified PR is merged/closed, follow completion cleanup below and end the run before gathering reviews/checks or making further GitHub changes. Otherwise continue the Babysit PR loop's live rules/check classification and corpus gathering. Saved run IDs are historical evidence only.
+1. Fetch the live PR snapshot first (or the GitHub connector equivalent if `gh` is unavailable). Saved run IDs are historical evidence only.
 2. Compare the live PR URL, number, branch, and head SHA against the heartbeat prompt.
 3. If the prompt points at the wrong PR/thread, `target_thread_id` is invalid, or the PR cannot be verified live, stop and report the mismatch instead of editing, replying, or marking ready.
-4. Treat Codex app/sidebar heartbeat updates as best-effort UI state only; they do not replace live GitHub checks, comments, threads, reactions, or local branch status.
-5. After every push or external review change, refresh the heartbeat prompt with the latest head SHA and known state; stale payloads must not drive readiness decisions.
+4. Only after validating the target, if the live PR is merged/closed, follow completion cleanup below and end the run before gathering reviews/checks or making further GitHub changes. Otherwise continue the Babysit PR loop's live rules/check classification and corpus gathering.
+5. Treat Codex app/sidebar heartbeat updates as best-effort UI state only; they do not replace live GitHub checks, comments, threads, reactions, or local branch status.
+6. After every push or external review change, refresh the heartbeat prompt with the latest head SHA and known state; stale payloads must not drive readiness decisions.
 
 Use `codex_app.automation_update` when available:
 
