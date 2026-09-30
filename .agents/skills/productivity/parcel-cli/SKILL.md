@@ -14,9 +14,13 @@ description: Work with Parcel package tracking through the official Parcel API. 
 ## API facts
 
 - Docs: `https://parcelapp.net/help/api.html`. Key goes in the `api-key` HTTP header.
-- `POST https://api.parcel.app/external/add-delivery/` — one delivery per request; limit 20 add requests/day including failures; cannot add tracking numbers that require extra input (email, postcode); new deliveries may show no data until Parcel's server updates.
-- `GET https://api.parcel.app/external/deliveries/?filter_mode=active|recent`
+- `POST https://api.parcel.app/external/add-delivery/` — one delivery per request; limit 20 add requests/day including failures; the API supports optional postcode and email fields; new deliveries may show no data until Parcel's server updates. See [Add Delivery](https://parcelapp.net/help/api-add-delivery.html).
+- `GET https://api.parcel.app/external/deliveries/?filter_mode=active|recent` — 20 reads/hour; results are cached upstream and do not trigger a carrier refresh. See [Recent & Active Deliveries](https://parcelapp.net/help/api-view-deliveries.html).
 - `GET https://api.parcel.app/external/supported_carriers.json`
+
+The current bundled helper does not accept postcode/email arguments. Do not invent CLI flags or omit required carrier inputs; use a reviewed integration that supports those fields after exact approval. Parcel does not document edit/delete/archive or forced-refresh endpoints. Never blindly retry an add after a timeout or lost response; check the app and recent deliveries first.
+
+For a separately installed remote MCP connector, verify fresh client discovery and its write gate before using it. A deployment plan, package install or local CLI success does not prove the remote connector is live. Preserve existing CLI and automation paths.
 
 ## Common reads
 
