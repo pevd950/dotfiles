@@ -9,7 +9,7 @@ description: Work with Parcel package tracking through the official Parcel API. 
 
 - Use the bundled helper: `$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py --help`.
 - Auth uses `PARCEL_API_KEY` from the host's local shell exports (such as `~/.zshenv.local`). Never print, paste, commit, or store the key in skill files, repo files, notes, or logs.
-- Adding a delivery is an externally visible state change. Run `add` without `--confirm` for dry-run planning; use `--confirm` (optionally `--notify`) only after the user explicitly approves the exact tracking number, carrier code, and description.
+- Adding a delivery is an externally visible state change. Run `add` without `--confirm` for dry-run planning; use `--confirm` (optionally `--notify`) only after the user explicitly approves the exact tracking number, carrier code, description, and any required postcode/email.
 
 ## API facts
 
@@ -34,7 +34,7 @@ For a separately installed remote MCP connector, verify fresh client discovery a
 
 1. Extract candidate tracking numbers from the live source and resolve the carrier code with `carriers`.
 2. Check recent/active deliveries for duplicates when practical.
-3. Show a compact approval table: tracking number, carrier code/name, description, source.
+3. Show a compact approval table: tracking number, carrier code/name, description, source, and any supplied postcode/email. Keep that approval in the private conversation; do not include these values in logs or public content.
 4. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.

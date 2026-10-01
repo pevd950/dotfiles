@@ -56,29 +56,18 @@ def request_json(
         with urllib.request.urlopen(req, timeout=30) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        try:
-            payload = json.loads(detail)
-        except json.JSONDecodeError:
-            payload = None
-        if isinstance(payload, dict):
-            error_message = payload.get("error_message")
-            if error_message and "extra input" in error_message.lower():
-                raise SystemExit(
-                    f"HTTP {exc.code}: {error_message}. Retry with --postcode or --email "
-                    "if the carrier requires one; Parcel does not identify which field."
-                ) from exc
-        raise SystemExit(f"HTTP {exc.code}: {detail or exc.reason}") from exc
+        # Provider details may echo private carrier inputs; expose only status.
+        raise SystemExit(f"Parcel returned HTTP {exc.code}; check carrier inputs and quota.") from exc
     except urllib.error.URLError as exc:
-        raise SystemExit(f"Request failed: {exc.reason}") from exc
+        raise SystemExit("Parcel request failed; verify delivery state before retrying an add.") from exc
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"API returned non-JSON response: {raw[:200]}") from exc
+        raise SystemExit("Parcel returned a non-JSON response; verify delivery state before retrying an add.") from exc
 
     if isinstance(payload, dict) and payload.get("success") is False:
-        raise SystemExit(payload.get("error_message") or "Parcel API request failed.")
+        raise SystemExit("Parcel API request failed; check carrier inputs and quota.")
     return payload
 
 
@@ -170,7 +159,7 @@ def command_add(args: argparse.Namespace) -> None:
         return
 
     result = request_json("POST", "/add-delivery/", data=payload)
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps({"success": result.get("success") is True}, indent=2))
 
 
 def build_parser() -> argparse.ArgumentParser:

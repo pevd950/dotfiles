@@ -1,15 +1,8 @@
 # Claude Prompting Best Practices
 
-> Historical guidance captured on the Updated date below. Model names, availability, capabilities, and linked pages may have changed; verify current provider documentation before using model-specific claims.
+Reviewed: 2026-10-01
 
-
-Updated: 2026-06-24
-
-Purpose: source guidance for adapting prompts to Claude chat-style usage. Keep this as a specialized mode; do not make Claude the default target unless the user asks for Claude.
-
-## Current Scope
-
-Anthropic's current prompting page covers Claude's latest models, including Claude Fable 5, Claude Mythos 5, Claude Opus 4.8, Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, and Claude Haiku 4.5.
+Use Claude-specific guidance when the user names Claude. Verify current model availability and capabilities against Anthropic documentation rather than a fixed model roster.
 
 ## Claude Prompt Shape
 

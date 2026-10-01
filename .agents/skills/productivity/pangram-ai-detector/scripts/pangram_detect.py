@@ -8,6 +8,7 @@ import http.client
 import json
 import math
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -164,9 +165,9 @@ def _clean_windows(result: dict[str, Any]) -> list[dict[str, Any]]:
             )
         cleaned.append(
             {
-                "label": label,
+                "label": label if label in {"AI-Generated", "AI-Assisted", "Human", "Mixed"} else "Unknown",
                 "ai_assistance_score": score,
-                "confidence": confidence,
+                "confidence": confidence if confidence in {"High", "Medium", "Low"} else "Unknown",
                 "start_index": start_index,
                 "end_index": end_index,
                 "word_count": word_count,
@@ -229,7 +230,7 @@ def _validate_success(result: dict[str, Any]) -> dict[str, Any]:
 
     # Validate all documented success fields, but retain only output-safe fields.
     version = _required_string(result, "version", max_length=100)
-    headline = _required_string(result, "headline", max_length=300)
+    _required_string(result, "headline", max_length=300)
     _required_string(result, "prediction", max_length=3000)
     fraction_ai = _required_fraction(result, "fraction_ai")
     fraction_ai_assisted = _required_fraction(result, "fraction_ai_assisted")
@@ -243,8 +244,8 @@ def _validate_success(result: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "stage": TERMINAL_SUCCESS,
-        "version": version,
-        "headline": headline,
+        "version": version if re.fullmatch(r"[0-9]{1,3}(?:\.[0-9]{1,3}){0,3}", version) else "unavailable",
+        "headline": {"AI": "AI-generated signal", "AI-Assisted": "AI-assisted signal", "Human": "Human-writing signal", "Mixed": "Mixed-writing signal"}[prediction_short],
         "prediction_short": prediction_short,
         "fraction_ai": fraction_ai,
         "fraction_ai_assisted": fraction_ai_assisted,
@@ -392,7 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Analyze text with Pangram's asynchronous AI-detection API."
     )
     source = parser.add_argument_group("input")
-    source.add_argument("--text", help="Text to analyze")
+    source.add_argument("--text", help="Non-sensitive text only; arguments may appear in process lists and shell history")
     source.add_argument("--file", help="UTF-8 text file to analyze")
     parser.add_argument(
         "--segments",

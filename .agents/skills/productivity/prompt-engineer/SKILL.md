@@ -82,6 +82,6 @@ Before returning the prompt, verify:
 
 ## References
 
-- Read [gpt-5-6-prompt-guide.md](references/gpt-5-6-prompt-guide.md) for GPT-5.6 Sol, Terra, or Luna; complex ChatGPT/Codex agents; prompt migration; autonomy boundaries; retrieval budgets; validation; or model/system-card implications. For current model-specific behavior, verify against OpenAI's official [Prompting guidance for GPT-5.6 Sol](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6).
+- Read [frontier-model-prompting.md](references/frontier-model-prompting.md) for current frontier-model prompting, the GPT-6.1 Sol evidence boundary, agent authority, instruction conflicts, validation, and migration. Verify new model-specific claims against current official documentation; local Codex labels alone do not establish public capabilities.
 - Read [ai-prompting-best-practices.md](references/ai-prompting-best-practices.md) for the general chat-UI prompt shape and anti-patterns.
 - Read [claude-prompting-best-practices.md](references/claude-prompting-best-practices.md) when Claude, Anthropic, XML-separated context, or long-document workflows are requested.

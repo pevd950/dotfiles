@@ -34,10 +34,10 @@ $HOME/.agents/skills/productivity/pangram-ai-detector/scripts/pangram_detect.py 
 Analyze piped text:
 
 ```bash
-pbpaste | $HOME/.agents/skills/productivity/pangram-ai-detector/scripts/pangram_detect.py
+cat /path/to/writing.txt | $HOME/.agents/skills/productivity/pangram-ai-detector/scripts/pangram_detect.py
 ```
 
-Analyze explicit text:
+Analyze explicit non-sensitive text only (`--text` is visible in process arguments and may enter shell history). Use stdin or a private file for sensitive writing:
 
 ```bash
 $HOME/.agents/skills/productivity/pangram-ai-detector/scripts/pangram_detect.py \
@@ -66,9 +66,9 @@ The current API is asynchronous. The helper creates a task, polls it with a boun
 
 Report:
 
-- `prediction_short` and `headline` when present;
+- `prediction_short` and the locally generated classification headline;
 - AI-generated, AI-assisted, and human fractions as percentages;
-- the Pangram API version;
+- the Pangram API version when it matches a numeric version format; otherwise report unavailable;
 - notable segment-level evidence only when it helps explain the result, without quoting the submitted text;
 - a short caveat that the result is a detector signal, not definitive proof.
 
