@@ -11,7 +11,7 @@ Shared run contract for recurring automation threads and scheduled scout/router 
 
 1. Resolve paths from the live environment: `CODEX_HOME=${CODEX_HOME:-$HOME/.codex}`; automation memory from the prompt or `$CODEX_HOME/automations/<automation-id>/memory.md`; skills from the session inventory first, then `$HOME/.agents/skills`.
 2. Read the automation memory before scanning or writing when it exists.
-3. Scan window: the latest successful checkpoint from memory; otherwise the prompt's fallback window; otherwise ask for the smallest missing input instead of inventing history.
+3. Scan window: an explicit interval or full-window rule from the current automation prompt or owning domain skill; otherwise the latest successful checkpoint from memory; otherwise the prompt's fallback window; otherwise ask for the smallest missing input instead of inventing history. Checkpoints resume work within a declared full window; they do not narrow that window.
 4. Exclude the current run from historical evidence. Parse JSONL sessions structurally; copied prompts, old memory excerpts, and replayed command output are context, not fresh friction.
 5. Discover existing assets before proposing new ones.
 6. Make the smallest allowed write, then read it back.
