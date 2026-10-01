@@ -37,17 +37,33 @@ class ParcelTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue()), {"ups": "UPS", "legacy": "Legacy"})
 
     def test_private_preview_and_confirmed_payload(self):
-        args = parcel.build_parser().parse_args(["add", "--tracking", "synthetic", "--carrier", "pholder", "--description", "test", "--email", "private@example.test", "--postcode", "PRIVATE", "--no-duplicate-check"])
+        args = parcel.build_parser().parse_args(["add", "--tracking", "synthetic", "--carrier", "pholder", "--description", "test", "--carrier-inputs-file", "-", "--no-duplicate-check"])
         out = io.StringIO()
-        with patch.object(parcel, "request_json") as req, redirect_stdout(out):
+        with patch.object(parcel, "request_json") as req, patch.object(parcel.sys, "stdin", io.StringIO(json.dumps({"email": "private@example.test", "postcode": "PRIVATE"}))), redirect_stdout(out):
             parcel.command_add(args)
             req.assert_not_called()
-        self.assertNotIn(args.email, out.getvalue())
-        self.assertNotIn(args.postcode, out.getvalue())
+        self.assertNotIn("private@example.test", out.getvalue())
+        self.assertNotIn("PRIVATE", out.getvalue())
         args.confirm = True
         out = io.StringIO()
-        with patch.object(parcel, "request_json", return_value={"success": True, "echo": args.email}) as req, redirect_stdout(out):
+        with patch.object(parcel, "request_json", return_value={"success": True, "echo": "private@example.test"}) as req, patch.object(parcel.sys, "stdin", io.StringIO(json.dumps({"email": "private@example.test", "postcode": "PRIVATE"}))), redirect_stdout(out):
             parcel.command_add(args)
-        self.assertEqual(req.call_args.kwargs["data"]["email"], args.email)
-        self.assertEqual(req.call_args.kwargs["data"]["postcode"], args.postcode)
-        self.assertNotIn(args.email, out.getvalue())
+        self.assertEqual(req.call_args.kwargs["data"]["email"], "private@example.test")
+        self.assertEqual(req.call_args.kwargs["data"]["postcode"], "PRIVATE")
+        self.assertNotIn("private@example.test", out.getvalue())
+
+    def test_private_input_file_and_validation(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "inputs.json"
+            source.write_text(json.dumps({"email": "private@example.test"}))
+            self.assertEqual(parcel.load_carrier_inputs(str(source)), {"email": "private@example.test"})
+            for value in [{"email": 1}, {"unknown": "private@example.test"}, ["private@example.test"]]:
+                source.write_text(json.dumps(value))
+                with self.assertRaises(SystemExit) as error:
+                    parcel.load_carrier_inputs(str(source))
+                self.assertNotIn("private@example.test", str(error.exception))
+            source.write_text("private@example.test")
+            with self.assertRaises(SystemExit) as error:
+                parcel.load_carrier_inputs(str(source))
+            self.assertNotIn("private@example.test", str(error.exception))

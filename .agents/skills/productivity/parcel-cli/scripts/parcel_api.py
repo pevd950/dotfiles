@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -132,6 +134,22 @@ def duplicate_exists(tracking: str) -> bool:
     return False
 
 
+def load_carrier_inputs(source: str | None) -> dict[str, str]:
+    """Read private carrier fields without putting their values in argv or errors."""
+    if source is None:
+        return {}
+    try:
+        raw = sys.stdin.read() if source == "-" else Path(source).expanduser().read_text(encoding="utf-8")
+        fields = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("Could not read carrier inputs as UTF-8 JSON.") from exc
+    if not isinstance(fields, dict) or set(fields) - {"postcode", "email"}:
+        raise SystemExit("Carrier inputs must be a JSON object containing only postcode and email.")
+    if any(not isinstance(value, str) or not value.strip() for value in fields.values()):
+        raise SystemExit("Carrier inputs must contain nonempty strings.")
+    return {key: value.strip() for key, value in fields.items()}
+
+
 def command_add(args: argparse.Namespace) -> None:
     payload = {
         "tracking_number": args.tracking.strip(),
@@ -140,10 +158,8 @@ def command_add(args: argparse.Namespace) -> None:
         "language": args.language,
         "send_push_confirmation": bool(args.notify),
     }
-    if args.postcode:
-        payload["postcode"] = args.postcode.strip()
-    if args.email:
-        payload["email"] = args.email.strip()
+    carrier_inputs = load_carrier_inputs(args.carrier_inputs_file)
+    payload.update(carrier_inputs)
     if not args.no_duplicate_check and duplicate_exists(payload["tracking_number"]):
         print("Duplicate found in active/recent deliveries; no add attempted.")
         return
@@ -151,9 +167,9 @@ def command_add(args: argparse.Namespace) -> None:
     if not args.confirm:
         print("Dry run. Add --confirm after explicit user approval to create this delivery.")
         preview = {key: value for key, value in payload.items() if key not in {"postcode", "email"}}
-        if args.postcode:
+        if "postcode" in carrier_inputs:
             preview["postcode_supplied"] = True
-        if args.email:
+        if "email" in carrier_inputs:
             preview["email_supplied"] = True
         print(json.dumps(preview, indent=2, sort_keys=True))
         return
@@ -183,8 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--carrier", required=True, help="Parcel carrier code")
     add.add_argument("--description", required=True, help="Delivery description")
     add.add_argument("--language", default="en", help="ISO 639-1 language code")
-    add.add_argument("--postcode", help="Postcode required by some carriers")
-    add.add_argument("--email", help="Order email required by some carriers")
+    add.add_argument("--carrier-inputs-file", help="Private UTF-8 JSON file with postcode/email; use - to read stdin")
     add.add_argument("--notify", action="store_true", help="Send push confirmation")
     add.add_argument("--confirm", action="store_true", help="Actually add the delivery")
     add.add_argument(

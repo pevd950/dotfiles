@@ -18,7 +18,7 @@ description: Work with Parcel package tracking through the official Parcel API. 
 - `GET https://api.parcel.app/external/deliveries/?filter_mode=active|recent` — 20 reads/hour; results are cached upstream and do not trigger a carrier refresh. See [Recent & Active Deliveries](https://parcelapp.net/help/api-view-deliveries.html).
 - `GET https://api.parcel.app/external/supported_carriers.json`
 
-The bundled helper accepts optional `--postcode` and `--email` inputs and omits their values from dry-run output. Include any required carrier inputs in the exact user approval. Parcel does not document edit/delete/archive or forced-refresh endpoints. Never blindly retry an add after a timeout or lost response; check the app and recent deliveries first.
+The bundled helper accepts optional postcode/email through `--carrier-inputs-file /path/to/private.json` or `--carrier-inputs-file -` for stdin and omits their values from dry-run output. Include any required carrier inputs in the exact user approval. Parcel does not document edit/delete/archive or forced-refresh endpoints. Never blindly retry an add after a timeout or lost response; check the app and recent deliveries first.
 
 For a separately installed remote MCP connector, verify fresh client discovery and its write gate before using it. A deployment plan, package install or local CLI success does not prove the remote connector is live. Preserve existing CLI and automation paths.
 
@@ -35,6 +35,7 @@ For a separately installed remote MCP connector, verify fresh client discovery a
 1. Extract candidate tracking numbers from the live source and resolve the carrier code with `carriers`.
 2. Check recent/active deliveries for duplicates when practical.
 3. Show a compact approval table: tracking number, carrier code/name, description, source, and any supplied postcode/email. Keep that approval in the private conversation; do not include these values in logs or public content.
-4. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
+4. Read optional carrier fields from a private JSON file or stdin (`{"postcode": "...", "email": "..."}`); omit unused keys. Do not pass their values as command arguments or put them in a shell command.
+5. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.
