@@ -139,6 +139,11 @@ class LayoutTests(unittest.TestCase):
         omz = self.home / ".oh-my-zsh"
         omz.mkdir()
         (omz / "oh-my-zsh.sh").write_text('for file in "$ZSH_CUSTOM"/*.zsh(N); do source "$file"; done\n')
+        local_bin = self.home / ".local/bin"
+        local_bin.mkdir(parents=True)
+        code = local_bin / "code"
+        code.write_text('#!/bin/sh\nfor file; do test -f "$file" || exit 8; done\n')
+        code.chmod(0o700)
         for migrated in (False, True):
             if migrated:
                 MIGRATION.migrate(self.home, True)
@@ -151,7 +156,9 @@ class LayoutTests(unittest.TestCase):
                         'if [[ -o interactive ]]; then '
                         '[[ "$LAYOUT_FIXTURE" = local && "$EDITOR" = vim ]] || exit 5; '
                         'whence has_docker_compose_cli_plugin >/dev/null || exit 6; '
-                        'whence myip >/dev/null || exit 7; fi; print layout-ok')
+                        'whence myip >/dev/null || exit 7; '
+                        'eval myaliases || exit 8; eval myfunctions || exit 9; '
+                        'eval zshrc || exit 10; fi; print layout-ok')
                     self.assertEqual(result.strip(), "layout-ok")
 
     @unittest.skipUnless(shutil.which("yadm"), "yadm required")
