@@ -1,0 +1,11 @@
+interface:
+  display_name: Prompt Engineer
+  short_description: Create precise, paste-ready prompts for any AI
+  default_prompt: Use $prompt-engineer to turn this rough idea into a paste-ready
+    prompt.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - atlas
+  allow_implicit_invocation: true

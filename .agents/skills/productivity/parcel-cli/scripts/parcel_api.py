@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,22 +58,22 @@ def request_json(
         with urllib.request.urlopen(req, timeout=30) as response:
             raw = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"HTTP {exc.code}: {detail or exc.reason}") from exc
+        # Provider details may echo private carrier inputs; expose only status.
+        raise SystemExit(f"Parcel returned HTTP {exc.code}; check carrier inputs and quota.") from exc
     except urllib.error.URLError as exc:
-        raise SystemExit(f"Request failed: {exc.reason}") from exc
+        raise SystemExit("Parcel request failed; verify delivery state before retrying an add.") from exc
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"API returned non-JSON response: {raw[:200]}") from exc
+        raise SystemExit("Parcel returned a non-JSON response; verify delivery state before retrying an add.") from exc
 
     if isinstance(payload, dict) and payload.get("success") is False:
-        raise SystemExit(payload.get("error_message") or "Parcel API request failed.")
+        raise SystemExit("Parcel API request failed; check carrier inputs and quota.")
     return payload
 
 
-def load_carriers() -> dict[str, str]:
+def load_carriers() -> dict[str, Any]:
     return request_json(
         "GET",
         "https://api.parcel.app/external/supported_carriers.json",
@@ -82,11 +84,15 @@ def load_carriers() -> dict[str, str]:
 def command_carriers(args: argparse.Namespace) -> None:
     carriers = load_carriers()
     query = (args.query or "").lower()
-    matches = {
-        code: name
-        for code, name in carriers.items()
-        if not query or query in code.lower() or query in name.lower()
-    }
+    matches: dict[str, str] = {}
+    for code, carrier in carriers.items():
+        # Parcel's carrier catalog currently returns objects, although older
+        # responses used plain strings.
+        name = carrier.get("name", code) if isinstance(carrier, dict) else carrier
+        if not isinstance(name, str):
+            continue
+        if not query or query in code.lower() or query in name.lower():
+            matches[code] = name
     if args.json:
         print(json.dumps(matches, indent=2, sort_keys=True))
         return
@@ -128,6 +134,22 @@ def duplicate_exists(tracking: str) -> bool:
     return False
 
 
+def load_carrier_inputs(source: str | None) -> dict[str, str]:
+    """Read private carrier fields without putting their values in argv or errors."""
+    if source is None:
+        return {}
+    try:
+        raw = sys.stdin.read() if source == "-" else Path(source).expanduser().read_text(encoding="utf-8")
+        fields = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise SystemExit("Could not read carrier inputs as UTF-8 JSON.") from exc
+    if not isinstance(fields, dict) or set(fields) - {"postcode", "email"}:
+        raise SystemExit("Carrier inputs must be a JSON object containing only postcode and email.")
+    if any(not isinstance(value, str) or not value.strip() for value in fields.values()):
+        raise SystemExit("Carrier inputs must contain nonempty strings.")
+    return {key: value.strip() for key, value in fields.items()}
+
+
 def command_add(args: argparse.Namespace) -> None:
     payload = {
         "tracking_number": args.tracking.strip(),
@@ -136,17 +158,24 @@ def command_add(args: argparse.Namespace) -> None:
         "language": args.language,
         "send_push_confirmation": bool(args.notify),
     }
+    carrier_inputs = load_carrier_inputs(args.carrier_inputs_file)
+    payload.update(carrier_inputs)
     if not args.no_duplicate_check and duplicate_exists(payload["tracking_number"]):
         print("Duplicate found in active/recent deliveries; no add attempted.")
         return
 
     if not args.confirm:
         print("Dry run. Add --confirm after explicit user approval to create this delivery.")
-        print(json.dumps(payload, indent=2, sort_keys=True))
+        preview = {key: value for key, value in payload.items() if key not in {"postcode", "email"}}
+        if "postcode" in carrier_inputs:
+            preview["postcode_supplied"] = True
+        if "email" in carrier_inputs:
+            preview["email_supplied"] = True
+        print(json.dumps(preview, indent=2, sort_keys=True))
         return
 
     result = request_json("POST", "/add-delivery/", data=payload)
-    print(json.dumps(result, indent=2, sort_keys=True))
+    print(json.dumps({"success": result.get("success") is True}, indent=2))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -170,6 +199,7 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--carrier", required=True, help="Parcel carrier code")
     add.add_argument("--description", required=True, help="Delivery description")
     add.add_argument("--language", default="en", help="ISO 639-1 language code")
+    add.add_argument("--carrier-inputs-file", help="Private UTF-8 JSON file with postcode/email; use - to read stdin")
     add.add_argument("--notify", action="store_true", help="Send push confirmation")
     add.add_argument("--confirm", action="store_true", help="Actually add the delivery")
     add.add_argument(
