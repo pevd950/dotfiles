@@ -1,3 +1,0 @@
-# Linux-specific Git config belongs here.
-#
-# Host auth helpers should stay local in ~/.gitconfig.auth.

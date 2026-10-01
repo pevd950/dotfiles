@@ -1,5 +1,8 @@
 /Library/Application Support/Code/User/*
 .gitconfig.auth
+.config/git/auth.conf
+.config/git/local.conf
+.config/git/platform.conf
 .zshenv.local
 .codex/skills/*
 .claude/skills/*

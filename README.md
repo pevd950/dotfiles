@@ -73,8 +73,10 @@ branches and PRs for bootstrap, shell startup, agent-skills, and package changes
 .
 ├── .config/
 │   ├── Code/User/prompts/      # VS Code prompts source (XDG path)
+│   ├── git/                    # Shared Git settings and yadm alternates
 │   ├── yadm/bootstrap          # Main bootstrap script
 │   └── starship.toml           # Starship prompt config
+├── .gitconfig                  # Includes .config/git/settings.conf
 ├── .zshrc                      # Zsh configuration
 ├── .zshrc_custom/              # Custom shell functions/aliases
 ├── .Brewfile##template         # Base Homebrew packages
@@ -94,7 +96,41 @@ yadm alt  # Regenerate alternates
 - `.Brewfile##template` - Generated from template
 - `.Brewfile##os.Darwin,hostname.kakarot` - Specific machine
 - `.Brewfile##class.work` - Work machines
-- `.gitconfig.local##class.personal` - Personal git config
+- `.config/git/local.conf##class.personal` - Personal Git config
+
+### Git Configuration
+
+Keep Git settings together in `.config/git/`:
+
+```text
+.gitconfig                         # Small entry point, includes settings.conf
+.config/git/
+├── settings.conf                  # Shared settings and includes
+├── local.conf##class.personal     # Personal identity
+├── local.conf##class.work         # Work identity
+├── platform.conf##os.Darwin       # macOS settings
+└── platform.conf##os.Linux        # Linux settings
+```
+
+`yadm alt` creates `local.conf` and `platform.conf` beside their alternates.
+Includes resolve relative to the file containing them, so the layout works
+without machine-specific absolute paths. The entry point keeps working even
+when `XDG_CONFIG_HOME` is customized. `settings.conf` has a distinct name to
+avoid loading it twice alongside Git's automatic `.config/git/config` lookup;
+an existing XDG Git config is left in place.
+
+Host-local authentication settings may live in the ignored
+`~/.config/git/auth.conf`. Existing `~/.gitconfig.auth` files remain included
+for compatibility, followed by `auth.conf`; there is no automatic move or
+credential change. The original order of identity, platform, authentication,
+and shared settings is preserved.
+
+After this reorganization is merged, use `yadm pull --ff-only` and `yadm alt`
+to install it. Bootstrap is not needed for this change. Old root-level
+`.gitconfig.local` and `.gitconfig.platform` symlinks may remain after the
+old alternate sources disappear; they are no longer read and can be removed
+after verifying the new links. Preserve regular files at those paths for
+review rather than deleting them.
 
 ### VS Code Prompts
 Stored in `.config/Code/User/prompts/`. If an app still expects the macOS Application Support path, create the symlink manually.
