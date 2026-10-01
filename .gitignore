@@ -13,3 +13,17 @@ superassistant/AGENTS.local.md
 __pycache__/
 *.py[cod]
 .venv-checks/
+
+# Host-local Zsh additions; only the shared modules and wrappers are tracked.
+.zshrc_custom/
+.config/zsh/custom/*
+!.config/zsh/custom/alias.zsh
+!.config/zsh/custom/functions.zsh
+!.config/zsh/custom/docker-compose-detection.zsh
+!.config/zsh/custom/macos-exports
+!.config/zsh/custom/debian-exports
+!.config/zsh/custom/bin/
+.config/zsh/custom/bin/*
+!.config/zsh/custom/bin/coderabbit
+!.config/zsh/custom/bin/cr
+!.config/zsh/custom/bin/onepassword-dev-preflight

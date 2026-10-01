@@ -1,13 +1,2 @@
-# Keep this file lightweight: it is sourced by every zsh invocation,
-# including non-interactive shells used by SSH remote commands.
-typeset -U path PATH
-
-[[ -d "/Applications/Codex.app/Contents/Resources" ]] && path=("/Applications/Codex.app/Contents/Resources" $path)
-[[ -d "/opt/homebrew/bin" ]] && path=("/opt/homebrew/bin" $path)
-[[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
-[[ -d "$HOME/.zshrc_custom/bin" ]] && path=("$HOME/.zshrc_custom/bin" $path)
-
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-export PATH
-
-[[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"
+# Zsh reads this entry point for every invocation, including SSH commands.
+[[ -r "$HOME/.config/zsh/zshenv" ]] && source "$HOME/.config/zsh/zshenv"

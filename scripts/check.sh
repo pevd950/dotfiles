@@ -14,19 +14,21 @@ bash_files=(
   scripts/setup-checks.sh
   .config/yadm/bootstrap
   .cursor/install.sh
-  .zshrc_custom/bin/coderabbit
-  .zshrc_custom/bin/cr
+  .config/zsh/custom/bin/coderabbit
+  .config/zsh/custom/bin/cr
 )
 
 zsh_files=(
   .zshenv
   .zshrc
-  .zshrc_custom/alias.zsh
-  .zshrc_custom/docker-compose-detection.zsh
-  .zshrc_custom/functions.zsh
-  .zshrc_custom/macos-exports
-  .zshrc_custom/debian-exports
-  .zshrc_custom/bin/onepassword-dev-preflight
+  .config/zsh/zshenv
+  .config/zsh/zshrc
+  .config/zsh/custom/alias.zsh
+  .config/zsh/custom/docker-compose-detection.zsh
+  .config/zsh/custom/functions.zsh
+  .config/zsh/custom/macos-exports
+  .config/zsh/custom/debian-exports
+  .config/zsh/custom/bin/onepassword-dev-preflight
   scripts/setup-1password-dev.zsh
 )
 

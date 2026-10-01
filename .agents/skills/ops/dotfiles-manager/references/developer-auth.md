@@ -5,7 +5,7 @@
 For 1Password, GitHub auth, SSH agent, or developer-token routing work, start with the non-mutating preflight, and use it to classify the host, not to collect secrets:
 
 ```bash
-~/.zshrc_custom/bin/onepassword-dev-preflight
+~/.config/zsh/custom/bin/onepassword-dev-preflight
 ```
 
 It answers: whether `op`, 1Password.app, `onepassword-mcp`, and the Codex `1password` MCP entry are available; whether `op account list`, `op plugin list`, `gh auth status`, and `gh api user` run without printing their output; whether `GH_TOKEN`/`GITHUB_TOKEN` env overrides are masking the baseline; whether `SSH_AUTH_SOCK`, `ssh-add`, 1Password `agent.toml`, GitHub `IdentityAgent`, and SSH auth to GitHub are usable; and which variable names quiet local env files export, without values.

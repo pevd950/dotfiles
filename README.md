@@ -69,20 +69,55 @@ branches and PRs for bootstrap, shell startup, agent-skills, and package changes
 
 ## 📁 Structure
 
-```
+```text
 .
 ├── .config/
-│   ├── Code/User/prompts/      # VS Code prompts source (XDG path)
-│   ├── git/                    # Shared Git settings and yadm alternates
-│   ├── yadm/bootstrap          # Main bootstrap script
-│   └── starship.toml           # Starship prompt config
-├── .gitconfig                  # Includes .config/git/settings.conf
-├── .zshrc                      # Zsh configuration
-├── .zshrc_custom/              # Custom shell functions/aliases
-├── .Brewfile##template         # Base Homebrew packages
-├── .Brewfile##os.Darwin,...    # Machine-specific Brewfiles
-└── setup.sh                    # Shared environment bootstrap
+│   ├── git/                    # Git settings and identity/platform alternates
+│   ├── zsh/                    # Shell configuration, custom modules and wrappers
+│   ├── vscode/                 # Portable dotfiles workspace
+│   ├── yadm/alt/               # Brewfile template and macOS login alternate
+│   └── yadm/bootstrap          # Main bootstrap script
+├── .vim/vimrc                  # Native Vim configuration path
+├── .gitconfig                  # Git entry point
+├── .zshenv                     # Noninteractive Zsh entry point
+├── .zshrc                      # Interactive Zsh entry point
+├── AGENTS.md                   # Repository guidance
+├── README.md
+└── setup.sh                    # Codespaces and shared bootstrap entry point
 ```
+
+## Updating an existing home
+
+After pulling this layout for the first time, use the existing shell to run:
+
+```sh
+yadm pull --ff-only
+python3 "$HOME/scripts/migrate-zsh-layout.py"       # Preview local additions
+python3 "$HOME/scripts/migrate-zsh-layout.py" --apply
+yadm alt
+exec zsh -l
+```
+
+Resolve any tracked local changes before pulling. The migration moves untracked
+plugins, completions, private overrides, and custom executables into
+`~/.config/zsh/custom/` without reading their contents or overwriting collisions. Relative symlink
+targets are adjusted when needed to keep pointing to the same location.
+It keeps `~/.zshrc_custom` as a compatibility link for existing application paths.
+If both directories contain the same path, it stops before making changes so you
+can compare and resolve that path privately. Running it again is safe. Before
+migration, interactive Zsh continues to use the old directory for local plugins
+and overrides and the new directory for the shared configuration.
+
+The root `.zshenv` and `.zshrc` loaders retain Zsh's normal startup order;
+`ZDOTDIR` is unchanged and `~/.zshenv.local` stays at its existing private path.
+Yadm creates `~/.Brewfile` and `~/.zprofile` from `.config/yadm/alt/`, so Homebrew
+and login shells keep using their normal entry points. Vim reads `~/.vim/vimrc`
+directly, including older versions that lack XDG configuration support.
+
+Open the workspace at `~/.config/vscode/dotfiles.code-workspace`; its relative
+folder path works in both a deployed home and a developer checkout. `setup.sh`
+stays at the root for Codespaces discovery. This migration does not require
+bootstrap, package installation, credential changes, or moving other repositories.
 
 ## 🔧 Machine-Specific Configuration
 
@@ -93,9 +128,9 @@ yadm alt  # Regenerate alternates
 ```
 
 ### Alternates Pattern
-- `.Brewfile##template` - Generated from template
-- `.Brewfile##os.Darwin,hostname.kakarot` - Specific machine
-- `.Brewfile##class.work` - Work machines
+- `.config/yadm/alt/.Brewfile##template` - Generated from template
+- `.config/yadm/alt/.Brewfile##os.Darwin,hostname.example` - Specific machine
+- `.config/yadm/alt/.Brewfile##class.work` - Work machines
 - `.config/git/local.conf##class.personal` - Personal Git config
 
 ### Git Configuration
@@ -146,7 +181,7 @@ that matches how the value is consumed:
   calls. Examples: `AGENT_HOST_ALIAS`, `AGENT_SHARED_CONTEXT_URL`,
   `CRAFT_AGENT_OPS_FRICTION_LOG_BLOCK_ID`,
   `CRAFT_PLATO_FRICTION_LOG_BLOCK_ID`, `AI_INBOX_DIR`, and local model paths.
-- `~/.zshrc_custom/exports-local.zsh`: interactive shell exports, dynamic
+- `~/.config/zsh/custom/exports-local.zsh`: interactive shell exports, dynamic
   command-based exports, and tool credentials for human terminal sessions. It
   may use commands such as `gh auth token`, but Codex or cron-style
   non-interactive shells should not depend on it being sourced by default.
