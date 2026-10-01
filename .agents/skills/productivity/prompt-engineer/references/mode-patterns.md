@@ -64,7 +64,7 @@ Use placeholders only when helpful: `{selection}`, `{clipboard}`, `{argument}`, 
 
 ## Prompt review
 
-Score each dimension from 1–10: clarity, completeness, model fit, output control, and practicality. Then return:
+Score each dimension from 0–10: clarity, completeness, model fit, output control, and practicality. Report the overall score as their rounded average. Then return:
 
 ```text
 Overall score: [0-10]

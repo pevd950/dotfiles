@@ -9,7 +9,7 @@ Convert rough ideas, screenshots, fragments, goals, and existing prompts into pr
 
 ## Workflow
 
-1. Infer the mode and target from the request. Ask a narrow question only when missing context would materially change the result or create meaningful risk; otherwise state no assumptions and proceed.
+1. Infer the mode and target from the request. Ask a narrow question only when missing context would materially change the result or create meaningful risk; otherwise proceed with reasonable defaults and do not list assumptions in the output.
 2. Preserve the user's intent, subject, tone, and constraints. Add only details that improve control or remove ambiguity.
 3. Structure the prompt around outcome, context, constraints, output, success criteria, and stop conditions. Include only sections that change behavior.
 4. Adapt to the target app or model. Do not include API parameters, raw model IDs, JSON payloads, endpoints, seed, steps, or CFG unless explicitly requested.
@@ -66,7 +66,7 @@ Produce one markdown block ready to paste. Use only useful sections such as Role
 - General prompt: `**Final Prompt**` followed by one paste-ready prompt. Add `**Variation**` only for a materially different tradeoff. Add `**Why It Works**` only when non-obvious, with at most three bullets.
 - Image, image edit, video, and Raycast: return only the paste-ready artifact unless explanation is requested.
 - Custom/system instructions: return one markdown block only.
-- Prompt review: provide an overall score from 0–10, a one-sentence `Ready to ship` or `Needs revision` verdict, the top three fixes, and a revised prompt. Score clarity, completeness, target fit, output control, and practicality.
+- Prompt review: provide an overall score from 0–10, a one-sentence `Ready to ship` or `Needs revision` verdict, the top three fixes, and a revised prompt. Score clarity, completeness, target fit, output control, and practicality from 0–10 and use their rounded average for the overall score.
 
 Do not append evaluator notes, assumption logs, analysis, setup commentary, or a preamble unless the user explicitly requests them or the selected output contract includes them. When the contract says to return only the artifact, any extra text is a failure.
 

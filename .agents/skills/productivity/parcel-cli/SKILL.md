@@ -34,8 +34,8 @@ For a separately installed remote MCP connector, verify fresh client discovery a
 
 1. Extract candidate tracking numbers from the live source and resolve the carrier code with `carriers`.
 2. Check recent/active deliveries for duplicates when practical.
-3. Show a compact approval table: tracking number, carrier code/name, description, source, and any supplied postcode/email. Keep that approval in the private conversation; do not include these values in logs or public content.
-4. Read optional carrier fields from a private JSON file or stdin (`{"postcode": "...", "email": "..."}`); omit unused keys. Do not pass their values as command arguments or put them in a shell command.
+3. Read optional carrier fields from a private JSON file or stdin (`{"postcode": "...", "email": "..."}`); omit unused keys. Do not pass their values as command arguments or put them in a shell command.
+4. Show a compact approval table: tracking number, carrier code/name, description, source, and any supplied postcode/email. Obtain explicit approval of those values before adding the delivery. Keep that approval in the private conversation; do not include these values in logs or public content.
 5. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.
