@@ -22,7 +22,7 @@ jobs:
       - name: Install validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck zsh yadm python3-venv
+          sudo apt-get install -y shellcheck zsh yadm vim python3-venv
 
       - name: Install validation dependencies
         run: bash scripts/setup-checks.sh
@@ -35,12 +35,19 @@ jobs:
           temp_home="$(mktemp -d)"
           trap 'rm -rf "$temp_home"' EXIT
 
-          HOME="$temp_home" yadm clone --no-bootstrap "$GITHUB_WORKSPACE"
-          HOME="$temp_home" yadm config local.class personal
-          HOME="$temp_home" yadm alt --force
+          export HOME="$temp_home"
+          export XDG_CONFIG_HOME="$temp_home/.config"
+          export XDG_DATA_HOME="$temp_home/.local/share"
 
+          yadm clone --no-bootstrap "$GITHUB_WORKSPACE"
+          yadm config local.class personal
+          yadm alt --force
+
+          python3 "$temp_home/scripts/migrate-zsh-layout.py" --apply
+          test -L "$temp_home/.zshrc_custom"
+          test -f "$temp_home/.vim/vimrc"
           test -f "$temp_home/.Brewfile"
           test -e "$temp_home/.config/git/local.conf"
           test -e "$temp_home/.config/git/platform.conf"
-          HOME="$temp_home" git config --global --includes --get user.name > /dev/null
-          HOME="$temp_home" git config --global --includes --get alias.st | grep -qx status
+          git config --global --includes --get user.name > /dev/null
+          git config --global --includes --get alias.st | grep -qx status

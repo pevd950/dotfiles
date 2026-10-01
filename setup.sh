@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+DOTFILES_SETUP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.config/zsh/custom-path.sh
+source "$DOTFILES_SETUP_DIR/.config/zsh/custom-path.sh"
+
 OH_MY_ZSH_INSTALL_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/1e3abc123f690c9bdd416e8224f1beb47c96f1c7/tools/install.sh"
 OH_MY_ZSH_INSTALL_SHA256="ce0b7c94aa04d8c7a8137e45fe5c4744e3947871f785fd58117c480c1bf49352"
 
@@ -341,7 +345,7 @@ setup_shell() {
   fi
 
   # Install Oh My Zsh plugins
-  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$HOME/.zshrc_custom}/plugins/zsh-syntax-highlighting"
+  local ZSH_HIGHLIGHT_DIR="${ZSH_CUSTOM:-$(dotfiles_zsh_custom_dir)}/plugins/zsh-syntax-highlighting"
   install_zsh_syntax_highlighting "$ZSH_HIGHLIGHT_DIR" || return 1
 }
 

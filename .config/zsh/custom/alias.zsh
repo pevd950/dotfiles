@@ -45,10 +45,10 @@ alias yadd="yadm add"
 
 # Editor
 if command -v code >/dev/null 2>&1; then
-  alias zshrc="code ~/.zshrc"
+  alias zshrc='code "$HOME/.config/zsh/zshrc"'
   alias mystarship='code ~/.config/starship.toml'
-  alias myaliases='code "$ZSH_CUSTOM"/alias.zsh'
-  alias myfunctions='code "$ZSH_CUSTOM"/functions.zsh'
+  alias myaliases='code "$HOME/.config/zsh/custom/alias.zsh"'
+  alias myfunctions='code "$HOME/.config/zsh/custom/functions.zsh"'
   alias myplugins='code "$ZSH_CUSTOM"/plugins.zsh'
   alias myzshrc='code "$ZSH_CUSTOM"'
   alias vsc='code .'
