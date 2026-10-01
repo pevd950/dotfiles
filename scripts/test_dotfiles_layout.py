@@ -1,6 +1,7 @@
 """Exercise migration safety and real application discovery in disposable homes."""
 
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -102,6 +103,34 @@ class LayoutTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MIGRATION.migrate(self.home, True)
         self.assertEqual(old.readlink(), Path("somewhere-else"))
+
+    def test_recovery_failure_keeps_original_error_and_restores_other_paths(self):
+        old = self.local_additions()
+        rename = Path.rename
+
+        def fail_one_restore(path, target):
+            if target == old / "bin/private-tool":
+                raise OSError("fixture recovery failure")
+            return rename(path, target)
+
+        errors = io.StringIO()
+        with patch.object(Path, "symlink_to", side_effect=OSError("original fixture failure")), \
+                patch.object(Path, "rename", fail_one_restore), patch("sys.stderr", errors):
+            with self.assertRaisesRegex(OSError, "original fixture failure"):
+                MIGRATION.migrate(self.home, True)
+        self.assertTrue((old / "exports-local.zsh").exists())
+        self.assertTrue((old / "plugins/example/.git/config").exists())
+        self.assertTrue((self.custom / "bin/private-tool").exists())
+        self.assertIn(str(old / "bin/private-tool"), errors.getvalue())
+
+    def test_compatibility_link_and_private_additions_are_ignored(self):
+        shutil.copy2(ROOT / ".gitignore", self.home / ".gitignore")
+        self.run_command("git", "init")
+        MIGRATION.migrate(self.home, True)
+        for path in (".zshrc_custom", ".config/zsh/custom/exports-local.zsh",
+                     ".config/zsh/custom/bin/private-tool", ".config/zsh/custom/plugins/example"):
+            with self.subTest(path=path):
+                self.run_command("git", "check-ignore", "--", path)
 
     @unittest.skipUnless(shutil.which("zsh"), "zsh required")
     def test_shell_startup_before_and_after_migration(self):

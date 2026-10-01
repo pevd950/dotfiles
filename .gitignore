@@ -15,7 +15,7 @@ __pycache__/
 .venv-checks/
 
 # Host-local Zsh additions; only the shared modules and wrappers are tracked.
-.zshrc_custom/
+.zshrc_custom
 .config/zsh/custom/*
 !.config/zsh/custom/alias.zsh
 !.config/zsh/custom/functions.zsh

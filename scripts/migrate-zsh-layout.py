@@ -9,6 +9,7 @@ link for applications that still refer to the former custom directory.
 import argparse
 import os
 from pathlib import Path
+import sys
 
 
 def present(path):
@@ -87,18 +88,29 @@ def migrate(home, apply=False):
             removed.append((directory, mode))
         source.symlink_to(".config/zsh/custom", target_is_directory=True)
     except BaseException:
-        if source.is_symlink() and source.resolve() == target.resolve():
-            source.unlink()
+        failures = []
+
+        def recover(path, operation, *args, **kwargs):
+            try:
+                operation(*args, **kwargs)
+            except OSError as error:
+                failures.append(f"{path}: {error}")
+
+        if source.is_symlink():
+            recover(source, source.unlink)
         for link, original in reversed(rewritten):
             if link.is_symlink():
-                link.unlink()
+                recover(link, link.unlink)
             # os.symlink also works if a failed Path.symlink_to triggered recovery.
-            os.symlink(original, link)
+            recover(link, os.symlink, original, link)
         for directory, mode in reversed(removed):
-            directory.mkdir(mode=mode)
-            os.chmod(directory, mode)
+            recover(directory, directory.mkdir, mode=mode)
+            recover(directory, os.chmod, directory, mode)
         for old, new in reversed(completed):
-            new.rename(old)
+            recover(old, new.rename, old)
+        if failures:
+            print("Recovery incomplete; these paths need manual attention:\n" +
+                  "\n".join(failures), file=sys.stderr)
         raise
     return len(moves)
 
