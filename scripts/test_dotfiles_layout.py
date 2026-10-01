@@ -172,6 +172,42 @@ class LayoutTests(unittest.TestCase):
         self.assertTrue((self.home / ".Brewfile").is_file())
         self.assertEqual((self.home / ".zprofile").resolve(), alt / ".zprofile##os.Darwin")
 
+    def test_setup_uses_active_plugin_directory_without_duplicate_checkout(self):
+        self.local_additions()
+        script = self.home / "setup-under-test.sh"
+        # Load the real setup functions while replacing installers with local stubs.
+        script.write_text((ROOT / "setup.sh").read_text().replace('main "$@"', ""))
+        command = ('source "$HOME/setup-under-test.sh"; '
+                   'install_oh_my_zsh() { :; }; install_starship() { :; }; '
+                   'install_zsh_syntax_highlighting() { printf "%s\\n" "$1"; }; '
+                   'setup_shell Darwin')
+        for migrated in (False, True):
+            if migrated:
+                MIGRATION.migrate(self.home, True)
+            expected = self.custom if migrated else self.home / ".zshrc_custom"
+            self.assertEqual(self.run_command("bash", "-c", command).strip(),
+                             str(expected / "plugins/zsh-syntax-highlighting"))
+        self.env["ZSH_CUSTOM"] = str(self.home / "explicit-custom")
+        self.assertEqual(self.run_command("bash", "-c", command).strip(),
+                         str(self.home / "explicit-custom/plugins/zsh-syntax-highlighting"))
+
+    @unittest.skipUnless(shutil.which("zsh"), "zsh required")
+    def test_auth_diagnostic_sees_active_local_exports_without_provider_access(self):
+        self.local_additions()
+        local_bin = self.home / ".local/bin"
+        local_bin.mkdir(parents=True)
+        for name in ("op", "codex", "ssh", "ssh-add", "gh", "git"):
+            stub = local_bin / name
+            stub.write_text("#!/bin/sh\nexit 1\n")
+            stub.chmod(0o700)
+        self.env["AGENT_HOST_ALIAS"] = "fixture"
+        for migrated in (False, True):
+            if migrated:
+                MIGRATION.migrate(self.home, True)
+            output = self.run_command("zsh", str(self.custom / "bin/onepassword-dev-preflight"))
+            row = next(line for line in output.splitlines() if line.startswith("exports-local.zsh"))
+            self.assertEqual(row.split(), ["exports-local.zsh", "present"])
+
     @unittest.skipUnless(shutil.which("vim"), "vim required")
     def test_vim_discovers_native_directory(self):
         shutil.copytree(ROOT / ".vim", self.home / ".vim")

@@ -14,6 +14,7 @@ bash_files=(
   scripts/setup-checks.sh
   .config/yadm/bootstrap
   .cursor/install.sh
+  .config/zsh/custom-path.sh
   .config/zsh/custom/bin/coderabbit
   .config/zsh/custom/bin/cr
 )
