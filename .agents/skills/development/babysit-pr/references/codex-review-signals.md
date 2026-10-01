@@ -7,7 +7,7 @@ gh api 'repos/{owner}/{repo}/issues/<pr>/reactions' --paginate \
   --jq '.[] | {id, user: .user.login, content, created_at}'
 ```
 
-Codex also commonly reacts to the latest `@codex review` issue comment rather than the PR body. Track that comment's ID after each push and inspect its reactions the same way:
+Automatic Codex review does not require an `@codex review` comment. Monitor the PR body and review submissions first. If an existing relevant request comment is present from a user-authorized exception, record its ID and inspect its reactions too. Do not create or renew a request comment merely to obtain a reaction target:
 
 ```bash
 gh api repos/{owner}/{repo}/issues/comments/<comment-id>/reactions --paginate \
@@ -16,11 +16,11 @@ gh api repos/{owner}/{repo}/issues/comments/<comment-id>/reactions --paginate \
 
 ## In-progress lock
 
-An `eyes` reaction from `chatgpt-codex-connector[bot]` (or another user-approved Codex bot account) on either the PR body or the latest relevant `@codex review` request comment blocks readiness while present.
+An `eyes` reaction from `chatgpt-codex-connector[bot]` (or another user-approved Codex bot account) on either the PR body or an existing relevant `@codex review` request comment blocks readiness while present. A request comment is optional; its absence does not authorize a manual review.
 
 ## Completion requires all of
 
-- Every relevant Codex `eyes` reaction is gone from the PR body and the latest review request comment.
+- Every relevant Codex `eyes` reaction is gone from the PR body and any existing relevant review request comment.
 - No newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
 - The no-issues evidence is bound to the live `headRefOid`, via one of:
   - a positive Codex review whose `commit_id` is that head;
@@ -34,8 +34,8 @@ An `eyes` reaction from `chatgpt-codex-connector[bot]` (or another user-approved
 - Never reuse reaction evidence after a push; newer actionable feedback overrides prior no-issues signals.
 - If no head-bound signal exists, report Codex status as unverified.
 
-## After every push or fresh `@codex review` request
+## After marking ready or pushing commits
 
-1. Record the live `headRefOid`, current reaction IDs, and the latest `@codex review` request comment ID.
-2. Poll PR-body reactions, that request's reactions, and reviews with their `commit_id`, re-fetching `headRefOid` each time.
-3. Keep monitoring until Codex removes `eyes` and either posts actionable feedback or leaves a head-bound no-issues signal. Restart if the head changes.
+1. Record the live `headRefOid` and current reaction IDs. Record a relevant request comment ID only if one already exists from a user-authorized exception.
+2. Wait for automatic review. Poll PR-body reactions, reviews with their `commit_id`, and any existing relevant request comment's reactions, re-fetching `headRefOid` each time. Do not post a review command after a push.
+3. Keep monitoring until Codex removes `eyes` and either posts actionable feedback or leaves a head-bound no-issues signal. Restart if the head changes. If review is unavailable or stalled, report that evidence under the babysitter's blocker policy; do not manually retrigger it without user authorization under the trigger policy.
