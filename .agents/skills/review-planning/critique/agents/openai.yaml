@@ -1,0 +1,11 @@
+interface:
+  display_name: Critique
+  short_description: Critique arguments, research, proposals, and plans
+  default_prompt: Use $critique to identify the strongest substantive weaknesses and
+    propose actionable corrections.
+policy:
+  products:
+  - chatgpt
+  - codex
+  - atlas
+  allow_implicit_invocation: true
