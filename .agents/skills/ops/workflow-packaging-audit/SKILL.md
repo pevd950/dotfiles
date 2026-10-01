@@ -11,7 +11,7 @@ Turn recent work history into a small set of practical reusable assets.
 
 Order: recent Codex sessions and task summaries → Codex memories and rollout summaries → Chronicle, if enabled, as a discovery/routing signal only (confirm details in logs, repos, trackers, or files before acting) → existing skills, custom agents, and automations.
 
-Scan window: for recurring reviews, the preceding 30 complete days in the configured local timezone, excluding the current day; use a requested interval for ad hoc reviews, or all available history when explicitly requested (say so). Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`; prefer structural JSONL reads over broad raw text search, pairing tool calls with tool outputs.
+Scan window: for recurring reviews and ad hoc reviews without a requested interval, the preceding 30 complete calendar days in the configured local timezone, excluding the current day; use a requested interval for ad hoc reviews, or all available history when explicitly requested (say so). Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`; prefer structural JSONL reads over broad raw text search, pairing tool calls with tool outputs.
 
 For an authorized full-window review across approved hosts, use [private transcript pull and review](references/transcript-review.md). It copies active/archive transcripts into a private source-separated cache using existing SSH and rsync, resumes local batches until traversal finishes, and retrieves surrounding user/tool/response context. Keep unavailable sources, parse gaps, exclusions, and unknown archive history explicit; coverage is separate from completed contextual review.
 
