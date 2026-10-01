@@ -40,5 +40,7 @@ jobs:
           HOME="$temp_home" yadm alt --force
 
           test -f "$temp_home/.Brewfile"
-          test -e "$temp_home/.gitconfig.local"
-          grep -qE '^[[:space:]]*name[[:space:]]*=' "$temp_home/.gitconfig.local"
+          test -e "$temp_home/.config/git/local.conf"
+          test -e "$temp_home/.config/git/platform.conf"
+          HOME="$temp_home" git config --global --includes --get user.name > /dev/null
+          HOME="$temp_home" git config --global --includes --get alias.st | grep -qx status
