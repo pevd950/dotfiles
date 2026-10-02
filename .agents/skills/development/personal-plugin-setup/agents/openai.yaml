@@ -1,0 +1,4 @@
+interface:
+  display_name: "Personal Plugin Setup"
+  short_description: "Commission, publish and maintain private account plugins"
+  default_prompt: "Use $personal-plugin-setup to choose hosting and commission a private plugin across my requested clients."
