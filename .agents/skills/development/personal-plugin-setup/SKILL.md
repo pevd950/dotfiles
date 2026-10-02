@@ -1,6 +1,6 @@
 ---
 name: personal-plugin-setup
-description: Set up or maintain a private MCP account plugin, choosing hosting, configuring credentials, packaging branding, and verifying its tools in the intended clients. Use for connector commissioning, plugin upgrades, and runtime acceptance.
+description: Set up or maintain a private MCP account plugin, choosing hosting, configuring credentials, packaging branding, and verifying its tools and optional UI in the intended clients. Use for connector commissioning, plugin upgrades, and runtime acceptance.
 ---
 
 # Personal plugin setup
@@ -9,7 +9,7 @@ Make the requested plugin capabilities work in the intended clients. Follow the 
 
 ## Establish the capability boundary
 
-Identify the requested reads, writes, clients, and private audience. Inspect current provider documentation and existing maintained MCP implementations. Reusable server code and an already hosted service are different options. Check licensing, supported operations, authentication, and persistence before selecting either.
+Identify the requested reads, writes, clients, UI needs, and private audience. Inspect current provider documentation and existing maintained MCP implementations. Reusable server code and an already hosted service are different options. Check licensing, supported operations, authentication, and persistence before selecting either.
 
 Keep provider capability, configured server tools, and installed client access distinct. If the user wants existing-record edits but the API supports only reads and creation, explain that limitation and the supported alternative. A read-only first implementation does not satisfy requested writes. Setup approval does not authorize a new provider mutation.
 
@@ -33,6 +33,12 @@ Choose for the actual dependencies and audience; local success does not establis
 - For consequential writes, resolve the exact effect and before/after state, bind approval to that effect, and reject stale previews. Retain result lookup after uncertain dispatch. Use provider idempotency when available; a possibly sent request must not be blindly replayed. Local dispatch protection alone cannot promise exactly-once provider execution.
 - Where independent processes share write or token state, use coordination that makes authority and outcomes durable. Keep provider HTTP outside mutation-state transactions. Choose storage for the concurrency/recovery needs rather than requiring a database for every plugin.
 
+## Choose optional UI surfaces
+
+Add UI when inspecting, comparing, selecting, editing, or navigating data materially improves the requested workflow. Choose a focused inline view, a sidebar app, or a conversation panel for the task; consider file handlers, composer content mentions, or rich forms only when relevant. Keep MCP tools usable without UI.
+
+For UI work, read [UI extensions and acceptance](references/ui-extensions.md) and the current [OpenAI Plugin Extensions documentation](https://developers.openai.com/plugins/build/extensions). Distinguish plugin-directory discovery and branding from registered app entrypoints. Record supported clients and selected surfaces; a sidebar entry does not prove a working interface.
+
 ## Configure and package
 
 Read [credentials, branding, and runtime acceptance](references/credentials-and-release.md) for 1Password custody and reference patterns, rotating tokens, package assets, and state compatibility. Keep credentials and private deployment metadata outside portable source.
@@ -44,6 +50,8 @@ Package the intended connection, capabilities, version, logo, and composer artwo
 Record the exact installed source/package/configuration, not only a tested checkout or source merge. Use the selected hosting procedure and project installer for authorized activation; verify state compatibility when an upgrade requires migration.
 
 Start with a small authenticated account read, then a bounded operation that proves the requested data shape. Test requested clients in fresh sessions. For writes, use an authorized reversible scenario with before/after readback and agreed cleanup; keep synthetic tests, prior accepted writes, and new live write acceptance distinct. If a write or client check is unavailable, state the gap rather than claiming full management.
+
+For selected UI surfaces, verify discovery, opening, rendered data, interaction, and conversation context through the installed client using the [UI acceptance checks](references/ui-extensions.md#prove-the-installed-interface). Keep source validation, accepted registration, and observed interface behavior separate.
 
 For failures, use [connector-readiness-triage](../../ops/connector-readiness-triage/SKILL.md) when available. Trace the failing layer before changing anything: client exposure/authentication, transport, runtime, local quota, or provider response. Inspect bounded private logs and status; honor retry/reset guidance and stop at the diagnostic budget. Do not consume scarce reads in retry loops or replay uncertain writes. Loopback health alone cannot exclude host pressure or provider failure.
 
