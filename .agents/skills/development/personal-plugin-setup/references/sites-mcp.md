@@ -1,28 +1,25 @@
-# ChatGPT Sites hosting alternative
+# ChatGPT Sites hosting
 
-Confirmed 2026-10-01: OpenAI documents hosting an MCP server in a new or existing Site and creating an associated plugin when its owner publishes. Install and connection remain separate steps. Feature rollout and workspace permissions can affect availability; recipients need access to both the plugin and Site. Personal accounts currently cannot share their Site-hosted plugin directly through invitations or a share link. [Official setup](https://help.openai.com/en/articles/20001547-hosting-a-plugin-with-chatgpt-sites)
+Consider Sites for tools over Site-owned data or an external HTTP API when its runtime, storage, and authorization fit. It can remove the need for a dedicated private host. An existing operational connector needs an independently validated port before switching hosting.
 
-## Fit test
+Check current availability and audience controls in [Site-hosted plugin documentation](https://help.openai.com/en/articles/20001547-hosting-a-plugin-with-chatgpt-sites). Publishing, plugin installation/connection, and useful execution are separate acceptance surfaces.
 
-Consider Sites for a cloud-native adapter to an external HTTP API or tools over Site-owned data. It can remove the need for a dedicated Mac and tunnel daemon. Move an operational connector when its requirements justify that change.
+## Runtime fit
 
-Check what the service needs: provider credentials, OAuth rotation, atomic state, rate limits, filesystem access, native binaries and user authorization. A server depending on local macOS apps, stdio processes, kernel-held directories or `node:sqlite` files needs a different runtime/storage design. Remote HTTP access to the provider does not by itself solve these dependencies.
+A Site runs HTTP code, not a local stdio process. Host-bound apps, native binaries, filesystem locks, and local SQLite files require redesign. Identify provider credentials, rotating tokens, durable write state, limits, and per-user access before moving source.
 
-## Implement using the installed Sites skills
+Use the current `sites-mcp`, `sites-building`, and `sites-hosting` skills when installed; otherwise use the platform's supported documentation and tools. Keep their changing schemas and deployment mechanics in those procedures.
 
-Read the currently installed `sites-mcp`, `sites-building` and `sites-hosting` procedures when executing, rather than embedding their tool schemas here.
+- Reuse the intended Site and preserve its identity, audience, and existing capabilities. Add the MCP capability and a stateless HTTP `POST /mcp` supporting initialization, discovery, and calls.
+- Enforce authorization with the trusted hosting identity described by Sites. Keep discovery free of private account data. Site/plugin connection OAuth and external provider authorization are separate lifecycles; one owner's provider grant must not become available to every viewer.
+- Supply runtime secrets through native environment tooling, with setup/recovery references in 1Password. Exclude values from source archives and hosting manifests.
+- Select platform storage for the actual requirements: structured durable state, blobs, and coordination have different needs. Memory or browser storage cannot own rotating tokens or authoritative write claims. Validate transaction/concurrency guarantees rather than assuming local SQLite semantics transfer to cloud storage.
+- For schema changes, inspect generated migrations and the actual applied state. A failed upload can follow successful migration; ambiguous deployment must be inspected before retrying.
 
-1. Inspect/reuse the intended Site and its source. Preserve its opaque project ID and audience; new Sites start private.
-2. Preserve existing capabilities and add `"mcp"` in `.openai/hosting.json`. Expose a stateless HTTP `POST /mcp` with initialization, discovery and calls. Sites does not run a local stdio server.
-3. Use the hosting-boundary identity headers documented by Sites. Keep discovery free of private data and enforce user-specific authorization on data calls, returning 401/403 when appropriate. Sites owns OAuth for the Site/plugin connection. Provider API authorization is a separate lifecycle; do not bypass it or share one owner's grant with all Site viewers.
-4. Store runtime secrets through the native Sites environment tools, with their authoritative setup/recovery metadata in 1Password. Keep values outside source archives and hosting manifests.
-5. Use platform persistence only where required: D1 for structured durable state, R2 for blobs. Memory/browser storage cannot carry authoritative claims or rotating tokens. Do not assume local SQLite locking/transaction semantics transfer unchanged to D1; review the supported coordination guarantees and recovery contract.
-6. Generate and inspect schema migrations before build/publish. Sites may apply migrations before Worker upload, so a failed deployment can leave applied schema changes. Preserve applied migration history and inspect ambiguous state before retrying.
-7. Build Workers-compatible output and publish with the native Site workflow. Reuse the provisioned app/private plugin; do not create an extra plugin or configure local MCP as a substitute.
-8. Read `get_site(include_mcp_connection: true)`, use its actual returned plugin ID with `plugin_management.suggest_plugins`, and let the user install/connect. Then verify an actual read-only tool call. Publishing success alone is hosting proof.
+## Plugin and client acceptance
 
-These steps were checked against the installed Sites MCP, hosting and storage instructions. Refresh them when using this procedure. A new Site was not created, published or tested as part of this research.
+Build for the supported hosted runtime and use its publication procedure within the authorized scope. Reuse the app/private plugin provisioned by Sites instead of creating another app or substituting local MCP configuration.
 
-## Recommendation for the next connector
+For installation/reconnection, obtain current connection metadata from `get_site` with `include_mcp_connection: true`. Use its returned plugin identity with the supported installation UI; preserve existing connection references on updates. A published Site or displayed Connect button is not a successful tool call.
 
-Compare a minimal Sites HTTP adapter with a private-host adapter before writing source. Favor Sites when its runtime, durable storage and provider authorization fit without a custom recovery system. Preserve an existing deployment until a separately designed and validated port is ready.
+After connection, execute a bounded account read in a fresh intended client. Verify the exposed contract, provider-account boundary, data freshness, and requested writes separately. Capture the active Site version and client acceptance; do not claim a Sites port was tested merely because this route is documented.

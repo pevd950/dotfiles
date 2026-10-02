@@ -1,48 +1,49 @@
-# Credentials, branding and release completion
+# Credentials, branding, and runtime acceptance
 
-## 1Password custody
+## 1Password custody and references
 
-Use the 1Password Environments skill. Authenticate and inspect existing environments before creating one; prefer the established project Environment. List variable names without exposing values. Retrieve the secret through its supported private access mechanism and verify the intended credential before relying on unattended access. Treat an item reference or consent page as a setup step, then verify usable credentials.
+Prefer the established project 1Password Environment or vault item. Use the 1Password Environments skill when installed for supported authentication, variable discovery, and mounts. Inspect current tool schemas rather than copying calls from an older session. An item UUID, secret reference, or consent page proves a setup step; verify that the intended runtime can use the intended credential with a bounded authenticated call.
 
-Record, as applicable:
+Keep a small private inventory:
 
-| Responsibility | Variables / records |
+| Responsibility | Record privately |
 | --- | --- |
-| Provider registration | App name/ID, client ID/secret, API and OAuth base URLs, exact redirect, scopes and token policy |
-| Transport | Tunnel/Site identity, intended organization/workspace association, runtime key, approved permissions and expiry |
-| Account package | Plugin/app identity, private connection URL, package version, logo/composer assets and verified metadata |
-| Runtime | Private owning-host route, root/service/config reference, active source SHA, state format and cutover time |
-| Recovery | Offline backup reference, compatible source fallback, migration/reconnect procedure and limits |
+| Provider authorization | Registration, API/OAuth endpoints, redirect, scopes, credential reference, token policy |
+| Transport | Tunnel/Site identity, workspace association, runtime key reference, permissions, expiry |
+| Account package | App/plugin identity, connection reference, version, asset references |
+| Runtime | Owning runtime/config references, active source SHA or immutable version, state format |
+| Recovery | Backup reference, compatible release, migration/reconnect limits, renewal action |
 
-Conceal secret values. Keep private identifiers, account URLs, host topology and viewing/library contents out of GitHub and reusable tracked configuration. Do not print a broad environment or route private notes into a public system. Use a masked entry or protected secret transfer, then verify file identity/mode and secret presence without logging the value.
+A vault reference has the symbolic shape `op://<vault>/<item>/<field>`; replace placeholders only in ignored private configuration. Environment mounts are a separate mechanism and should use the supported 1Password tooling. Never put real reference paths, identifiers, secret values, or connection URLs in shared examples. Inject secrets at runtime through the supported mechanism rather than expanding them into shell arguments, tool inputs, or build output. Exclude sensitive files from source control and package archives.
 
-For OAuth, dedicate the grant to this connector. Serialize single-use refresh and retain durable intent before a possibly consuming request. The active runtime token store becomes authoritative after rotation; an initial concealed bootstrap snapshot is historical evidence, never a rollback token. Unknown refresh outcomes require scoped reconnect/recovery, not deletion of the marker or a second refresh. Preserve unrelated grants.
+Verify mount metadata or credential presence privately; do not read a mounted environment just to prove it exists. If interactive unlock/consent is required, identify that boundary and preserve prepared setup. When credential reuse is authorized, establish a match with the intended provider/account without logging values; a working CLI credential is not automatically the connector's credential.
 
-Update the active release variable after verification. Do not assume an `append_variables` tool replaces an existing name: use a supported update path, or a clearly named new canonical field plus explicit deprecation metadata. Avoid duplicate same-name variables. Verify saved metadata without rereading all secrets.
+For variable updates, inspect current replacement/append semantics, preserve unrelated names, and avoid duplicate canonical fields. Read back names/non-secret metadata to verify the save. Keep active release metadata separate from historical installed/pinned values.
 
-## Branding acceptance
+For providers with rotating single-use refresh tokens, dedicate and coordinate the grant. The active runtime token store becomes authoritative after rotation; the initial secret-manager snapshot is historical. Preserve durable refresh intent before a possibly consuming call. Unknown outcomes need scoped reconnect/recovery, not restoration of the bootstrap token or a blind second refresh.
 
-Prepare square logo/composer assets up front; retain the original official/licensed source. Use transparent padding and verify circular cropping, legibility and optional light/dark variants. Inspect the current plugin schema before choosing `interface`/`extensions.com.openai` fields and include every referenced file under the plugin root, preferably `./assets/`.
+## Package and visible branding
 
-Record the package version, accepted icon references and a fresh visible client check separately. Preserve the existing app identity and server permissions when updating artwork. If the UI still shows a fallback icon, record it as unresolved even when metadata saved successfully.
+Inspect the current [plugin format](https://developers.openai.com/plugins/build/plugins) and [icon requirements](https://developers.openai.com/plugins/deploy/submission#icons-and-screenshots). Include logo and composer artwork in the first intended package, using official or appropriately licensed assets. Follow current format/dimension/size requirements and plugin-root-relative paths; inspect the final archive to ensure every referenced asset is present and private configuration is absent.
 
-References: [Plugin packaging](https://developers.openai.com/plugins/build/plugins), [icon requirements](https://developers.openai.com/plugins/deploy/submission#icons-and-screenshots).
+Use square artwork with padding that survives circular cropping. Check small-size legibility and applicable light/dark variants. A branding update should retain existing connection references and capability scope.
 
-## Merge → deploy → migrate where applicable → verify
+Verify three things separately: archive asset references, metadata accepted for the intended package version, and visible artwork in the relevant picker/listing/composer. Inspect saved package/version metadata and a fresh client session before attributing a fallback to caching. A saved logo does not establish a visible fix; keep any fallback unresolved until observed or explicitly accepted by the owner. Runtime restart or access changes are not implied by an artwork update.
 
-1. Verify the authorized merge's exact SHA/main ancestry and reviewed-tree equivalence. Build/package from that commit, not a dirty checkout or mutable branch name.
-2. Stage on the owning runtime and run required release checks. Preserve active configuration, credential files, stores and unrelated services. Verify the runtime version floor on the actual host.
-3. Determine whether migration is needed and what rollback is compatible. For consequential persisted state, compare the actual legacy shape with the approved contract; do not assume a test fixture proves the production store.
-4. Stop every old consumer of the affected stores, including read-only consumers that can refresh OAuth. Verify absence, then make an offline private backup with a byte/digest manifest. Do not copy a live SQLite database, delete a journal, restore consumed tokens or sync the live store to cloud storage.
-5. Rehearse on the offline copy when the state change warrants it. Run the authorized migration; preserve originals and archive digests. Inspect quarantine. A retained completed outcome plus documented request-completion evidence can support an operator assessment; observed desired state alone cannot resolve an ambiguous request. Never automatically clear unattributable/global blocks.
-6. Activate the staged release using its supported installer. On failure, prove candidate job absence before retrying and preserve evidence. Restore only compatible source; a permanent database/OAuth format fence can intentionally make old read-only binaries incompatible.
-7. Read back active service/config/release SHA, health and readiness. Perform a bounded restart and fresh authenticated read through the account plugin. Check changed tool behavior and preserved result lookup; never apply an old ID to demonstrate replay refusal in production.
-8. Test missing/invalid credentials without registering another poller or performing provider work. Configuration validation, HTTP denial and successful authenticated execution establish different facts.
-9. Update 1Password release metadata, private handoff and GitHub acceptance with sanitized evidence. Keep tested source, installed source, automated tests and owner/client acceptance distinct. If no new live write was performed, state that.
-10. Complete usable delivery, or identify the exact remaining external boundary. Record source merge, CI, connection status and installed-client acceptance separately.
+## Installed source and compatible upgrades
 
-## Review discipline
+Use the owning project's installer and release/runbook within the user's scope. Record immutable source/package identity, dependency/runtime requirements, and configuration. Staging should preserve the active inputs; verify the actual running service/config/version after authorized activation. Build checks, source merge, and deployment are separate evidence.
 
-Use `babysit-pr` to collect the full live review record, check repository rules and track the current commit and monitor. Use `gh-pr-address-feedback` for validated fixes. One root owns source changes and the sole monitor. Capacity-only skips require the user's applicable permission and are recorded separately from approval. Verify the reason for a paused review before treating it as a capacity limit.
+For an upgrade that changes persisted write or OAuth state, determine compatibility before activation. Use the store's supported consistent backup procedure; for an offline cutover, stop all affected consumers, including read-only clients that can refresh tokens. Rehearse migration on the backup when warranted, preserve original evidence, and inspect ambiguous/quarantined records. Observed desired state alone cannot establish what happened to an uncertain request.
 
-Reassess the design when substantive findings repeatedly affect one subsystem. Document the guarantees and the limits of the available evidence. Do not claim power-loss certification or exactly-once remote execution from tests that cannot establish them.
+Recover with compatible source and authoritative current state. An old binary may remain incompatible even in read-only mode after a format fence. Never restore consumed tokens or delete dispatch evidence to make rollback work. Follow the project's activation recovery procedure and establish the candidate's state before retrying a failed installer.
+
+## End-to-end acceptance and maintenance
+
+Check active version/configuration, readiness, controlled credential denial, and fresh authenticated execution. Use restart/recovery probes only where required for the release and authorized. Verify changed tool schemas in fresh sessions; retain separate observations for each requested client.
+
+For supported writes, test the exact approved effect with before/after readback and agreed cleanup. Check returned IDs and values rather than trusting an accepted HTTP status. Preserve result lookup for lost responses; prior outcomes can validate migration preservation without claiming a new live write. Record any missing write/device acceptance explicitly.
+
+Classify rate failures by layer: transport, connector budget, or upstream response. Honor provider reset/Retry-After guidance within a bounded diagnostic budget. Account for failures that consume quota, shared callers, and budget persistence across restarts. Report cache source/age/completeness and whether a read triggers upstream refresh. Do not reset counters or restart a service to evade limits; reconcile uncertain writes before any new attempt.
+
+Maintain private active-release, expiry/renewal, state, recovery, and client-acceptance metadata. Keep operational transcripts and personal account data outside the reusable skill. Use existing maintenance arrangements; this guidance does not create a schedule or require a particular PR/review/merge workflow.
