@@ -26,9 +26,13 @@ For providers with rotating single-use refresh tokens, dedicate and coordinate t
 
 Inspect the current [plugin format](https://developers.openai.com/plugins/build/plugins) and [icon requirements](https://developers.openai.com/plugins/deploy/submission#icons-and-screenshots). Include logo and composer artwork in the first intended package, using official or appropriately licensed assets. Follow current format/dimension/size requirements and plugin-root-relative paths; inspect the final archive to ensure every referenced asset is present and private configuration is absent.
 
-Use square artwork with padding that survives circular cropping. Check small-size legibility and applicable light/dark variants. A branding update should retain existing connection references and capability scope.
+Use square artwork with padding that survives cropping. Check transparent edges and small-size legibility on the intended light/dark surfaces. Some clients display the asset without rounding its corners; use transparent rounded artwork where needed. For a corner-only edit, preserve the original colors and mark. Prefer a precise antialiased alpha mask when the active image-editing requirements permit it.
 
-Verify three things separately: archive asset references, metadata accepted for the intended package version, and visible artwork in the relevant picker/listing/composer. Inspect saved package/version metadata and a fresh client session before attributing a fallback to caching. A saved logo does not establish a visible fix; keep any fallback unresolved until observed or explicitly accepted by the owner. Runtime restart or access changes are not implied by an artwork update.
+For an artwork-only update, retain the app/plugin identity, connection references, capabilities, and descriptions. Change only the intended artwork and package version. Use the original package or an installed copy whose identity, connection mapping, and version match the live plugin. Preserve the original for recovery; do not reconstruct its configuration from display metadata alone.
+
+Verify archive asset references, accepted package metadata, and visible artwork separately. Reopen the plugin to confirm the saved version, then select it through `@` in a fresh, unsent Chat composer. Inspect the actual icon at its normal display size. Listing/detail images and a Try-in-chat prefill can use different rendering paths; a loaded generic icon does not prove the custom asset is visible. Record each surface separately and check the saved version before attributing a fallback to caching. Keep any remaining fallback as an acceptance gap unless the owner explicitly accepts it.
+
+When auditing a collection, check separately installed companion plugins too. Keep before/after screenshots and asset/package hashes in the private operational record. Record account package versions separately from runtime source/version; an artwork update does not establish a runtime upgrade or authorize a restart or access change.
 
 ## Installed source and compatible upgrades
 
