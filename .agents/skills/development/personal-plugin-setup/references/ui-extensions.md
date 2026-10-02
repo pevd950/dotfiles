@@ -36,6 +36,8 @@ Use the available ChatGPT/MCP app-building skill for implementation mechanics wh
 
 For each selected surface and intended client:
 
+For supported combinations, perform steps 1–4. For unavailable or unsupported combinations, report the gap and skip those UI checks; do not claim UI acceptance. Keep the tool-workflow check in step 5.
+
 1. Verify the installed package/source and registration. Open the interface from its intended entry action in a fresh session.
 2. Check that it renders a bounded authenticated result with the correct item identity, data shape, and freshness/completeness information.
 3. Exercise the relevant selection, navigation, or form interaction. Verify conversation context updates where the workflow depends on them. For edits, use an authorized scenario and read back the server state.
