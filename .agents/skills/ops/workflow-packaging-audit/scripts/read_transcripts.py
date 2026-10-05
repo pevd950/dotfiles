@@ -329,6 +329,7 @@ def report(cache, after, through):
                     'undated_files_with_session_time': len(undated_files),
                     'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
                     'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps,
+                    'evicted_old_copies': sum(path.startswith(source + '/') for path in snapshot.get('evicted', {})),
                     'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
                     'new_archive_observations': sum(bool(f.get('archive_observed_after')) for f in entry.get('files', {}).values())}
             return {'window': {'after': low, 'through': high}, 'sources': sources,

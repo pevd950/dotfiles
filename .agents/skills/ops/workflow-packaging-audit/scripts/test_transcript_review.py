@@ -1,4 +1,5 @@
 import getpass
+import datetime as dt
 import json
 import os
 from pathlib import Path
@@ -9,7 +10,9 @@ from unittest.mock import patch
 
 import pull_transcripts as puller
 import read_transcripts as reader
-from transcript_cache import read_json
+import cache_retention
+import review_worklist
+from transcript_cache import read_json, write_json
 
 AFTER = '2026-08-22T00:00:00Z'
 THROUGH = '2026-09-21T00:00:00Z'
@@ -59,6 +62,112 @@ class TranscriptReviewTests(unittest.TestCase):
             self.spec['label']=value
             with self.subTest(value=value),self.assertRaises(ValueError):self.pull()
         self.assertFalse(self.cache.exists())
+
+    def test_timed_out_probe_retries_once_without_changing_identity(self):
+        self.write([record('user_message', message='hello')])
+        real = puller.probe
+        calls = 0
+        def one_timeout(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise puller.subprocess.TimeoutExpired(['ssh'], 30)
+            return real(spec, excluded)
+        with patch.object(puller, 'probe', side_effect=one_timeout):
+            result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(calls, 3)  # initial retry, then final probe
+        self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['probe_timeout_retries'], 1)
+
+    def test_transient_ssh_probe_retries_but_identity_mismatch_does_not(self):
+        self.write([record('user_message',message='hello')])
+        real = puller.probe
+        calls = 0
+        def transient(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise puller.ProbeUnavailable('ssh_probe_unavailable')
+            return real(spec, excluded)
+        with patch.object(puller,'probe',side_effect=transient):
+            self.assertEqual(self.pull()['source-a']['status'],'ok')
+        self.assertEqual(calls,3)
+        self.spec['hostnames']=['wrong-identity']
+        with patch.object(puller,'probe',wraps=real) as spy:
+            self.assertEqual(self.pull()['source-a']['status'],'unavailable')
+        self.assertEqual(spy.call_count,1)
+
+    def test_retention_evicts_only_old_verified_duplicate_and_does_not_recopy(self):
+        old = record('user_message', message='old')
+        old['timestamp'] = '2026-07-01T12:00:00Z'
+        source = self.write([{'type':'session_meta','payload':{'id':'old'}}, old])
+        self.pull(); self.scan()
+        result = cache_retention.run(self.cache, self.config, days=60,
+                                     timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+        self.assertTrue(source.exists())
+        self.assertFalse((self.cache/self.relative).exists())
+        self.pull(); self.scan()
+        self.assertFalse((self.cache/self.relative).exists())
+        # A crash after the tombstone commit but before unlink would leave an
+        # orphan; the next pull must not relist it and retention can remove it.
+        cached = self.cache/self.relative
+        cached.write_bytes(source.read_bytes()); cached.chmod(0o600)
+        self.pull(); self.scan()
+        self.assertEqual(reader.candidates(self.cache, AFTER, THROUGH), [])
+        retry = cache_retention.run(self.cache, self.config, days=60,
+                                    timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(retry['orphaned_eviction_files'], 1)
+        self.assertFalse(cached.exists())
+        source.write_text(source.read_text() + json.dumps(record('user_message', message='resumed'))+'\n')
+        self.pull(); self.scan()
+        self.assertTrue((self.cache/self.relative).exists())
+        self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH)), 1)
+
+    def test_retention_preserves_undated_recent_archive_and_absent_source(self):
+        old = record('user_message', message='old'); old['timestamp']='2026-07-01T12:00:00Z'
+        undated = record('user_message', message='unknown'); undated.pop('timestamp')
+        self.write([{'type':'session_meta','payload':{'id':'undated'}},undated], name='undated.jsonl')
+        self.write([{'type':'session_meta','payload':{'id':'archived'}},old], area='archived_sessions', name='archive.jsonl')
+        absent = self.write([{'type':'session_meta','payload':{'id':'absent'}},old], name='absent.jsonl')
+        self.pull(); self.scan(); absent.unlink(); self.pull(); self.scan()
+        result = cache_retention.run(self.cache, self.config, days=60,
+                                     timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 0)
+        self.assertEqual(len(list(self.cache.rglob('*.jsonl'))), 3)
+
+    def test_worklist_filters_guardians_and_reopens_changed_chats(self):
+        main = {'type':'session_meta','payload':{'id':'main','source':'vscode'}}
+        guardian = {'type':'session_meta','payload':{'id':'guardian','source':{'subagent':{'other':'guardian'}}}}
+        self.write([main,record('user_message',message='please inspect'),record('agent_message',message='done')])
+        self.write([guardian,record('user_message',message='copied prompt')], name='guardian.jsonl')
+        self.pull();self.scan()
+        first = review_worklist.worklist(self.cache, AFTER, THROUGH)
+        self.assertEqual(first['primary_total'],1)
+        self.assertEqual(first['guardian_groups_excluded'],1)
+        group = first['primary'][0]
+        decision = self.base/'decision.json'
+        write_json(decision,[{'key':group['key'],'fingerprint':group['fingerprint'],'disposition':'no_change'}])
+        review_worklist.mark(self.cache,AFTER,THROUGH,decision)
+        self.assertEqual(review_worklist.worklist(self.cache,AFTER,THROUGH)['primary_pending'],0)
+        with (self.codex/'sessions'/'old-name.jsonl').open('a') as f:
+            f.write(json.dumps(record('user_message',message='new correction'))+'\n')
+        self.pull();self.scan()
+        self.assertEqual(review_worklist.worklist(self.cache,AFTER,THROUGH)['primary_pending'],1)
+        with self.assertRaisesRegex(ValueError,'Stale'):
+            review_worklist.mark(self.cache,AFTER,THROUGH,decision)
+
+    def test_worklist_includes_new_archive_observation_without_recent_activity(self):
+        old = record('user_message',message='old request'); old['timestamp']='2026-07-01T12:00:00Z'
+        active = self.write([{'type':'session_meta','payload':{'id':'archived-later','source':'vscode'}},old])
+        self.pull();self.scan()
+        active.rename(self.codex/'archived_sessions'/active.name)
+        self.pull();self.scan()
+        now = dt.datetime.now(dt.timezone.utc)
+        result = review_worklist.worklist(self.cache,
+            (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
+        self.assertEqual(result['primary_with_archive_appearance'],1)
+        self.assertEqual(result['primary'][0]['user_turn_count'],0)
 
     def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
         self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])

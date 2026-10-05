@@ -41,6 +41,11 @@ print(json.dumps(result))
 SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
        '-o', 'ConnectTimeout=10', '-o', 'ConnectionAttempts=1', '-T']
 LABEL = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,79}\Z')
+RSYNC_SAFE_PATH = re.compile(r'[A-Za-z0-9_./-]+\Z')
+
+
+class ProbeUnavailable(ValueError):
+    """A transport failure, distinct from a source identity mismatch."""
 
 
 def validate_source(spec):
@@ -69,19 +74,30 @@ def probe(spec, exclude):
                if spec.get('ssh') else [sys.executable, '-c', PROBE, payload])
     result = subprocess.run(command, capture_output=True, text=True, timeout=30)
     if result.returncode:
-        raise ValueError('Source identity/inventory probe failed')
+        if spec.get('ssh') and result.returncode == 255:
+            raise ProbeUnavailable('ssh_probe_unavailable')
+        raise ValueError('Source identity/inventory probe command failed')
     value = json.loads(result.stdout)
     if value.get('hostname', '').casefold() not in {h.casefold() for h in spec['hostnames']} or value.get('user') != spec['user']:
         raise ValueError('Source identity mismatch')
     return value
 
 
-def rsync_command(spec, area, destination, exclude):
+def probe_with_retry(spec, exclude):
+    """Retry one transient metadata probe; never retry a transfer or change identity."""
+    try:
+        return probe(spec, exclude), 0
+    except (subprocess.TimeoutExpired, ProbeUnavailable):
+        return probe(spec, exclude), 1
+
+
+def rsync_command(spec, area, destination, exclude, skipped=()):
     root = spec['roots'][area]
     origin = spec['ssh'] + ':' + shlex.quote(root + '/') if spec.get('ssh') else root + '/'
     command = ['rsync', '-rt', '--checksum', '--delay-updates', '--timeout=60']
     if spec.get('ssh'):
         command += ['-e', shlex.join(SSH)]
+    command += ['--exclude=/' + name for name in sorted(skipped)]
     return command + ['--exclude=.~tmp~/', '--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
 
 
@@ -111,9 +127,11 @@ def pull(cache, config):
         prior_labels = {label.casefold(): label for label in previous['sources']}
         if any(spec['label'].casefold() in prior_labels and prior_labels[spec['label'].casefold()] != spec['label'] for spec in sources):
             raise ValueError('Source label differs only by case from prior cache identity')
+        evicted = dict(previous.get('evicted', {}))
         snapshot = {'observed_at': dt.datetime.now(dt.timezone.utc).isoformat(),
                     'exclude_sessions': exclude, 'sources': {s['label']: {**previous['sources'].get(s['label'], {}),
                         'status': 'not_attempted', 'error': None} for s in sources},
+                    'evicted': evicted,
                     'archive_history': 'First observation is a baseline; earlier archive/unarchive transitions are unknown.'}
         write_json(metadata, snapshot)
         for spec in sources:
@@ -122,12 +140,28 @@ def pull(cache, config):
             entry = {**old, 'status': 'unavailable', 'error': None}
             snapshot['sources'][label] = entry
             try:
+                phase = 'initial_probe'
                 coverage_through = dt.datetime.now(dt.timezone.utc).isoformat()
-                before = probe(spec, exclude)
+                before, retries = probe_with_retry(spec, exclude)
                 identity = {k: before[k] for k in ('hostname', 'user')}
                 if old.get('identity') not in (None, identity) or old.get('roots') not in (None, spec['roots']):
                     raise ValueError('Source label was reused; use a new cache label')
                 entry['identity'] = identity
+                entry['probe_timeout_retries'] = retries
+                skipped = {'sessions': set(), 'archived_sessions': set()}
+                for relative, marker in list(evicted.items()):
+                    parts = Path(relative).parts
+                    if len(parts) < 3 or parts[0] != label or parts[1] not in skipped:
+                        continue
+                    cache_path(root, relative)
+                    area, name = parts[1], '/'.join(parts[2:])
+                    source_item = before['roots'][area]['files'].get(name)
+                    if (source_item and RSYNC_SAFE_PATH.fullmatch(name) and
+                            source_item == marker.get('source_signature')):
+                        skipped[area].add(name)
+                    elif source_item:
+                        # A resumed or otherwise changed old chat returns to the hot cache.
+                        del evicted[relative]
                 source_dir = private_dir(root / label)
                 # Publish invalidation before rsync can replace any cached bytes.
                 # Keep prior hashes only in the private in-memory recovery input.
@@ -138,12 +172,13 @@ def pull(cache, config):
                     if before['roots'][area]['status'] != 'ok':
                         transfer[area] = 'source_inventory_incomplete'
                         continue
+                    phase = 'rsync_' + area
                     destination = private_dir(source_dir / area)
                     # Never let a prior cache symlink redirect rsync writes.
                     for base, dirs, files in os.walk(destination):
                         for name in dirs + files:
                             cache_path(root, str((Path(base) / name).relative_to(root)))
-                    result = subprocess.run(rsync_command(spec, area, destination, exclude),
+                    result = subprocess.run(rsync_command(spec, area, destination, exclude, skipped[area]),
                                             capture_output=True, timeout=3600)
                     # Apple openrsync accepts symbolic --chmod but can retain
                     # source modes. The enclosing 0700 cache stays private;
@@ -155,7 +190,9 @@ def pull(cache, config):
                                 raise ValueError('Unsafe cache entry')
                             path.chmod(0o700 if stat.S_ISDIR(info.st_mode) else 0o600)
                     transfer[area] = 'ok' if result.returncode == 0 else 'rsync_incomplete'
-                after = probe(spec, exclude)
+                phase = 'final_probe'
+                after, extra_retries = probe_with_retry(spec, exclude)
+                entry['probe_timeout_retries'] += extra_retries
                 inventory_completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
                 inventory = {}
                 for area in ('sessions', 'archived_sessions'):
@@ -163,6 +200,13 @@ def pull(cache, config):
                     now_files = after['roots'][area]['files']
                     if before['roots'][area] != after['roots'][area]:
                         transfer[area] = 'source_changed_during_pull'
+                    if any(after['roots'][area]['files'].get(name) != before['roots'][area]['files'].get(name)
+                           for name in skipped[area]):
+                        transfer[area] = 'evicted_source_changed_during_pull'
+                    if any(Path(relative).parts[:2] == (label, area) and
+                           '/'.join(Path(relative).parts[2:]) not in after['roots'][area]['files']
+                           for relative in evicted):
+                        transfer[area] = 'evicted_source_missing'
                     directory = source_dir / area
                     if not directory.exists():
                         continue
@@ -171,6 +215,8 @@ def pull(cache, config):
                             continue  # Uncommitted rsync staging is not a source copy.
                         relative = str(path.relative_to(root))
                         cache_path(root, relative)
+                        if relative in evicted:
+                            continue  # A prior interrupted eviction left an orphan copy.
                         name = str(path.relative_to(directory))
                         prior = old.get('files', {}).get(relative, {})
                         present = name in now_files
@@ -187,12 +233,14 @@ def pull(cache, config):
                         inventory[relative] = {
                             'area': area, 'sha256': digest, 'size': first[0], 'mtime_ns': first[1],
                             'present_at_source': present,
+                            'source_signature': now_files.get(name) if present else None,
                             'first_observed_at': prior.get('first_observed_at', snapshot['observed_at']),
                             'archive_observed_after': (prior.get('archive_observed_after') or
                                 (old.get('last_successful_pull') if area == 'archived_sessions' and not prior and present else None))}
                     # Missing new source files are explicit transfer gaps; old
                     # cached files remain available and are labeled as retained.
-                    if any(str(Path(label, area, name)) not in inventory for name in now_files):
+                    if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]
+                           for name in now_files):
                         transfer[area] = 'cache_missing_source_files'
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
@@ -200,7 +248,9 @@ def pull(cache, config):
                 if entry['status'] == 'ok':
                     entry['last_successful_pull'] = dt.datetime.now(dt.timezone.utc).isoformat()
             except subprocess.TimeoutExpired:
-                entry.update(status='unavailable', error='source_timeout')
+                entry.update(status='unavailable', error=phase + '_timeout')
+            except ProbeUnavailable:
+                entry.update(status='unavailable', error=phase + '_ssh_unavailable')
             except (OSError, ValueError, KeyError, TypeError):
                 entry.update(status='unavailable', error='source_unavailable_or_invalid')
             write_json(metadata, snapshot)
