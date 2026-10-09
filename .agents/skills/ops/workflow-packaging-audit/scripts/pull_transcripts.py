@@ -12,7 +12,7 @@ import subprocess
 import sys
 import stat
 
-from transcript_cache import cache_path, file_hash, locked_cache, private_dir, read_json, signature, write_json
+from transcript_cache import cache_path, file_hash, locked_cache, private_dir, private_file, read_json, signature, write_json
 
 # Only metadata is returned by the identity/inventory probe. Paths are explicit
 # approved transcript roots, never a home-directory or configuration copy.
@@ -277,6 +277,15 @@ def pull(cache, config):
                     for relative, marker in list(evicted.items()):
                         if (Path(relative).parts[:2] == (label, 'sessions') and
                                 marker.get('present_at_source') is False and marker.get('sha256') in recovered):
+                            orphan = cache_path(root, relative)
+                            if orphan.exists():
+                                first = signature(orphan)
+                                if file_hash(orphan) != marker['sha256'] or signature(orphan) != first:
+                                    transfer['sessions'] = 'unverified_eviction_orphan'
+                                    continue
+                                # Finish the already-authorized, interrupted eviction
+                                # only after its identical archive copy is verified.
+                                private_file(orphan).unlink()
                             del evicted[relative]
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,

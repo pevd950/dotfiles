@@ -384,6 +384,31 @@ class TranscriptReviewTests(unittest.TestCase):
         spec = {**self.spec, '_hash_files': {'sessions': [f'{i:05d}-' + 'x'*90 + '.jsonl' for i in range(5000)]}}
         self.assertEqual(puller.probe(spec, [])['roots']['sessions']['status'], 'ok')
 
+    def test_archive_move_cleans_verified_interrupted_eviction_orphan(self):
+        source = self.evict_old()
+        orphan = self.cache/self.relative
+        orphan.write_bytes(source.read_bytes()); orphan.chmod(0o600)
+        source.rename(self.codex/'archived_sessions'/source.name)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok')
+        self.assertFalse(orphan.exists())
+        self.assertNotIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        self.assertEqual(self.pull()['source-a']['status'], 'ok')
+        self.scan()
+        self.assertTrue(reader.report(self.cache, '2026-06-01T00:00:00Z', '2026-07-15T00:00:00Z')['all_sources_covered'])
+
+    def test_archive_move_preserves_changed_eviction_orphan_as_gap(self):
+        source = self.evict_old()
+        orphan = self.cache/self.relative
+        orphan.write_bytes(source.read_bytes().replace(b'"message": "old"', b'"message": "new"')); orphan.chmod(0o600)
+        source.rename(self.codex/'archived_sessions'/source.name)
+        result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'partial')
+        self.assertEqual(result['transfer']['sessions'], 'unverified_eviction_orphan')
+        self.assertTrue(orphan.exists())
+        self.assertIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
     def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
         self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])
         self.pull();self.scan();self.assertTrue(self.report()['all_sources_covered'])
