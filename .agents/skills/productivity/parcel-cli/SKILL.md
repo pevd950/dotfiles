@@ -1,6 +1,6 @@
 ---
 name: parcel-cli
-description: Work with Parcel package tracking through the official Parcel API. Use when Codex needs to inspect active or recent Parcel deliveries, search Parcel carrier codes, add a package delivery after explicit confirmation, or build package-delivery automations from tracking numbers.
+description: Work with Parcel package tracking through the official Parcel API. Use when Codex needs to inspect active or recent Parcel deliveries, search Parcel carrier codes, add a requested package delivery, or build package-delivery automations from tracking numbers.
 ---
 
 # Parcel CLI
@@ -9,7 +9,7 @@ description: Work with Parcel package tracking through the official Parcel API. 
 
 - Use the bundled helper: `$HOME/.agents/skills/productivity/parcel-cli/scripts/parcel_api.py --help`.
 - Auth uses `PARCEL_API_KEY` from the host's local shell exports (such as `~/.zshenv.local`). Never print, paste, commit, or store the key in skill files, repo files, notes, or logs.
-- Adding a delivery is an externally visible state change. Run `add` without `--confirm` for dry-run planning; use `--confirm` (optionally `--notify`) only after the user explicitly approves the exact tracking number, carrier code, description, and any required postcode/email.
+- A user's request to add a delivery or existing scoped authorization supplies permission for that resolved delivery. Do not require a second approval of the preview. Ask only for missing or ambiguous tracking, carrier, description, or required postcode/email. Run `add` without `--confirm` for dry-run planning; `--confirm` (optionally `--notify`) selects execution without another conversational approval step.
 
 ## API facts
 
@@ -35,7 +35,7 @@ For a separately installed remote MCP connector, verify fresh client discovery a
 1. Extract candidate tracking numbers from the live source and resolve the carrier code with `carriers`.
 2. Check recent/active deliveries for duplicates when practical.
 3. Read optional carrier fields from a private JSON file or stdin (`{"postcode": "...", "email": "..."}`); omit unused keys. Do not pass their values as command arguments or put them in a shell command.
-4. Show a compact approval table: tracking number, carrier code/name, description, source, and any supplied postcode/email. Obtain explicit approval of those values before adding the delivery. Keep that approval in the private conversation; do not include these values in logs or public content.
-5. After explicit approval, run `add --confirm`; report successes, failures, and any quota or carrier limitations.
+4. Resolve the requested delivery's tracking number, carrier code/name, description, source, and any required postcode/email. Ask only when required values or the requested action are unclear; keep private delivery details out of logs and public content.
+5. For a requested add, run `add --confirm` without a second approval prompt; report successes, failures, and any quota or carrier limitations.
 
 Use `pholder` only for placeholder deliveries.
