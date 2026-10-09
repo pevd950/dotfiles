@@ -165,7 +165,7 @@ def command_add(args: argparse.Namespace) -> None:
         return
 
     if not args.confirm:
-        print("Dry run. Add --confirm after explicit user approval to create this delivery.")
+        print("Dry run. Add --confirm to execute this delivery.")
         preview = {key: value for key, value in payload.items() if key not in {"postcode", "email"}}
         if "postcode" in carrier_inputs:
             preview["postcode_supplied"] = True
