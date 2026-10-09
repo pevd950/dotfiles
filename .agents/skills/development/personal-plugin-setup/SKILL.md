@@ -39,6 +39,12 @@ Add UI when inspecting, comparing, selecting, editing, or navigating data materi
 
 For UI work, read [UI extensions and acceptance](references/ui-extensions.md) and the current [OpenAI Plugin Extensions documentation](https://developers.openai.com/plugins/build/extensions). Distinguish plugin-directory discovery and branding from registered app entrypoints. Record supported clients and selected surfaces; a sidebar entry does not prove a working interface.
 
+## Choose the consolidation boundary
+
+When management tools and UI serve the same account workflow, read [UI and capability parity](references/ui-and-parity.md). Choose hosting and user interface independently: a hosted backend can serve an embedded MCP App without requiring a separate website workflow. A skill cannot change an upstream MCP server's response format.
+
+Prefer one coherent user-facing integration when it covers the requested tools and interface. A package-upload restriction or upstream server limitation is evidence about that specific path. Preserve the working installation until the replacement is verified; distinguish plugin removal from provider credential revocation.
+
 ## Configure and package
 
 Read [credentials, branding, and runtime acceptance](references/credentials-and-release.md) for 1Password custody and reference patterns, rotating tokens, package assets, and state compatibility. Keep credentials and private deployment metadata outside portable source.
