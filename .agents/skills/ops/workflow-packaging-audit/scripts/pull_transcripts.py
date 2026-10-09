@@ -255,6 +255,11 @@ def pull(cache, config):
                         if not copied and prior and digest != prior.get('sha256'):
                             transfer[area] = 'unverified_cache_change'
                             continue
+                        archive_through = prior.get('archive_observed_through')
+                        if area == 'archived_sessions' and present and not archive_through:
+                            # Migrate legacy entries once using their last known inventory.
+                            archive_through = old.get('inventory_completed_at') if prior else None
+                            archive_through = archive_through or inventory_completed_at
                         inventory[relative] = {
                             'area': area, 'sha256': digest, 'size': first[0], 'mtime_ns': first[1],
                             'present_at_source': present,
@@ -262,8 +267,7 @@ def pull(cache, config):
                             'first_observed_at': prior.get('first_observed_at', snapshot['observed_at']),
                             'archive_observed_after': (prior.get('archive_observed_after') or
                                 (old.get('last_successful_pull') if area == 'archived_sessions' and not prior and present else None)),
-                            'archive_observed_through': (prior.get('archive_observed_through') or
-                                (inventory_completed_at if area == 'archived_sessions' and not prior and present else None))}
+                            'archive_observed_through': archive_through}
                     # Missing new source files are explicit transfer gaps; old
                     # cached files remain available and are labeled as retained.
                     if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]

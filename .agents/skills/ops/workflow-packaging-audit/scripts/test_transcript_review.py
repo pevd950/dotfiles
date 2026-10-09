@@ -409,6 +409,29 @@ class TranscriptReviewTests(unittest.TestCase):
         self.scan()
         self.assertFalse(self.report()['all_sources_covered'])
 
+    def test_legacy_archive_bound_is_initialized_once_and_allows_retention(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-07-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        entry = snapshot['sources']['source-a']
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        item = entry['files'][relative]
+        item['first_observed_at'] = '2026-07-01T00:00:00Z'
+        item.pop('archive_observed_through')
+        entry['inventory_completed_at'] = '2026-07-02T00:00:00Z'
+        entry['last_successful_pull'] = '2026-07-02T00:00:00Z'
+        write_json(self.cache/'snapshot.json', snapshot)
+        for _ in range(2):
+            self.pull()
+            item = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]
+            self.assertEqual(item['archive_observed_through'], '2026-07-02T00:00:00Z')
+        self.scan()
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+        self.assertTrue(source.exists())
+
     def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
         self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])
         self.pull();self.scan();self.assertTrue(self.report()['all_sources_covered'])

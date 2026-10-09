@@ -95,7 +95,7 @@ The cutoff is midnight at the start of the preceding 60 complete local calendar 
 
 Each indexed session header owns its source classification; guardian/approval sidecars are excluded structurally, including inherited history followed by a child session. Archive discovery groups each visible session separately.
 
-Archive evidence begins with a baseline filesystem observation. Later new archive appearances include an observation interval ending at the final source inventory; worklists select interval overlap with uncertain membership; old transitions and events between pulls are unknown. Presence under an archive directory is an observation, not a complete archive/unarchive timeline. No database snapshot is needed.
+Archive evidence begins with a baseline filesystem observation. Later new archive appearances include an observation interval ending at the final source inventory; worklists select interval overlap with uncertain membership; legacy entries initialize an upper bound once from their last inventory and preserve it across pulls; old transitions and events between pulls are unknown. Presence under an archive directory is an observation, not a complete archive/unarchive timeline. No database snapshot is needed.
 
 ## Acceptance and reporting
 
