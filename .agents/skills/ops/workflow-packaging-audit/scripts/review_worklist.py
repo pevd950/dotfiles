@@ -47,6 +47,7 @@ def build(root, snapshot, connection, after, through):
             'source_host': snapshot['sources'][row['source']].get('identity', {}).get('hostname'),
             'session_id': identity, 'origin': provenance, 'files': set(), 'events': set(),
             'signals': set(), 'user_turns': set(), 'activity_times': [], 'undated': 0,
+            'undated_user_turns': set(), 'window_membership': 'confirmed',
             'anchor': None, 'archive_appearance': None})
         group['files'].add(row['path'])
         group['events'].add(row['sha256'])
@@ -55,12 +56,17 @@ def build(root, snapshot, connection, after, through):
                 group['activity_times'].append(row['stamp'])
             else:
                 group['undated'] += 1
+                group['window_membership'] = 'uncertain'
             if row['kind'] == 'user_message':
-                group['user_turns'].add(row['sha256'])
+                if row['stamp']:
+                    group['user_turns'].add(row['sha256'])
+                else:
+                    group['undated_user_turns'].add(row['sha256'])
         if group['anchor'] is None or (row['kind'] == 'user_message' and group.get('anchor_kind') != 'user_message'):
             group['anchor'] = {'path': row['path'], 'line': row['line']}
             group['anchor_kind'] = row['kind']
         if appearance:
+            group['window_membership'] = 'uncertain'
             group['events'].add('archive:' + json.dumps(appearance, sort_keys=True))
             prior = group['archive_appearance']
             group['archive_appearance'] = {'after': min(prior['after'], appearance['after']) if prior else appearance['after'],
@@ -104,6 +110,7 @@ def build(root, snapshot, connection, after, through):
         group['last_activity'] = max(times) if times else None
         group['file_count'] = len(group.pop('files'))
         group['user_turn_count'] = len(group.pop('user_turns'))
+        group['undated_user_turn_count'] = len(group.pop('undated_user_turns'))
         group['signals'] = sorted(group['signals'])
         group.pop('anchor_kind', None)
         output.append(group)
@@ -130,7 +137,7 @@ def worklist(cache, after, through):
             reviewed = ledger['items'].get(group['key'], {})
             group['disposition'] = reviewed.get('disposition') if reviewed.get('fingerprint') == group['fingerprint'] else None
         primary = [g for g in groups if g['origin'] in ('main','unknown') and
-                   (g['user_turn_count'] or g['archive_appearance'])]
+                   (g['user_turn_count'] or g['undated_user_turn_count'] or g['archive_appearance'])]
         supporting = [g for g in groups if g not in primary and g['origin'] != 'guardian']
         return {'window': {'after': stamp(after), 'through': stamp(through)},
                 'primary_total': len(primary),

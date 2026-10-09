@@ -18,12 +18,12 @@ from transcript_cache import cache_path, file_hash, locked_cache, private_dir, r
 # approved transcript roots, never a home-directory or configuration copy.
 PROBE = r'''
 import getpass,hashlib,json,os,pathlib,socket,stat,sys
-request=json.loads(sys.argv[1]); result={'hostname':socket.gethostname(),'user':getpass.getuser(),'roots':{}}
+request=json.load(sys.stdin); result={'hostname':socket.gethostname(),'user':getpass.getuser(),'roots':{}}
 for area,raw in request['roots'].items():
  p=pathlib.Path(raw)
  if not p.is_absolute() or any(x.is_symlink() for x in (p,*p.parents)) or not p.is_dir():
   result['roots'][area]={'status':'missing_or_unsafe','files':{}};continue
- files={};gaps=[]
+ files={};gaps=[];hash_files=set(request.get('hash_files',{}).get(area,[]))
  for base,dirs,names in os.walk(p,followlinks=False,onerror=lambda _:gaps.append('unreadable_directory')):
   unsafe=[d for d in dirs if pathlib.Path(base,d).is_symlink()]
   gaps.extend('symlink_directory' for _ in unsafe);dirs[:]=[d for d in dirs if d not in unsafe]
@@ -34,7 +34,7 @@ for area,raw in request['roots'].items():
     s=q.lstat()
     if not stat.S_ISREG(s.st_mode):gaps.append('nonregular_transcript');continue
     name=str(q.relative_to(p)); item={'size':s.st_size,'mtime_ns':s.st_mtime_ns}
-    if name in request.get('hash_files',{}).get(area,[]):
+    if name in hash_files:
      digest=hashlib.sha256()
      with q.open('rb') as handle:
       opened=os.fstat(handle.fileno())
@@ -83,9 +83,9 @@ def validate_source(spec):
 
 def probe(spec, exclude):
     payload = json.dumps({'roots': spec['roots'], 'exclude_sessions': exclude, 'hash_files': spec.get('_hash_files', {})})
-    command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(PROBE) + ' ' + shlex.quote(payload)]
-               if spec.get('ssh') else [sys.executable, '-c', PROBE, payload])
-    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(PROBE)]
+               if spec.get('ssh') else [sys.executable, '-c', PROBE])
+    result = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=30)
     if result.returncode:
         if spec.get('ssh') and result.returncode == 255:
             raise ProbeUnavailable('ssh_probe_unavailable')
@@ -180,7 +180,9 @@ def pull(cache, config):
                     source_item = before['roots'][area]['files'].get(name)
                     if (source_item and RSYNC_SAFE_PATH.fullmatch(name) and
                             {k: source_item[k] for k in ('size', 'mtime_ns')} == marker.get('source_signature') and
-                            source_item.get('sha256') == marker.get('sha256')):
+                            source_item.get('sha256') == marker.get('sha256') and
+                            marker.get('exclude_sessions') is not None and
+                            sorted(marker['exclude_sessions']) == sorted(exclude)):
                         skipped[area].add(name)
                     elif source_item:
                         # A resumed or otherwise changed old chat returns to the hot cache.
@@ -267,6 +269,15 @@ def pull(cache, config):
                     if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]
                            for name in now_files):
                         transfer[area] = 'cache_missing_source_files'
+                # Once identical bytes are recovered in a verified archive copy,
+                # the absent active path no longer represents missing history.
+                if transfer.get('archived_sessions') == 'ok':
+                    recovered = {item['sha256'] for item in inventory.values()
+                                 if item['area'] == 'archived_sessions' and item['present_at_source']}
+                    for relative, marker in list(evicted.items()):
+                        if (Path(relative).parts[:2] == (label, 'sessions') and
+                                marker.get('present_at_source') is False and marker.get('sha256') in recovered):
+                            del evicted[relative]
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
                              status='ok' if all(v == 'ok' for v in transfer.values()) else 'partial')

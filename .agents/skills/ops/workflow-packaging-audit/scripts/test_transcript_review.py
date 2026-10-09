@@ -233,6 +233,10 @@ class TranscriptReviewTests(unittest.TestCase):
             (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
         self.assertEqual(queue['primary_with_archive_appearance'], 1)
         self.assertEqual(queue['primary'][0]['session_id'], 'old')
+        self.assertNotIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        historical = reader.report(self.cache, '2026-06-01T00:00:00Z', '2026-07-15T00:00:00Z')
+        self.assertEqual(historical['sources']['source-a']['selected_records'], 1)
+        self.assertTrue(historical['all_sources_covered'])
 
     def test_evicted_history_blocks_overlapping_coverage_only(self):
         self.evict_old(); self.pull(); self.scan()
@@ -319,6 +323,66 @@ class TranscriptReviewTests(unittest.TestCase):
         item['archive_observed_through'] = '2026-10-02T00:00:00Z'
         write_json(self.cache/'snapshot.json', snapshot)
         self.assertEqual(review_worklist.worklist(self.cache, AFTER, THROUGH)['primary_total'], 0)
+
+    def test_eviction_preserves_archive_interval_coverage_gap(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T00:00:00Z'
+        self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        item = snapshot['sources']['source-a']['files']['source-a/archived_sessions/old-name.jsonl']
+        item.update(first_observed_at='2026-07-15T00:00:00Z',
+                    archive_observed_after='2026-06-15T00:00:00Z', archive_observed_through='2026-07-15T00:00:00Z')
+        write_json(self.cache/'snapshot.json', snapshot)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+        coverage = reader.report(self.cache, '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z')
+        self.assertEqual(coverage['sources']['source-a']['evicted_window_gaps'], 1)
+        self.assertFalse(coverage['all_sources_covered'])
+        self.assertTrue(reader.report(self.cache, AFTER, THROUGH)['all_sources_covered'])
+
+    def test_changed_exclusions_restore_evicted_hidden_child(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-07-01T12:00:00Z'
+        self.config['exclude_sessions'] = ['child']
+        self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old,
+                    {'type': 'session_meta', 'payload': {'id': 'child'}}, record('user_message', message='recent')])
+        self.pull(); self.scan()
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+        self.config['exclude_sessions'] = []
+        self.pull(); self.scan()
+        self.assertTrue((self.cache/self.relative).exists())
+        self.assertNotIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
+        self.assertTrue(self.report()['all_sources_covered'])
+
+    def test_legacy_tombstone_without_exclusions_is_restored(self):
+        self.evict_old()
+        snapshot = read_json(self.cache/'snapshot.json')
+        del snapshot['evicted'][self.relative]['exclude_sessions']
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.pull(); self.scan()
+        self.assertTrue((self.cache/self.relative).exists())
+        self.assertNotIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+
+    def test_undated_worklist_membership_is_uncertain_in_every_window(self):
+        event = record('user_message', message='undated'); del event['timestamp']
+        self.write([{'type': 'session_meta', 'payload': {'id': 'legacy', 'source': 'cli'}}, event])
+        self.pull(); self.scan()
+        for after, through in [(AFTER, THROUGH), ('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z')]:
+            queue = review_worklist.worklist(self.cache, after, through)
+            group = queue['primary'][0]
+            self.assertEqual(group['window_membership'], 'uncertain')
+            self.assertEqual(group['user_turn_count'], 0)
+            self.assertEqual(group['undated_user_turn_count'], 1)
+            self.assertIsNone(group['first_activity'])
+            self.assertFalse(queue['review_complete'])
+
+    def test_large_hash_target_inventory_uses_stdin(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}])
+        spec = {**self.spec, '_hash_files': {'sessions': [f'{i:05d}-' + 'x'*90 + '.jsonl' for i in range(5000)]}}
+        self.assertEqual(puller.probe(spec, [])['roots']['sessions']['status'], 'ok')
 
     def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
         self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])

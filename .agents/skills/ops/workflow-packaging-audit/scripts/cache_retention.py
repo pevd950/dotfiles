@@ -49,7 +49,8 @@ def plan(root, snapshot, connection, cutoff):
         # baseline is not a historical transition timestamp.
         if file['area'] == 'archived_sessions':
             observed = dt.datetime.fromisoformat(item['first_observed_at'])
-            if observed >= cutoff:
+            observed_through = dt.datetime.fromisoformat(item.get('archive_observed_through') or source['inventory_completed_at'])
+            if observed >= cutoff or observed_through >= cutoff:
                 continue
             if item.get('archive_observed_after') and dt.datetime.fromisoformat(item['archive_observed_after']) >= cutoff:
                 continue
@@ -63,7 +64,9 @@ def plan(root, snapshot, connection, cutoff):
         result.append({'path': relative, 'source': file['source'], 'area': file['area'],
                        'name': name, 'bytes': file['size'], 'sha256': file['sha256'],
                        'source_signature': item['source_signature'], 'first_activity': file['first_activity'],
-                       'last_activity': file['last_activity']})
+                       'last_activity': file['last_activity'],
+                       'archive_observed_after': item.get('archive_observed_after'),
+                       'archive_observed_through': item.get('archive_observed_through') or source.get('inventory_completed_at')})
     return result
 
 
@@ -90,7 +93,9 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
             orphaned.append({'path': relative, 'source': parts[0], 'area': parts[1],
                              'name': name, 'bytes': private_file(path).stat().st_size,
                              'sha256': marker['sha256'], 'source_signature': marker['source_signature'],
-                             'first_activity': marker.get('first_activity'), 'last_activity': marker['last_activity']})
+                             'first_activity': marker.get('first_activity'), 'last_activity': marker['last_activity'],
+                             'archive_observed_after': marker.get('archive_observed_after'),
+                             'archive_observed_through': marker.get('archive_observed_through')})
         result = {'cutoff': cutoff.isoformat(), 'eligible_files': len(candidates) + len(orphaned),
                   'eligible_bytes': sum(c['bytes'] for c in candidates + orphaned),
                   'orphaned_eviction_files': len(orphaned),
@@ -139,8 +144,9 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
         timestamp = dt.datetime.now(dt.timezone.utc).isoformat()
         for item in selected:
             if item['path'] not in evicted:
-                evicted[item['path']] = {k: item[k] for k in ('source_signature','sha256','first_activity','last_activity')}
+                evicted[item['path']] = {k: item[k] for k in ('source_signature','sha256','first_activity','last_activity','archive_observed_after','archive_observed_through')}
                 evicted[item['path']]['evicted_at'] = timestamp
+                evicted[item['path']]['exclude_sessions'] = sorted(snapshot.get('exclude_sessions', []))
                 del snapshot['sources'][item['source']]['files'][item['path']]
         if selected:
             snapshot['observed_at'] = timestamp
