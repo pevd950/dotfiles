@@ -1,4 +1,5 @@
 import getpass
+import hashlib
 import datetime as dt
 import json
 import os
@@ -78,6 +79,21 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(result['status'], 'ok')
         self.assertEqual(calls, 3)  # initial retry, then final probe
         self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['probe_timeout_retries'], 1)
+
+    def test_slow_hash_workload_has_longer_bounded_probe_budget(self):
+        source = self.write([record('user_message', message='old')])
+        real = puller.subprocess.run
+        def simulated_slow_probe(command, **kwargs):
+            if kwargs['timeout'] < 45:
+                raise puller.subprocess.TimeoutExpired(command, kwargs['timeout'])
+            self.assertLessEqual(kwargs['timeout'], 900)
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=simulated_slow_probe):
+            for targets in ({}, {'sessions': []}):
+                with self.assertRaises(puller.subprocess.TimeoutExpired):
+                    puller.probe({**self.spec, '_hash_files': targets}, [])
+            result = puller.probe({**self.spec, '_hash_files': {'sessions': [source.name]}}, [])
+        self.assertEqual(result['roots']['sessions']['files'][source.name]['sha256'], hashlib.sha256(source.read_bytes()).hexdigest())
 
     def test_transient_ssh_probe_retries_but_identity_mismatch_does_not(self):
         self.write([record('user_message',message='hello')])

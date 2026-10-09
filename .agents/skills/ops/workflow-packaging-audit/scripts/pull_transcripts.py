@@ -85,7 +85,9 @@ def probe(spec, exclude):
     payload = json.dumps({'roots': spec['roots'], 'exclude_sessions': exclude, 'hash_files': spec.get('_hash_files', {})})
     command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(PROBE)]
                if spec.get('ssh') else [sys.executable, '-c', PROBE])
-    result = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=30)
+    # Historical content hashing has a larger bounded budget than inventory alone.
+    hashing = any(spec.get('_hash_files', {}).values())
+    result = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=900 if hashing else 30)
     if result.returncode:
         if spec.get('ssh') and result.returncode == 255:
             raise ProbeUnavailable('ssh_probe_unavailable')
