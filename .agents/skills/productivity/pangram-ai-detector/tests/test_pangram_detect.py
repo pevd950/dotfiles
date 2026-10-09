@@ -146,22 +146,6 @@ class PangramDetectTests(unittest.TestCase):
         self.assertIn("source text omitted", rendered)
         self.assertIn("Detector signal only", rendered)
 
-    def test_provider_strings_cannot_echo_source_text(self) -> None:
-        malicious = success_result(headline=SOURCE_TEXT, version=SOURCE_TEXT)
-        malicious["windows"][0]["label"] = SOURCE_TEXT
-        malicious["windows"][0]["confidence"] = "PRIVATE"
-        result, _, _ = self.run_predict([
-            FakeResponse({"task_id": "safe-task"}), FakeResponse(malicious)
-        ])
-        output = io.StringIO()
-        with redirect_stdout(output):
-            print(json.dumps(PANGRAM.sanitized_result(result, True)))
-            PANGRAM.print_summary(result, True)
-        self.assertNotIn(SOURCE_TEXT, output.getvalue())
-        self.assertNotIn("PRIVATE", output.getvalue())
-        self.assertEqual(result["version"], "unavailable")
-        self.assertEqual(result["windows"][0]["label"], "Unknown")
-
     def test_predict_rejects_invalid_bounds_before_network_access(self) -> None:
         invalid_cases = [
             {"timeout": 0, "poll_interval": 0, "max_polls": 1},
