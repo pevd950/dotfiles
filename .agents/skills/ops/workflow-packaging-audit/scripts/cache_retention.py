@@ -26,7 +26,9 @@ def plan(root, snapshot, connection, cutoff):
     """Only fully indexed, timestamped, source-present old copies qualify."""
     refresh_inventory(connection, snapshot)
     result = []
-    rows = connection.execute("""SELECT f.*, max(CASE WHEN r.excluded=0 AND
+    rows = connection.execute("""SELECT f.*, min(CASE WHEN r.excluded=0 AND
+        r.kind IN ('user_message','assistant_message','tool_call','tool_result') THEN r.stamp END) first_activity,
+        max(CASE WHEN r.excluded=0 AND
         r.kind IN ('user_message','assistant_message','tool_call','tool_result') THEN r.stamp END) last_activity,
         sum(CASE WHEN r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result') THEN 1 ELSE 0 END) activity_count
         FROM files f LEFT JOIN records r ON r.file=f.id WHERE f.listed=1 GROUP BY f.id""")
@@ -34,7 +36,7 @@ def plan(root, snapshot, connection, cutoff):
         source = snapshot['sources'].get(file['source'], {})
         item = source.get('files', {}).get(file['path'], {})
         area_state = source.get('transfer', {}).get(file['area'])
-        if (area_state not in ('ok', 'source_changed_during_pull') or
+        if (area_state != 'ok' or
                 file['status'] != 'complete' or
                 file['malformed'] or file['oversized'] or file['untimestamped'] or
                 not item.get('present_at_source') or not item.get('source_signature') or
@@ -60,7 +62,8 @@ def plan(root, snapshot, connection, cutoff):
             continue
         result.append({'path': relative, 'source': file['source'], 'area': file['area'],
                        'name': name, 'bytes': file['size'], 'sha256': file['sha256'],
-                       'source_signature': item['source_signature'], 'last_activity': file['last_activity']})
+                       'source_signature': item['source_signature'], 'first_activity': file['first_activity'],
+                       'last_activity': file['last_activity']})
     return result
 
 
@@ -87,7 +90,7 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
             orphaned.append({'path': relative, 'source': parts[0], 'area': parts[1],
                              'name': name, 'bytes': private_file(path).stat().st_size,
                              'sha256': marker['sha256'], 'source_signature': marker['source_signature'],
-                             'last_activity': marker['last_activity']})
+                             'first_activity': marker.get('first_activity'), 'last_activity': marker['last_activity']})
         result = {'cutoff': cutoff.isoformat(), 'eligible_files': len(candidates) + len(orphaned),
                   'eligible_bytes': sum(c['bytes'] for c in candidates + orphaned),
                   'orphaned_eviction_files': len(orphaned),
@@ -107,7 +110,10 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
                 result['source_verification_gaps'][label] = 'config_or_roots_mismatch'
                 continue
             try:
-                current, _ = probe_with_retry(spec, snapshot.get('exclude_sessions', []))
+                hash_files = {area: [c['name'] for c in candidates + orphaned
+                                     if c['source'] == label and c['area'] == area]
+                              for area in ('sessions', 'archived_sessions')}
+                current, _ = probe_with_retry({**spec, '_hash_files': hash_files}, snapshot.get('exclude_sessions', []))
                 if {k: current[k] for k in ('hostname','user')} != source.get('identity'):
                     raise ValueError('Source identity mismatch')
                 verified[label] = current
@@ -121,7 +127,9 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
             if current['roots'][item['area']]['status'] != 'ok':
                 result['source_verification_gaps'][item['source']] = 'source_inventory_incomplete'
                 continue
-            if current['roots'][item['area']]['files'].get(item['name']) != item['source_signature']:
+            source_item = current['roots'][item['area']]['files'].get(item['name'], {})
+            if ({k: source_item.get(k) for k in ('size', 'mtime_ns')} != item['source_signature'] or
+                    source_item.get('sha256') != item['sha256']):
                 result['source_verification_gaps'][item['source']] = 'source_file_changed_or_missing'
                 continue
             selected.append(item)
@@ -131,7 +139,7 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
         timestamp = dt.datetime.now(dt.timezone.utc).isoformat()
         for item in selected:
             if item['path'] not in evicted:
-                evicted[item['path']] = {k: item[k] for k in ('source_signature','sha256','last_activity')}
+                evicted[item['path']] = {k: item[k] for k in ('source_signature','sha256','first_activity','last_activity')}
                 evicted[item['path']]['evicted_at'] = timestamp
                 del snapshot['sources'][item['source']]['files'][item['path']]
         if selected:

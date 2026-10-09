@@ -17,7 +17,7 @@ from transcript_cache import cache_path, file_hash, locked_cache, private_dir, r
 # Only metadata is returned by the identity/inventory probe. Paths are explicit
 # approved transcript roots, never a home-directory or configuration copy.
 PROBE = r'''
-import getpass,json,os,pathlib,socket,stat,sys
+import getpass,hashlib,json,os,pathlib,socket,stat,sys
 request=json.loads(sys.argv[1]); result={'hostname':socket.gethostname(),'user':getpass.getuser(),'roots':{}}
 for area,raw in request['roots'].items():
  p=pathlib.Path(raw)
@@ -33,7 +33,20 @@ for area,raw in request['roots'].items():
    try:
     s=q.lstat()
     if not stat.S_ISREG(s.st_mode):gaps.append('nonregular_transcript');continue
-    files[str(q.relative_to(p))]={'size':s.st_size,'mtime_ns':s.st_mtime_ns}
+    name=str(q.relative_to(p)); item={'size':s.st_size,'mtime_ns':s.st_mtime_ns}
+    if name in request.get('hash_files',{}).get(area,[]):
+     digest=hashlib.sha256()
+     with q.open('rb') as handle:
+      opened=os.fstat(handle.fileno())
+      if (opened.st_dev,opened.st_ino,opened.st_size,opened.st_mtime_ns,opened.st_ctime_ns)!=(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns):
+       gaps.append('changed_hash_target');continue
+      for block in iter(lambda:handle.read(1024*1024),b''):digest.update(block)
+      end=os.fstat(handle.fileno())
+     final=q.lstat()
+     proof=lambda v:(v.st_dev,v.st_ino,v.st_size,v.st_mtime_ns,v.st_ctime_ns)
+     if proof(s)!=proof(end) or proof(s)!=proof(final):gaps.append('changed_hash_target');continue
+     item['sha256']=digest.hexdigest()
+    files[name]=item
    except OSError:gaps.append('unreadable_transcript')
  result['roots'][area]={'status':'ok' if not gaps else 'partial','files':files,'gaps':gaps}
 print(json.dumps(result))
@@ -52,7 +65,7 @@ def validate_source(spec):
     for field in ('label',):
         if not isinstance(spec.get(field), str) or not LABEL.fullmatch(spec[field]):
             raise ValueError('Invalid source label')
-    if spec['label'].lower() in {'snapshot.json', 'index.sqlite3', 'index.sqlite3-journal', 'index.sqlite3-wal', 'index.sqlite3-shm'}:
+    if spec['label'].lower() in {'snapshot.json', 'index.sqlite3', 'index.sqlite3-journal', 'index.sqlite3-wal', 'index.sqlite3-shm', 'review-ledger.json'}:
         raise ValueError('Reserved cache-control source label')
     if spec.get('ssh') is not None and not LABEL.fullmatch(spec['ssh']):
         raise ValueError('Use an existing SSH host alias')
@@ -69,7 +82,7 @@ def validate_source(spec):
 
 
 def probe(spec, exclude):
-    payload = json.dumps({'roots': spec['roots'], 'exclude_sessions': exclude})
+    payload = json.dumps({'roots': spec['roots'], 'exclude_sessions': exclude, 'hash_files': spec.get('_hash_files', {})})
     command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(PROBE) + ' ' + shlex.quote(payload)]
                if spec.get('ssh') else [sys.executable, '-c', PROBE, payload])
     result = subprocess.run(command, capture_output=True, text=True, timeout=30)
@@ -142,7 +155,16 @@ def pull(cache, config):
             try:
                 phase = 'initial_probe'
                 coverage_through = dt.datetime.now(dt.timezone.utc).isoformat()
-                before, retries = probe_with_retry(spec, exclude)
+                # Hash only tombstoned sources, including same-metadata rewrites.
+                hash_files = {'sessions': [], 'archived_sessions': []}
+                for relative in evicted:
+                    parts = Path(relative).parts
+                    if len(parts) >= 3 and parts[0] == label and parts[1] in hash_files:
+                        name = '/'.join(parts[2:])
+                        if RSYNC_SAFE_PATH.fullmatch(name):
+                            hash_files[parts[1]].append(name)
+                probe_spec = {**spec, '_hash_files': hash_files}
+                before, retries = probe_with_retry(probe_spec, exclude)
                 identity = {k: before[k] for k in ('hostname', 'user')}
                 if old.get('identity') not in (None, identity) or old.get('roots') not in (None, spec['roots']):
                     raise ValueError('Source label was reused; use a new cache label')
@@ -157,7 +179,8 @@ def pull(cache, config):
                     area, name = parts[1], '/'.join(parts[2:])
                     source_item = before['roots'][area]['files'].get(name)
                     if (source_item and RSYNC_SAFE_PATH.fullmatch(name) and
-                            source_item == marker.get('source_signature')):
+                            {k: source_item[k] for k in ('size', 'mtime_ns')} == marker.get('source_signature') and
+                            source_item.get('sha256') == marker.get('sha256')):
                         skipped[area].add(name)
                     elif source_item:
                         # A resumed or otherwise changed old chat returns to the hot cache.
@@ -191,7 +214,7 @@ def pull(cache, config):
                             path.chmod(0o700 if stat.S_ISDIR(info.st_mode) else 0o600)
                     transfer[area] = 'ok' if result.returncode == 0 else 'rsync_incomplete'
                 phase = 'final_probe'
-                after, extra_retries = probe_with_retry(spec, exclude)
+                after, extra_retries = probe_with_retry(probe_spec, exclude)
                 entry['probe_timeout_retries'] += extra_retries
                 inventory_completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
                 inventory = {}
@@ -203,10 +226,10 @@ def pull(cache, config):
                     if any(after['roots'][area]['files'].get(name) != before['roots'][area]['files'].get(name)
                            for name in skipped[area]):
                         transfer[area] = 'evicted_source_changed_during_pull'
-                    if any(Path(relative).parts[:2] == (label, area) and
-                           '/'.join(Path(relative).parts[2:]) not in after['roots'][area]['files']
-                           for relative in evicted):
-                        transfer[area] = 'evicted_source_missing'
+                    for relative, marker in evicted.items():
+                        parts = Path(relative).parts
+                        if parts[:2] == (label, area):
+                            marker['present_at_source'] = '/'.join(parts[2:]) in now_files
                     directory = source_dir / area
                     if not directory.exists():
                         continue
@@ -233,10 +256,12 @@ def pull(cache, config):
                         inventory[relative] = {
                             'area': area, 'sha256': digest, 'size': first[0], 'mtime_ns': first[1],
                             'present_at_source': present,
-                            'source_signature': now_files.get(name) if present else None,
+                            'source_signature': {k: now_files[name][k] for k in ('size', 'mtime_ns')} if present else None,
                             'first_observed_at': prior.get('first_observed_at', snapshot['observed_at']),
                             'archive_observed_after': (prior.get('archive_observed_after') or
-                                (old.get('last_successful_pull') if area == 'archived_sessions' and not prior and present else None))}
+                                (old.get('last_successful_pull') if area == 'archived_sessions' and not prior and present else None)),
+                            'archive_observed_through': (prior.get('archive_observed_through') or
+                                (inventory_completed_at if area == 'archived_sessions' and not prior and present else None))}
                     # Missing new source files are explicit transfer gaps; old
                     # cached files remain available and are labeled as retained.
                     if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]
