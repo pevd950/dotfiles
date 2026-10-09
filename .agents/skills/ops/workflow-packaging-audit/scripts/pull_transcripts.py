@@ -282,7 +282,11 @@ def pull(cache, config):
                     for relative, marker in evicted.items():
                         parts = Path(relative).parts
                         if parts[:2] == (label, area):
-                            marker['present_at_source'] = '/'.join(parts[2:]) in now_files
+                            name = '/'.join(parts[2:])
+                            if name in now_files and name not in before['roots'][area]['files']:
+                                marker['restoration_pending'] = True
+                                marker['restore_sha256'] = now_files[name].get('sha256')
+                            marker['present_at_source'] = name in now_files
                     directory = source_dir / area
                     if not directory.exists():
                         continue

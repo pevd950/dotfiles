@@ -473,6 +473,32 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(queue['primary_with_archive_appearance'], 1)
         self.assertEqual(queue['primary'][0]['anchor']['path'], self.relative)
 
+    def test_evicted_archive_reappearing_at_final_probe_is_restored_next_pull(self):
+        source = self.evict_archive()
+        away = self.base/'away.jsonl'; source.rename(away)
+        real = puller.probe
+        calls = 0
+        def return_at_final_probe(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                away.rename(source)
+            return real(spec, excluded)
+        with patch.object(puller, 'probe', side_effect=return_at_final_probe):
+            self.assertEqual(self.pull()['source-a']['status'], 'partial')
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        marker = read_json(self.cache/'snapshot.json')['evicted'][relative]
+        self.assertTrue(marker['present_at_source'])
+        self.assertTrue(marker['restoration_pending'])
+        self.assertFalse((self.cache/relative).exists())
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        self.assertTrue((self.cache/relative).exists())
+        self.assertFalse(read_json(self.cache/'snapshot.json')['evicted'])
+        now = dt.datetime.now(dt.timezone.utc)
+        queue = review_worklist.worklist(self.cache,
+            (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
+        self.assertEqual(queue['primary_with_archive_appearance'], 1)
+
     def fail_transfer(self):
         real = puller.subprocess.run
         def fail(command, **kwargs):
