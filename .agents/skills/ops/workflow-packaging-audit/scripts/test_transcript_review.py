@@ -461,6 +461,40 @@ class TranscriptReviewTests(unittest.TestCase):
             (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
         self.assertEqual(queue['primary_with_archive_appearance'], 1)
 
+    def check_retained_archive_reappearance(self, existing_bounds):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        if existing_bounds:
+            snapshot = read_json(self.cache/'snapshot.json')
+            snapshot['sources']['source-a']['files'][relative].update(
+                archive_observed_after='2026-06-15T00:00:00Z', archive_observed_through='2026-07-15T00:00:00Z')
+            write_json(self.cache/'snapshot.json', snapshot)
+        away = self.base/'away.jsonl'; source.rename(away)
+        self.pull(); self.scan()
+        self.assertTrue((self.cache/relative).exists())
+        self.assertFalse(read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]['present_at_source'])
+        away.rename(source)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        item = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]
+        now = dt.datetime.now(dt.timezone.utc)
+        queue = review_worklist.worklist(self.cache,
+            (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
+        self.assertEqual(queue['primary_with_archive_appearance'], 1)
+        self.assertFalse(queue['review_complete'])
+        if existing_bounds:
+            self.assertEqual(item['archive_observed_after'], '2026-06-15T00:00:00Z')
+            self.assertEqual(review_worklist.worklist(self.cache, '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z')['primary_with_archive_appearance'], 1)
+        self.pull(); self.scan()
+        self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]['archive_observed_through'], item['archive_observed_through'])
+
+    def test_retained_archive_reappearance_preserves_old_and_new_windows(self):
+        self.check_retained_archive_reappearance(existing_bounds=True)
+
+    def test_retained_baseline_archive_reappearance_creates_discovery_interval(self):
+        self.check_retained_archive_reappearance(existing_bounds=False)
+
     def test_evicted_archive_recovered_as_active_preserves_discovery(self):
         source = self.evict_archive(); source.rename(self.codex/'sessions'/source.name)
         self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
