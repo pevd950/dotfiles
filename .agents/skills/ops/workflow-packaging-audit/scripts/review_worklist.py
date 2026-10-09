@@ -87,7 +87,7 @@ def build(root, snapshot, connection, after, through):
     for source in snapshot['sources'].values():
         for path, item in source.get('files', {}).items():
             observed = item.get('archive_observed_after')
-            if item.get('area') != 'archived_sessions' or not observed:
+            if not observed:
                 continue
             try:
                 lower = stamp(observed)

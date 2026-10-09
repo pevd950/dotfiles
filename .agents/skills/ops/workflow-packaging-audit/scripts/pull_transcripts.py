@@ -114,6 +114,48 @@ def rsync_command(spec, area, destination, exclude, skipped=()):
     return command + ['--exclude=.~tmp~/', '--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
 
 
+def reconcile_evictions(root, label, evicted, inventory, transfer, observed_through):
+    """Retire markers only after their replacement bytes are verified in the cache."""
+    def preserve_archive_bounds(marker, item):
+        if not marker.get('archive_observed_after'):
+            return
+        lower = [v for v in (marker.get('archive_observed_after'), item.get('archive_observed_after')) if v]
+        upper = [v for v in (marker.get('archive_observed_through'), item.get('archive_observed_through')) if v]
+        when = lambda value: dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+        item['archive_observed_after'] = min(lower, key=when)
+        item['archive_observed_through'] = max(upper, key=when) if upper else observed_through
+
+    for relative, marker in list(evicted.items()):
+        parts = Path(relative).parts
+        if len(parts) < 3 or parts[0] != label:
+            continue
+        expected = marker.get('restore_sha256') if marker.get('restoration_pending') else marker.get('sha256')
+        if not expected:
+            continue
+        replacement = inventory.get(relative)
+        if (marker.get('restoration_pending') and replacement and
+                transfer.get(replacement['area']) == 'ok' and replacement['sha256'] == expected):
+            preserve_archive_bounds(marker, replacement)
+            del evicted[relative]
+            continue
+        if marker.get('present_at_source') is not False:
+            continue
+        replacement = next((item for path, item in inventory.items()
+                            if path != relative and transfer.get(item['area']) == 'ok' and item['sha256'] == expected), None)
+        if replacement is None:
+            continue
+        orphan = cache_path(root, relative)
+        if orphan.exists():
+            first = signature(orphan)
+            if file_hash(orphan) != marker['sha256'] or signature(orphan) != first:
+                transfer[parts[1]] = 'unverified_eviction_orphan'
+                continue
+            # Finish an already-authorized eviction after verifying recovery.
+            private_file(orphan).unlink()
+        preserve_archive_bounds(marker, replacement)
+        del evicted[relative]
+
+
 def pull(cache, config):
     if not isinstance(config, dict):
         raise ValueError('Expected a configuration object')
@@ -171,6 +213,7 @@ def pull(cache, config):
                 entry['identity'] = identity
                 entry['probe_timeout_retries'] = retries
                 skipped = {'sessions': set(), 'archived_sessions': set()}
+                restoring = set()
                 for relative, marker in list(evicted.items()):
                     parts = Path(relative).parts
                     if len(parts) < 3 or parts[0] != label or parts[1] not in skipped:
@@ -181,12 +224,15 @@ def pull(cache, config):
                     if (source_item and RSYNC_SAFE_PATH.fullmatch(name) and
                             {k: source_item[k] for k in ('size', 'mtime_ns')} == marker.get('source_signature') and
                             source_item.get('sha256') == marker.get('sha256') and
+                            not marker.get('restoration_pending') and marker.get('present_at_source') is not False and
                             marker.get('exclude_sessions') is not None and
                             sorted(marker['exclude_sessions']) == sorted(exclude)):
                         skipped[area].add(name)
                     elif source_item:
-                        # A resumed or otherwise changed old chat returns to the hot cache.
-                        del evicted[relative]
+                        # Keep the old evidence until a replacement is actually verified.
+                        marker['restoration_pending'] = True
+                        marker['restore_sha256'] = source_item.get('sha256')
+                        restoring.add(relative)
                 source_dir = private_dir(root / label)
                 # Publish invalidation before rsync can replace any cached bytes.
                 # Keep prior hashes only in the private in-memory recovery input.
@@ -228,6 +274,11 @@ def pull(cache, config):
                     if any(after['roots'][area]['files'].get(name) != before['roots'][area]['files'].get(name)
                            for name in skipped[area]):
                         transfer[area] = 'evicted_source_changed_during_pull'
+                        for name in skipped[area]:
+                            if now_files.get(name) != before['roots'][area]['files'].get(name):
+                                marker = evicted[str(Path(label, area, name))]
+                                marker['restoration_pending'] = True
+                                marker['restore_sha256'] = now_files.get(name, before['roots'][area]['files'][name]).get('sha256')
                     for relative, marker in evicted.items():
                         parts = Path(relative).parts
                         if parts[:2] == (label, area):
@@ -240,7 +291,7 @@ def pull(cache, config):
                             continue  # Uncommitted rsync staging is not a source copy.
                         relative = str(path.relative_to(root))
                         cache_path(root, relative)
-                        if relative in evicted:
+                        if relative in evicted and relative not in restoring:
                             continue  # A prior interrupted eviction left an orphan copy.
                         name = str(path.relative_to(directory))
                         prior = old.get('files', {}).get(relative, {})
@@ -273,24 +324,7 @@ def pull(cache, config):
                     if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]
                            for name in now_files):
                         transfer[area] = 'cache_missing_source_files'
-                # Once identical bytes are recovered in a verified archive copy,
-                # the absent active path no longer represents missing history.
-                if transfer.get('archived_sessions') == 'ok':
-                    recovered = {item['sha256'] for item in inventory.values()
-                                 if item['area'] == 'archived_sessions' and item['present_at_source']}
-                    for relative, marker in list(evicted.items()):
-                        if (Path(relative).parts[:2] == (label, 'sessions') and
-                                marker.get('present_at_source') is False and marker.get('sha256') in recovered):
-                            orphan = cache_path(root, relative)
-                            if orphan.exists():
-                                first = signature(orphan)
-                                if file_hash(orphan) != marker['sha256'] or signature(orphan) != first:
-                                    transfer['sessions'] = 'unverified_eviction_orphan'
-                                    continue
-                                # Finish the already-authorized, interrupted eviction
-                                # only after its identical archive copy is verified.
-                                private_file(orphan).unlink()
-                            del evicted[relative]
+                reconcile_evictions(root, label, evicted, inventory, transfer, inventory_completed_at)
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
                              status='ok' if all(v == 'ok' for v in transfer.values()) else 'partial')

@@ -47,7 +47,7 @@ def plan(root, snapshot, connection, cutoff):
             continue
         # Archive appearance itself is relevant; the first observed archive
         # baseline is not a historical transition timestamp.
-        if file['area'] == 'archived_sessions':
+        if file['area'] == 'archived_sessions' or item.get('archive_observed_after'):
             observed = dt.datetime.fromisoformat(item['first_observed_at'])
             observed_through = dt.datetime.fromisoformat(item.get('archive_observed_through') or source['inventory_completed_at'])
             if observed >= cutoff or observed_through >= cutoff:

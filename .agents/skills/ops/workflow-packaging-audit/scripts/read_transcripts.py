@@ -296,7 +296,7 @@ def evicted_window_gaps(snapshot, source, low, high):
         archive_overlap = observed_after is not None and observed_after.isoformat(timespec='microseconds') < high and (
             observed_through is None or observed_through.isoformat(timespec='microseconds') > low)
         exclusions_changed = 'exclude_sessions' not in marker or sorted(marker['exclude_sessions']) != sorted(snapshot.get('exclude_sessions', []))
-        if activity_overlap or archive_overlap or exclusions_changed:
+        if activity_overlap or archive_overlap or exclusions_changed or marker.get('restoration_pending'):
             gaps += 1
     return gaps
 

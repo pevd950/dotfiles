@@ -432,6 +432,133 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(result['evicted_files'], 1)
         self.assertTrue(source.exists())
 
+    def evict_archive(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        item = snapshot['sources']['source-a']['files']['source-a/archived_sessions/old-name.jsonl']
+        item.update(first_observed_at='2026-07-15T00:00:00Z', archive_observed_after='2026-06-15T00:00:00Z',
+                    archive_observed_through='2026-07-15T00:00:00Z')
+        write_json(self.cache/'snapshot.json', snapshot)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+        return source
+
+    def test_reappearing_evicted_archive_is_restored_and_queued(self):
+        source = self.evict_archive()
+        away = self.base/'away.jsonl'; source.rename(away)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok')
+        marker = read_json(self.cache/'snapshot.json')['evicted']['source-a/archived_sessions/old-name.jsonl']
+        self.assertFalse(marker['present_at_source'])
+        away.rename(source)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        self.assertTrue((self.cache/'source-a/archived_sessions/old-name.jsonl').exists())
+        self.assertFalse(read_json(self.cache/'snapshot.json')['evicted'])
+        now = dt.datetime.now(dt.timezone.utc)
+        queue = review_worklist.worklist(self.cache,
+            (now-dt.timedelta(hours=1)).isoformat(), (now+dt.timedelta(hours=1)).isoformat())
+        self.assertEqual(queue['primary_with_archive_appearance'], 1)
+
+    def test_evicted_archive_recovered_as_active_preserves_discovery(self):
+        source = self.evict_archive(); source.rename(self.codex/'sessions'/source.name)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        self.assertFalse(snapshot['evicted'])
+        item = snapshot['sources']['source-a']['files'][self.relative]
+        self.assertEqual(item['archive_observed_after'], '2026-06-15T00:00:00Z')
+        self.assertTrue(reader.report(self.cache, '2025-12-01T00:00:00Z', '2026-01-15T00:00:00Z')['all_sources_covered'])
+        queue = review_worklist.worklist(self.cache, '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z')
+        self.assertEqual(queue['primary_with_archive_appearance'], 1)
+        self.assertEqual(queue['primary'][0]['anchor']['path'], self.relative)
+
+    def fail_transfer(self):
+        real = puller.subprocess.run
+        def fail(command, **kwargs):
+            if command[0] == 'rsync':
+                return puller.subprocess.CompletedProcess(command, 23)
+            return real(command, **kwargs)
+        return patch.object(puller.subprocess, 'run', side_effect=fail)
+
+    def test_failed_replacement_keeps_tombstone_after_source_disappears(self):
+        source = self.evict_old()
+        source.write_text(source.read_text()+json.dumps(record('user_message', message='resumed'))+'\n')
+        with self.fail_transfer():
+            self.assertEqual(self.pull()['source-a']['status'], 'partial')
+        marker = read_json(self.cache/'snapshot.json')['evicted'][self.relative]
+        self.assertTrue(marker['restoration_pending'])
+        source.unlink(); self.pull(); self.scan()
+        self.assertIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_interrupted_replacement_keeps_tombstone_after_source_disappears(self):
+        source = self.evict_old()
+        source.write_text(source.read_text()+json.dumps(record('user_message', message='resumed'))+'\n')
+        real = puller.subprocess.run
+        def interrupt(command, **kwargs):
+            if command[0] == 'rsync':
+                raise KeyboardInterrupt()
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=interrupt), self.assertRaises(KeyboardInterrupt):
+            self.pull()
+        marker = read_json(self.cache/'snapshot.json')['evicted'][self.relative]
+        self.assertTrue(marker['restoration_pending'])
+        source.unlink(); self.pull(); self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_failed_exclusion_replacement_keeps_tombstone(self):
+        source = self.evict_old(); self.config['exclude_sessions'] = ['audit']
+        with self.fail_transfer():
+            self.pull()
+        self.assertIn(self.relative, read_json(self.cache/'snapshot.json')['evicted'])
+        source.unlink(); self.pull(); self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_failed_replacement_can_recover_changed_bytes_in_archive(self):
+        source = self.evict_old()
+        source.write_text(source.read_text()+json.dumps(record('user_message', message='resumed'))+'\n')
+        with self.fail_transfer():
+            self.pull()
+        source.rename(self.codex/'archived_sessions'/source.name)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        self.assertFalse(read_json(self.cache/'snapshot.json')['evicted'])
+        self.assertEqual(self.report()['sources']['source-a']['selected_records'], 1)
+        self.assertTrue(self.report()['all_sources_covered'])
+
+    def test_legacy_archive_recovered_as_active_gets_stable_upper_bound(self):
+        source = self.evict_archive()
+        snapshot = read_json(self.cache/'snapshot.json')
+        marker = snapshot['evicted']['source-a/archived_sessions/old-name.jsonl']
+        marker.pop('archive_observed_through')
+        write_json(self.cache/'snapshot.json', snapshot)
+        source.rename(self.codex/'sessions'/source.name)
+        self.pull(); self.scan()
+        bound = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][self.relative]['archive_observed_through']
+        self.assertIsNotNone(bound)
+        self.pull(); self.scan()
+        self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][self.relative]['archive_observed_through'], bound)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.datetime.now(dt.timezone.utc).date()+dt.timedelta(days=90), apply=True)
+        self.assertEqual(result['evicted_files'], 1)
+
+    def test_skipped_source_changed_during_pull_keeps_recovery_gap(self):
+        source = self.evict_old()
+        real = puller.probe
+        calls = 0
+        def change_at_final_probe(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                source.write_text(source.read_text()+json.dumps(record('user_message', message='resumed'))+'\n')
+            return real(spec, excluded)
+        with patch.object(puller, 'probe', side_effect=change_at_final_probe):
+            self.assertEqual(self.pull()['source-a']['status'], 'partial')
+        marker = read_json(self.cache/'snapshot.json')['evicted'][self.relative]
+        self.assertTrue(marker['restoration_pending'])
+        source.unlink(); self.pull(); self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
     def test_same_metadata_cache_edit_invalidates_all_read_paths(self):
         self.write([{'type':'session_meta','payload':{'id':'old'}},record('user_message',message='hello')])
         self.pull();self.scan();self.assertTrue(self.report()['all_sources_covered'])
