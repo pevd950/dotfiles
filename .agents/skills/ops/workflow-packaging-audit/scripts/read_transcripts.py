@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import sqlite3
 
-from scan_codex_sessions import _event, _time
+from scan_codex_sessions import _event, _time, _source_class
 from transcript_cache import cache_path, file_hash, locked_cache, private_file, read_json, signature, write_json
 
 SCHEMA = '''
@@ -52,13 +52,12 @@ def connect(root):
     if 'verified_stat' not in file_columns:
         connection.execute('ALTER TABLE files ADD COLUMN verified_stat TEXT')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
-    if version is None or version[0] != '5':
-        # Rebuild derived cursors once to account for identity/envelope gaps
-        # and quarantine unknown segments after excluded sessions.
+    if version is None or version[0] != '6':
+        # Rebuild derived cursors once to retain each session header's source class.
         with connection:
             connection.execute('DELETE FROM records')
             connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0")
-            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','5')")
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','6')")
     return connection
 
 
@@ -203,6 +202,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                                 owner = session
                                             header_seen = True
                                             kind = 'session_meta' if valid else 'invalid_session_meta'
+                                            summary = {'source_class': _source_class(payload.get('source'))} if valid else {}
                                             if not valid:
                                                 malformed += 1
                                         else:
@@ -281,6 +281,82 @@ def scope_at_record(connection, scope, row, *, window_checked=False):
     return record_scope(current, row['stamp'], window_checked=window_checked)
 
 
+def evicted_window_gaps(snapshot, source, low, high):
+    """Legacy tombstones without a first timestamp may overlap any earlier window."""
+    gaps = 0
+    for path, marker in snapshot.get('evicted', {}).items():
+        if not path.startswith(source + '/'):
+            continue
+        last = _time(marker.get('last_activity'))
+        first = _time(marker.get('first_activity'))
+        observed_after = _time(marker.get('archive_observed_after'))
+        observed_through = _time(marker.get('archive_observed_through'))
+        activity_overlap = last is None or (last.isoformat(timespec='microseconds') > low and
+            (first is None or first.isoformat(timespec='microseconds') <= high))
+        archive_overlap = observed_after is not None and observed_after.isoformat(timespec='microseconds') < high and (
+            observed_through is None or observed_through.isoformat(timespec='microseconds') > low)
+        exclusions_changed = 'exclude_sessions' not in marker or sorted(marker['exclude_sessions']) != sorted(snapshot.get('exclude_sessions', []))
+        if activity_overlap or archive_overlap or exclusions_changed or marker.get('restoration_pending'):
+            gaps += 1
+    return gaps
+
+
+def coverage_report(snapshot, connection, after, through):
+    """Describe the verified snapshot/index while the caller holds its cache lock."""
+    low, high = stamp(after), stamp(through)
+    if low >= high:
+        raise ValueError('Empty or reversed window')
+    sources = {}
+    for source, entry in snapshot['sources'].items():
+        rows = connection.execute('SELECT * FROM files WHERE listed=1 AND source=?', (source,)).fetchall()
+        selected = connection.execute("SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND f.status='complete' AND r.stamp>? AND r.stamp<=? AND r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')", (source, low, high)).fetchone()[0]
+        pending = sum(r['status'] == 'pending' for r in rows)
+        changed = sum(r['status'] == 'changed' for r in rows)
+        evicted_gaps = evicted_window_gaps(snapshot, source, low, high)
+        parse_gaps = sum(r['malformed'] + r['oversized'] + r['untimestamped'] for r in rows if r['status'] != 'excluded')
+        coverage = _time(entry.get('coverage_through', entry.get('last_successful_pull')))
+        reaches_end = coverage is not None and stamp(through) <= coverage.isoformat(timespec='microseconds') and coverage <= dt.datetime.now(dt.timezone.utc)
+        excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
+        undated_files = set()
+        for file in rows:
+            current_header_time = None
+            for record in connection.execute("SELECT kind,stamp,excluded FROM records WHERE file=? AND (kind IN ('session_meta','invalid_session_meta') OR (excluded=0 AND stamp IS NULL AND kind IN ('user_message','assistant_message','tool_call','tool_result'))) ORDER BY line", (file['id'],)):
+                if record['kind'] in ('session_meta', 'invalid_session_meta'):
+                    current_header_time = record['stamp'] if record['kind'] == 'session_meta' else None
+                elif current_header_time is not None:
+                    undated_files.add(file['id'])
+                    break
+        sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
+            'host_basis': 'verified_copy_source',
+            'pull_status': entry['status'], 'pull_error': entry.get('error'),
+            'last_successful_pull': entry.get('last_successful_pull'),
+            'coverage_through': coverage.isoformat() if coverage else None,
+            'inventory_reaches_window_end': reaches_end,
+            'excluded_records': excluded_count,
+            'cached_files': len(rows), 'pending_files': pending, 'changed_files': changed,
+            'excluded_files': sum(r['status'] == 'excluded' for r in rows),
+            'bytes_scanned': sum(r['offset'] for r in rows),
+            'records_scanned': sum(r['line'] for r in rows), 'selected_records': selected,
+            'malformed_records': sum(r['malformed'] for r in rows),
+            'oversized_unparsed': sum(r['oversized'] for r in rows),
+            'untimestamped_events': sum(r['untimestamped'] for r in rows),
+            'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
+            'undated_files_with_session_time': len(undated_files),
+            'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
+            'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps and not evicted_gaps,
+            'evicted_window_gaps': evicted_gaps,
+            'evicted_old_copies': sum(path.startswith(source + '/') for path in snapshot.get('evicted', {})),
+            'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
+            'new_archive_observations': sum(bool(f.get('archive_observed_after')) for f in entry.get('files', {}).values())}
+    return {'window': {'after': low, 'through': high}, 'sources': sources,
+            'excluded_sessions': snapshot.get('exclude_sessions', []),
+            'snapshot_observed_at': snapshot['observed_at'],
+            'all_sources_covered': all(s['timestamp_selection_complete'] for s in sources.values()),
+            'archive_history': snapshot['archive_history'],
+            'time_scope': 'Candidate pages include dated in-window activity plus undated activity with explicit session-level or unknown time. Session start does not prove activity-window membership.',
+            'interpretation': 'Record occurrences preserve source/file attribution; copies and inherited fork history are not deduplicated. Coverage is not a completed model review.'}
+
+
 def report(cache, after, through):
     low, high = stamp(after), stamp(through)
     if low >= high:
@@ -292,52 +368,7 @@ def report(cache, after, through):
             with connection:
                 refresh_inventory(connection, snapshot)
                 verify_index_bytes(connection, root)
-            sources = {}
-            for source, entry in snapshot['sources'].items():
-                rows = connection.execute('SELECT * FROM files WHERE listed=1 AND source=?', (source,)).fetchall()
-                selected = connection.execute("SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND f.status='complete' AND r.stamp>? AND r.stamp<=? AND r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result')", (source, low, high)).fetchone()[0]
-                pending = sum(r['status'] == 'pending' for r in rows)
-                changed = sum(r['status'] == 'changed' for r in rows)
-                parse_gaps = sum(r['malformed'] + r['oversized'] + r['untimestamped'] for r in rows if r['status'] != 'excluded')
-                coverage = _time(entry.get('coverage_through', entry.get('last_successful_pull')))
-                reaches_end = coverage is not None and stamp(through) <= coverage.isoformat(timespec='microseconds') and coverage <= dt.datetime.now(dt.timezone.utc)
-                excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
-                undated_files = set()
-                for file in rows:
-                    current_header_time = None
-                    for record in connection.execute("SELECT kind,stamp,excluded FROM records WHERE file=? AND (kind IN ('session_meta','invalid_session_meta') OR (excluded=0 AND stamp IS NULL AND kind IN ('user_message','assistant_message','tool_call','tool_result'))) ORDER BY line", (file['id'],)):
-                        if record['kind'] in ('session_meta', 'invalid_session_meta'):
-                            current_header_time = record['stamp'] if record['kind'] == 'session_meta' else None
-                        elif current_header_time is not None:
-                            undated_files.add(file['id'])
-                            break
-                sources[source] = {'source_host': entry.get('identity', {}).get('hostname'),
-                    'host_basis': 'verified_copy_source',
-                    'pull_status': entry['status'], 'pull_error': entry.get('error'),
-                    'last_successful_pull': entry.get('last_successful_pull'),
-                    'coverage_through': coverage.isoformat() if coverage else None,
-                    'inventory_reaches_window_end': reaches_end,
-                    'excluded_records': excluded_count,
-                    'cached_files': len(rows), 'pending_files': pending, 'changed_files': changed,
-                    'excluded_files': sum(r['status'] == 'excluded' for r in rows),
-                    'bytes_scanned': sum(r['offset'] for r in rows),
-                    'records_scanned': sum(r['line'] for r in rows), 'selected_records': selected,
-                    'malformed_records': sum(r['malformed'] for r in rows),
-                    'oversized_unparsed': sum(r['oversized'] for r in rows),
-                    'untimestamped_events': sum(r['untimestamped'] for r in rows),
-                    'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
-                    'undated_files_with_session_time': len(undated_files),
-                    'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
-                    'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps,
-                    'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
-                    'new_archive_observations': sum(bool(f.get('archive_observed_after')) for f in entry.get('files', {}).values())}
-            return {'window': {'after': low, 'through': high}, 'sources': sources,
-                    'excluded_sessions': snapshot.get('exclude_sessions', []),
-                    'snapshot_observed_at': snapshot['observed_at'],
-                    'all_sources_covered': all(s['timestamp_selection_complete'] for s in sources.values()),
-                    'archive_history': snapshot['archive_history'],
-                    'time_scope': 'Candidate pages include dated in-window activity plus undated activity with explicit session-level or unknown time. Session start does not prove activity-window membership.',
-                    'interpretation': 'Record occurrences preserve source/file attribution; copies and inherited fork history are not deduplicated. Coverage is not a completed model review.'}
+            return coverage_report(snapshot, connection, after, through)
         finally:
             connection.close()
 
