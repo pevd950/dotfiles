@@ -316,6 +316,20 @@ def coverage_report(snapshot, connection, after, through):
         parse_gaps = sum(r['malformed'] + r['oversized'] + r['untimestamped'] for r in rows if r['status'] != 'excluded')
         coverage = _time(entry.get('coverage_through', entry.get('last_successful_pull')))
         reaches_end = coverage is not None and stamp(through) <= coverage.isoformat(timespec='microseconds') and coverage <= dt.datetime.now(dt.timezone.utc)
+        transfers = entry.get('transfer', {})
+        growth_proofs = entry.get('source_growth_proofs', {})
+        def area_covers_window(area, value):
+            if value in ('ok', 'new_files_after_initial_inventory'):
+                return True
+            if value != 'source_growth_after_initial_inventory_verified':
+                return False
+            proof = growth_proofs.get(area, {})
+            earliest = proof.get('earliest_unread_activity')
+            return bool(proof.get('verified_files')) and (earliest is None or stamp(through) < stamp(earliest))
+        closed_window_copy = (entry['status'] == 'ok' or
+            (entry['status'] == 'partial' and bool(transfers) and
+             all(area_covers_window(area, value) for area, value in transfers.items())))
+        source_bytes_cover_window = closed_window_copy and reaches_end and not pending and not changed and not evicted_gaps
         excluded_count = connection.execute('SELECT count(*) FROM records r JOIN files f ON f.id=r.file WHERE f.listed=1 AND f.source=? AND r.excluded=1', (source,)).fetchone()[0]
         undated_files = set()
         for file in rows:
@@ -343,7 +357,8 @@ def coverage_report(snapshot, connection, after, through):
             'undated_scope_records': sum(r['untimestamped'] for r in rows if r['status'] == 'complete'),
             'undated_files_with_session_time': len(undated_files),
             'cached_traversal_complete': bool(entry.get('files') is not None) and not pending and not changed,
-            'timestamp_selection_complete': entry['status'] == 'ok' and reaches_end and not pending and not changed and not parse_gaps and not evicted_gaps,
+            'source_bytes_cover_window': source_bytes_cover_window,
+            'timestamp_selection_complete': source_bytes_cover_window and not parse_gaps,
             'evicted_window_gaps': evicted_gaps,
             'evicted_old_copies': sum(path.startswith(source + '/') for path in snapshot.get('evicted', {})),
             'retained_files_absent_at_source': sum(not f['present_at_source'] for f in entry.get('files', {}).values()),
