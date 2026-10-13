@@ -168,7 +168,7 @@ after verifying the new links. Preserve regular files at those paths for
 review rather than deleting them.
 
 ### VS Code Prompts
-Stored in `.config/Code/User/prompts/`. If an app still expects the macOS Application Support path, create the symlink manually.
+Legacy VS Code user prompts may be host-local. Confirm the source directory exists before creating a compatibility link; this repository does not currently track that prompt directory.
 
 ### Host-Local Environment Files
 
@@ -231,7 +231,7 @@ Full yadm bootstrap:
 1. Runs `yadm alt` for machine-specific configs
 2. Creates required local directories
 3. Calls `setup.sh` for remaining setup
-4. Symlinks shared agent skills into Codex, Claude, and Copilot
+4. Refreshes Claude compatibility links to the canonical shared skills.
 
 Both scripts are designed to be safe to re-run.
 
@@ -284,8 +284,7 @@ from its local Git config. That restores inherited helpers. If the checkout had 
 custom local helper before setup, restore its previous values instead.
 
 ### Shared AI Skills
-- Canonical skill source lives in `.config/agent-skills/skills/`.
-- Bootstrap symlinks each shared skill folder into `CODEX_HOME/skills` (defaulting to `.codex/skills/`), `.claude/skills/`, and `.copilot/skills/`.
+Canonical personal/shared skills live in `~/.agents/skills/`, organized by category. Codex and Copilot use this standard root. Bootstrap creates Claude compatibility links and removes obsolete provider links; it does not install three separate skill copies. Repository state does not establish host installation or runtime discovery.
 - Skills that depend on machine-local secrets should read them from env vars at runtime rather than storing them in tracked files.
 - Notify the user: load `$notify-user` (`.agents/skills/productivity/notify-user/`). Do not call ActionBuddy, Poke, or Buddy MCP for routine handoffs.
 - Example secret: the default-enabled Poke provider under `$notify-user` requires `POKE_API_KEY` (missing key soft-skips).
@@ -305,10 +304,7 @@ yadm bootstrap
 
 ## 🆘 Common Issues
 
-**VS Code prompts missing**: Create the symlink manually if a macOS app expects the Application Support path:
-```bash
-ln -snf ~/.config/Code/User/prompts ~/Library/Application\ Support/Code/User/prompts
-```
+**VS Code prompts missing**: Legacy VS Code user prompts may be host-local. Confirm the source directory exists before creating a compatibility link; this repository does not currently track that prompt directory.
 
 **Wrong Brewfile**: Check hostname matches:
 ```bash

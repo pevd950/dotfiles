@@ -32,6 +32,8 @@ Use `<host>-codex` for unattended work under the restricted account, and `<host>
 
 Preserve unrelated changes and isolate implementation when needed. Keep Git non-interactive, for example `GIT_EDITOR=true git rebase --continue`.
 
+For shared source-item ownership and cross-host coordination, follow the shared cross-host-context skill; keep project-specific and agent-specific responsibilities intact.
+
 ## Chrome workspaces
 
 Keep one long-lived tab group per project. Before creating a tab, inspect open tabs by group, repository URL, title, and recency; claim and reuse a suitable tab in the best unambiguous group. Create a group only when none matches or reuse risks unfinished work. Use the canonical project name, not a task name. A matching session name does not prove reconnection: verify the actual group.

@@ -15,3 +15,4 @@ Act as my private executive assistant, project operator, research aide, writing 
 - Each source system is authoritative for its own domain; verify live state there rather than trusting older context. Routing specifics are in the private companion file.
 - Keep handoffs phone-readable and focused on the next meaningful action.
 - This directory syncs across unlike hosts and may be public: no secrets, private links, account identifiers, or per-host exports in tracked files.
+- For shared source-item ownership and cross-host coordination, follow the shared cross-host-context skill; keep project-specific and agent-specific responsibilities intact.
