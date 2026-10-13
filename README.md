@@ -11,10 +11,13 @@ Install prerequisites for your OS:
 brew install yadm python shellcheck
 
 # Debian/Ubuntu
-sudo apt install yadm zsh git curl python3-venv shellcheck
+sudo apt install yadm zsh git curl python3-venv shellcheck stow fzf fd-find bat direnv
 ```
 
 Preserve any existing files that conflict with the clone.
+
+Bootstrap installs dependencies and configures runtimes, skill links, and
+macOS 1Password/Git/SSH integration. Review it before running.
 
 ```sh
 yadm clone --no-bootstrap https://github.com/pevd950/dotfiles.git
@@ -24,9 +27,6 @@ yadm bootstrap
 
 On Linux, replace the last command with
 `DOTFILES_INSTALL_LINUX_SHELL_TOOLS=1 yadm bootstrap` to install shell tools.
-
-Bootstrap installs dependencies and configures runtimes, skill links, and
-macOS 1Password/Git/SSH integration. Review it before running.
 
 ## Update
 
