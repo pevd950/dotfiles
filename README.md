@@ -167,9 +167,6 @@ old alternate sources disappear; they are no longer read and can be removed
 after verifying the new links. Preserve regular files at those paths for
 review rather than deleting them.
 
-### VS Code Prompts
-Legacy VS Code user prompts may be host-local. Confirm the source directory exists before creating a compatibility link; this repository does not currently track that prompt directory.
-
 ### Host-Local Environment Files
 
 Keep host-local values out of tracked dotfiles. Use the narrowest local file
@@ -303,8 +300,6 @@ yadm bootstrap
 ```
 
 ## 🆘 Common Issues
-
-**VS Code prompts missing**: Legacy VS Code user prompts may be host-local. Confirm the source directory exists before creating a compatibility link; this repository does not currently track that prompt directory.
 
 **Wrong Brewfile**: Check hostname matches:
 ```bash
