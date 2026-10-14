@@ -95,6 +95,17 @@ class TranscriptReviewTests(unittest.TestCase):
             result = puller.probe({**self.spec, '_hash_files': {'sessions': [source.name]}}, [])
         self.assertEqual(result['roots']['sessions']['files'][source.name]['sha256'], hashlib.sha256(source.read_bytes()).hexdigest())
 
+    def test_unresponsive_remote_hash_probe_stops_at_short_ssh_preflight(self):
+        spec = {**self.spec, 'ssh': 'source-review',
+                '_hash_files': {'sessions': ['old-name.jsonl']}}
+        with patch.object(puller.subprocess, 'run',
+                          side_effect=puller.subprocess.TimeoutExpired(['ssh'], 30)) as run, \
+             patch.object(puller, 'probe', side_effect=AssertionError('hash probe started')):
+            with self.assertRaises(puller.subprocess.TimeoutExpired):
+                puller.probe_with_retry(spec, [])
+        self.assertEqual(run.call_count, 2)
+        self.assertTrue(all(call.kwargs['timeout'] == 30 for call in run.call_args_list))
+
     def test_transient_ssh_probe_retries_but_identity_mismatch_does_not(self):
         self.write([record('user_message',message='hello')])
         real = puller.probe
@@ -139,6 +150,124 @@ class TranscriptReviewTests(unittest.TestCase):
         self.pull(); self.scan()
         self.assertTrue((self.cache/self.relative).exists())
         self.assertEqual(len(reader.candidates(self.cache, AFTER, THROUGH)), 1)
+
+    def test_retention_reconciles_evicted_path_still_listed_after_copy_removed(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-07-01T12:00:00Z'
+        self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old])
+        self.pull(); self.scan()
+        original = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][self.relative]
+        cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        snapshot = read_json(self.cache/'snapshot.json')
+        snapshot['sources']['source-a']['files'][self.relative] = original
+        del snapshot['evicted'][self.relative]['first_activity']
+        del snapshot['evicted'][self.relative]['exclude_sessions']
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.assertEqual(self.report()['sources']['source-a']['changed_files'], 1)
+        with patch.object(cache_retention, 'probe_with_retry', side_effect=AssertionError('unexpected probe')):
+            result = cache_retention.run(self.cache, self.config, days=60,
+                timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['reconciled_inventory_files'], 1)
+        self.assertEqual(result['recovered_legacy_markers'], 1)
+        self.assertEqual(result['evicted_files'], 0)
+        self.assertEqual(self.report()['sources']['source-a']['changed_files'], 0)
+        marker = read_json(self.cache/'snapshot.json')['evicted'][self.relative]
+        self.assertEqual(marker['first_activity'], '2026-07-01T12:00:00.000000+00:00')
+        self.assertEqual(marker['exclude_sessions'], [])
+        self.assertEqual(self.report()['sources']['source-a']['evicted_window_gaps'], 0)
+
+    def test_retention_does_not_invent_legacy_bounds_without_matching_index(self):
+        self.evict_old()
+        snapshot = read_json(self.cache/'snapshot.json')
+        marker = snapshot['evicted'][self.relative]
+        del marker['first_activity']; del marker['exclude_sessions']
+        marker['last_activity'] = '2026-07-02T12:00:00+00:00'
+        write_json(self.cache/'snapshot.json', snapshot)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['recoverable_legacy_markers'], 0)
+        self.assertNotIn('first_activity', read_json(self.cache/'snapshot.json')['evicted'][self.relative])
+
+    def test_retention_resolves_same_bytes_pending_restoration_after_verified_probe(self):
+        self.evict_old()
+        snapshot = read_json(self.cache/'snapshot.json')
+        marker = snapshot['evicted'][self.relative]
+        marker['restoration_pending'] = True
+        marker['restore_sha256'] = marker['sha256']
+        snapshot['sources']['source-a']['files'][self.relative] = {
+            'area': 'sessions', 'sha256': marker['sha256'],
+            'size': marker['source_signature']['size'],
+            'mtime_ns': marker['source_signature']['mtime_ns'],
+            'present_at_source': True,
+            'source_signature': marker['source_signature']}
+        del marker['first_activity']; del marker['exclude_sessions']
+        write_json(self.cache/'snapshot.json', snapshot)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['resolved_pending_markers'], 1)
+        self.assertEqual(result['recovered_legacy_markers'], 1)
+        self.assertEqual(result['reconciled_inventory_files'], 1)
+        self.assertNotIn(self.relative, read_json(self.cache/'snapshot.json')['sources']['source-a']['files'])
+        self.assertNotIn('restoration_pending', read_json(self.cache/'snapshot.json')['evicted'][self.relative])
+        self.assertEqual(self.report()['sources']['source-a']['evicted_window_gaps'], 0)
+
+    def test_retention_keeps_pending_restoration_when_source_bytes_changed(self):
+        source = self.evict_old()
+        snapshot = read_json(self.cache/'snapshot.json')
+        marker = snapshot['evicted'][self.relative]
+        marker['restoration_pending'] = True
+        marker['restore_sha256'] = marker['sha256']
+        snapshot['sources']['source-a']['files'][self.relative] = {
+            'area': 'sessions', 'sha256': marker['sha256'],
+            'size': marker['source_signature']['size'],
+            'mtime_ns': marker['source_signature']['mtime_ns'],
+            'present_at_source': True,
+            'source_signature': marker['source_signature']}
+        write_json(self.cache/'snapshot.json', snapshot)
+        before = source.stat()
+        source.write_text(source.read_text().replace('"message": "old"', '"message": "new"'))
+        os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['resolved_pending_markers'], 0)
+        self.assertEqual(result['source_verification_gaps']['source-a'], 'source_file_changed_or_missing')
+        self.assertTrue(read_json(self.cache/'snapshot.json')['evicted'][self.relative]['restoration_pending'])
+
+    def test_retention_deduplicates_listed_eviction_orphan(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-07-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old])
+        self.pull(); self.scan()
+        original = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][self.relative]
+        cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        cached = self.cache/self.relative
+        cached.write_bytes(source.read_bytes()); cached.chmod(0o600)
+        snapshot = read_json(self.cache/'snapshot.json')
+        snapshot['sources']['source-a']['files'][self.relative] = original
+        write_json(self.cache/'snapshot.json', snapshot)
+        result = cache_retention.run(self.cache, self.config, days=60,
+            timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['eligible_files'], 1)
+        self.assertEqual(result['orphaned_eviction_files'], 1)
+        self.assertEqual(result['evicted_files'], 1)
+        self.assertEqual(result['reconciled_inventory_files'], 1)
+        self.assertFalse(cached.exists())
+        self.assertEqual(self.report()['sources']['source-a']['changed_files'], 0)
+
+    def test_retention_does_not_reprobe_unavailable_source(self):
+        source = self.evict_old()
+        cached = self.cache/self.relative
+        cached.write_bytes(source.read_bytes()); cached.chmod(0o600)
+        snapshot = read_json(self.cache/'snapshot.json')
+        snapshot['sources']['source-a']['status'] = 'unavailable'
+        snapshot['sources']['source-a']['error'] = 'initial_probe_timeout'
+        write_json(self.cache/'snapshot.json', snapshot)
+        with patch.object(cache_retention, 'probe_with_retry', side_effect=AssertionError('unexpected probe')):
+            result = cache_retention.run(self.cache, self.config, days=60,
+                timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['source_verification_gaps']['source-a'], 'latest_pull_unavailable')
+        self.assertEqual(result['evicted_files'], 0)
+        self.assertTrue(cached.exists())
 
     def test_retention_preserves_undated_recent_archive_and_absent_source(self):
         old = record('user_message', message='old'); old['timestamp']='2026-07-01T12:00:00Z'
@@ -969,6 +1098,198 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertFalse(state['inventory_reaches_window_end'])
         self.assertTrue(reader.report(self.cache, AFTER, '2026-09-09T00:00:00Z')['all_sources_covered'])
 
+    def test_new_file_after_initial_inventory_does_not_block_closed_window(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                    record('user_message', message='dated')])
+        real = puller.probe_with_retry
+        calls = 0
+        def create_during_pull(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                self.write([{'type': 'session_meta', 'payload': {'id': 'new'}},
+                            record('user_message', message='later copy')], name='appeared-later.jsonl')
+            return real(spec, excluded)
+        with patch.object(puller, 'probe_with_retry', side_effect=create_during_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'partial')
+        self.assertEqual(result['transfer']['sessions'], 'new_files_after_initial_inventory')
+        self.scan()
+        self.assertTrue(self.report()['all_sources_covered'])
+        self.assertFalse(reader.report(self.cache, AFTER,
+            (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=1)).isoformat())['all_sources_covered'])
+        self.pull(); self.scan()
+        self.assertTrue((self.cache/'source-a/sessions/appeared-later.jsonl').exists())
+
+    def test_failed_transfer_with_final_inventory_growth_cannot_cover_window(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='copied')])
+        self.pull(); self.scan()
+        copied = (self.cache/self.relative).read_bytes()
+        with source.open('a') as handle:
+            handle.write(json.dumps(record('user_message', message='uncopied in-window append')) + '\n')
+        real_probe = puller.probe_with_retry
+        real_run = puller.subprocess.run
+        probes = 0
+        def add_at_final_inventory(spec, excluded):
+            nonlocal probes
+            probes += 1
+            if probes == 2:
+                self.write([{'type': 'session_meta', 'payload': {'id': 'new'}},
+                            record('user_message', message='uncopied new file')], name='appeared-later.jsonl')
+            return real_probe(spec, excluded)
+        def fail_sessions_transfer(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                return puller.subprocess.CompletedProcess(command, 23, b'', b'')
+            return real_run(command, **kwargs)
+        with patch.object(puller, 'probe_with_retry', side_effect=add_at_final_inventory), \
+             patch.object(puller.subprocess, 'run', side_effect=fail_sessions_transfer):
+            result = self.pull()['source-a']
+        self.scan()
+        self.assertEqual((self.cache/self.relative).read_bytes(), copied)
+        self.assertNotEqual(source.read_bytes(), copied)
+        self.assertFalse((self.cache/'source-a/sessions/appeared-later.jsonl').exists())
+        coverage = self.report()
+        self.assertFalse(coverage['sources']['source-a']['source_bytes_cover_window'])
+        self.assertFalse(coverage['all_sources_covered'])
+        self.assertEqual(result['transfer']['sessions'], 'rsync_incomplete')
+
+    def test_recorded_transfer_failure_blocks_misclassified_snapshot(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                    record('user_message', message='copied')])
+        self.pull(); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        source = snapshot['sources']['source-a']
+        source['rsync_exit_codes']['sessions'] = 23
+        for status, classification in [('partial', 'new_files_after_initial_inventory'),
+                                       ('partial', 'source_growth_after_initial_inventory_verified'),
+                                       ('ok', 'ok')]:
+            with self.subTest(status=status, classification=classification):
+                source['status'] = status
+                source['transfer']['sessions'] = classification
+                source['source_growth_proofs'] = {'sessions': {
+                    'verified_files': 1, 'earliest_unread_activity': None}}
+                write_json(self.cache/'snapshot.json', snapshot)
+                coverage = self.report()
+                self.assertFalse(coverage['sources']['source-a']['source_bytes_cover_window'])
+                self.assertFalse(coverage['all_sources_covered'])
+
+    def test_legacy_partial_snapshot_requires_fresh_transfer_proof(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                    record('user_message', message='copied')])
+        self.pull(); self.scan()
+        snapshot = read_json(self.cache/'snapshot.json')
+        source = snapshot['sources']['source-a']
+        del source['rsync_exit_codes']
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.assertTrue(self.report()['all_sources_covered'])
+        source['status'] = 'partial'
+        source['transfer']['sessions'] = 'new_files_after_initial_inventory'
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_failed_transfer_cannot_be_rescued_by_post_cutoff_append_proof(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='copied')])
+        self.pull(); self.scan()
+        real_run = puller.subprocess.run
+        def fail_and_append(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                appended = record('user_message', message='after cutoff')
+                appended['timestamp'] = dt.datetime.now(dt.timezone.utc).isoformat()
+                with source.open('a') as handle:
+                    handle.write(json.dumps(appended) + '\n')
+                return puller.subprocess.CompletedProcess(command, 23, b'', b'')
+            return real_run(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=fail_and_append), \
+             patch.object(puller, 'probe_appended_tail', side_effect=AssertionError('unexpected rescue')):
+            result = self.pull()['source-a']
+        self.scan()
+        self.assertEqual(result['transfer']['sessions'], 'rsync_incomplete')
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_existing_source_append_is_proved_and_bounded_by_tail_time(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='dated')])
+        real = puller.probe_with_retry
+        calls = 0
+        tail_time = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=1)
+        def append_during_pull(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                appended = record('user_message', message='append')
+                appended['timestamp'] = tail_time.isoformat()
+                with source.open('a') as handle:
+                    handle.write(json.dumps(appended) + '\n')
+            return real(spec, excluded)
+        with patch.object(puller, 'probe_with_retry', side_effect=append_during_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['transfer']['sessions'], 'source_growth_after_initial_inventory_verified')
+        self.scan()
+        self.assertTrue(self.report()['all_sources_covered'])
+        self.assertTrue(reader.report(self.cache, AFTER,
+            (tail_time-dt.timedelta(minutes=30)).isoformat())['all_sources_covered'])
+        self.assertFalse(reader.report(self.cache, AFTER,
+            (tail_time+dt.timedelta(minutes=30)).isoformat())['all_sources_covered'])
+
+    def test_in_window_source_append_still_blocks_closed_window(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='dated')])
+        real = puller.probe_with_retry
+        calls = 0
+        def append_during_pull(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                with source.open('a') as handle:
+                    handle.write(json.dumps(record('user_message', message='old copied append')) + '\n')
+            return real(spec, excluded)
+        with patch.object(puller, 'probe_with_retry', side_effect=append_during_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['transfer']['sessions'], 'source_growth_after_initial_inventory_verified')
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_same_size_rewrite_after_copy_is_not_proved_as_append(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='old')])
+        real = puller.probe_with_retry
+        calls = 0
+        def rewrite_during_pull(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                before = source.stat()
+                source.write_text(source.read_text().replace('"message": "old"', '"message": "new"'))
+                os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return real(spec, excluded)
+        with patch.object(puller, 'probe_with_retry', side_effect=rewrite_during_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['transfer']['sessions'], 'source_changed_during_pull')
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_undated_append_cannot_prove_closed_window(self):
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'keep'}},
+                             record('user_message', message='dated')])
+        real = puller.probe_with_retry
+        calls = 0
+        def append_during_pull(spec, excluded):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                appended = record('user_message', message='unknown')
+                appended.pop('timestamp')
+                with source.open('a') as handle:
+                    handle.write(json.dumps(appended) + '\n')
+            return real(spec, excluded)
+        with patch.object(puller, 'probe_with_retry', side_effect=append_during_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['transfer']['sessions'], 'source_changed_during_pull')
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
     def test_excluded_child_is_hidden_without_losing_parent_or_later_child(self):
         self.write([{'type':'session_meta','payload':{'id':'parent'}}, record('user_message',message='keep parent'),
                     {'type':'session_meta','payload':{'id':'excluded-child'}}, record('user_message',message='hide child'),
@@ -1045,6 +1366,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(state['malformed_records'], 1)
         self.assertEqual(state['untimestamped_events'], 1)
         self.assertEqual(state['selected_records'], 1)
+        self.assertTrue(state['source_bytes_cover_window'])
         self.assertFalse(state['timestamp_selection_complete'])
 
     def test_symlinks_are_not_copied_and_cache_redirection_is_rejected(self):

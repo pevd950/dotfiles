@@ -33,7 +33,7 @@ for area,raw in request['roots'].items():
    try:
     s=q.lstat()
     if not stat.S_ISREG(s.st_mode):gaps.append('nonregular_transcript');continue
-    name=str(q.relative_to(p)); item={'size':s.st_size,'mtime_ns':s.st_mtime_ns}
+    name=str(q.relative_to(p)); item={'size':s.st_size,'mtime_ns':s.st_mtime_ns,'ctime_ns':s.st_ctime_ns}
     if name in hash_files:
      digest=hashlib.sha256()
      with q.open('rb') as handle:
@@ -49,6 +49,45 @@ for area,raw in request['roots'].items():
     files[name]=item
    except OSError:gaps.append('unreadable_transcript')
  result['roots'][area]={'status':'ok' if not gaps else 'partial','files':files,'gaps':gaps}
+print(json.dumps(result))
+'''
+APPEND_PROBE = r'''
+import datetime as dt,getpass,hashlib,json,os,pathlib,re,socket,stat,sys
+request=json.load(sys.stdin);result={'hostname':socket.gethostname(),'user':getpass.getuser(),'checks':{}}
+for area,checks in request['checks'].items():
+ root=pathlib.Path(request['roots'][area]);result['checks'][area]={}
+ if not root.is_absolute() or any(p.is_symlink() for p in (root,*root.parents)) or not root.is_dir():continue
+ for name,want in checks.items():
+  item={'prefix_matches':False,'tail_min':None,'tail_records':0};result['checks'][area][name]=item
+  if not re.fullmatch(r'[A-Za-z0-9_./-]+',name) or not name.endswith('.jsonl'):continue
+  relative=pathlib.PurePosixPath(name)
+  if relative.is_absolute() or any(part in ('.','..') for part in relative.parts):continue
+  path=root.joinpath(*relative.parts)
+  if any(p.is_symlink() for p in (path,*path.parents)) or not path.is_file():continue
+  try:
+   before=path.stat();size=want['size']
+   if not stat.S_ISREG(before.st_mode) or not isinstance(size,int) or size<=0 or size>before.st_size:continue
+   digest=hashlib.sha256();remaining=size;last=b'';tail_min=None;tail_count=0
+   with path.open('rb') as handle:
+    opened=os.fstat(handle.fileno())
+    if (opened.st_dev,opened.st_ino,opened.st_size,opened.st_mtime_ns,opened.st_ctime_ns)!=(before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns):continue
+    while remaining:
+     block=handle.read(min(1024*1024,remaining))
+     if not block:break
+     digest.update(block);remaining-=len(block);last=block[-1:]
+    if remaining or last!=b'\n' or digest.hexdigest()!=want['sha256']:continue
+    for raw in handle:
+     row=json.loads(raw);stamp=row.get('timestamp')
+     if not isinstance(stamp,str):raise ValueError('undated_tail')
+     parsed=dt.datetime.fromisoformat(stamp.replace('Z','+00:00'))
+     if parsed.tzinfo is None:raise ValueError('naive_tail')
+     parsed=parsed.astimezone(dt.timezone.utc)
+     tail_min=parsed if tail_min is None or parsed<tail_min else tail_min
+     tail_count+=1
+   after=path.stat()
+   if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)!=(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns):continue
+   item.update(prefix_matches=True,tail_min=tail_min.isoformat() if tail_min else None,tail_records=tail_count)
+  except (OSError,ValueError,KeyError,TypeError,json.JSONDecodeError):continue
 print(json.dumps(result))
 '''
 SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
@@ -100,10 +139,36 @@ def probe(spec, exclude):
 
 def probe_with_retry(spec, exclude):
     """Retry one transient metadata probe; never retry a transfer or change identity."""
+    def attempt():
+        if spec.get('ssh') and any(spec.get('_hash_files', {}).values()):
+            # A historical hash probe may wait up to 15 minutes. Check that
+            # the exact configured SSH route can run a trivial command first,
+            # so an unresponsive host fails within the metadata budget.
+            preflight = subprocess.run(SSH + [spec['ssh'], 'true'],
+                                      capture_output=True, timeout=30)
+            if preflight.returncode == 255:
+                raise ProbeUnavailable('ssh_probe_unavailable')
+            if preflight.returncode:
+                raise ValueError('Source transport preflight failed')
+        return probe(spec, exclude)
     try:
-        return probe(spec, exclude), 0
+        return attempt(), 0
     except (subprocess.TimeoutExpired, ProbeUnavailable):
-        return probe(spec, exclude), 1
+        return attempt(), 1
+
+
+def probe_appended_tail(spec, area, checks):
+    """Prove copied bytes are a stable prefix and timestamp every uncopied row."""
+    payload = json.dumps({'roots': spec['roots'], 'checks': {area: checks}})
+    command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(APPEND_PROBE)]
+               if spec.get('ssh') else [sys.executable, '-c', APPEND_PROBE])
+    result = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=900)
+    if result.returncode:
+        raise ValueError('Source append proof failed')
+    value = json.loads(result.stdout)
+    if value.get('hostname', '').casefold() not in {h.casefold() for h in spec['hostnames']} or value.get('user') != spec['user']:
+        raise ValueError('Source append proof identity mismatch')
+    return value.get('checks', {}).get(area, {})
 
 
 def rsync_command(spec, area, destination, exclude, skipped=()):
@@ -238,12 +303,14 @@ def pull(cache, config):
                 source_dir = private_dir(root / label)
                 # Publish invalidation before rsync can replace any cached bytes.
                 # Keep prior hashes only in the private in-memory recovery input.
-                entry.update(files={}, status='transferring')
+                entry.update(files={}, status='transferring', source_growth_proofs={}, rsync_exit_codes={})
                 write_json(metadata, snapshot)
                 transfer = {}
+                rsync_exit_codes = {}
                 for area in ('sessions', 'archived_sessions'):
                     if before['roots'][area]['status'] != 'ok':
                         transfer[area] = 'source_inventory_incomplete'
+                        rsync_exit_codes[area] = None
                         continue
                     phase = 'rsync_' + area
                     destination = private_dir(source_dir / area)
@@ -253,6 +320,7 @@ def pull(cache, config):
                             cache_path(root, str((Path(base) / name).relative_to(root)))
                     result = subprocess.run(rsync_command(spec, area, destination, exclude, skipped[area]),
                                             capture_output=True, timeout=3600)
+                    rsync_exit_codes[area] = result.returncode
                     # Apple openrsync accepts symbolic --chmod but can retain
                     # source modes. The enclosing 0700 cache stays private;
                     # normalize only owned cache copies before inventorying.
@@ -271,8 +339,18 @@ def pull(cache, config):
                 for area in ('sessions', 'archived_sessions'):
                     copied = transfer[area] == 'ok'
                     now_files = after['roots'][area]['files']
-                    if before['roots'][area] != after['roots'][area]:
-                        transfer[area] = 'source_changed_during_pull'
+                    if copied and before['roots'][area] != after['roots'][area]:
+                        initial = before['roots'][area]
+                        final = after['roots'][area]
+                        # Files first seen after the initial inventory may
+                        # contain copied older history, but were not present
+                        # when this already-closed review window was sampled.
+                        # Keep them explicit for later windows.
+                        only_added = (initial['status'] == final['status'] == 'ok' and
+                                      len(now_files) > len(initial['files']) and
+                                      all(now_files.get(name) == item for name, item in initial['files'].items()))
+                        transfer[area] = ('new_files_after_initial_inventory' if only_added
+                                          else 'source_changed_during_pull')
                     if any(after['roots'][area]['files'].get(name) != before['roots'][area]['files'].get(name)
                            for name in skipped[area]):
                         transfer[area] = 'evicted_source_changed_during_pull'
@@ -332,11 +410,45 @@ def pull(cache, config):
                             'archive_observed_through': archive_through}
                     # Missing new source files are explicit transfer gaps; old
                     # cached files remain available and are labeled as retained.
-                    if any(str(Path(label, area, name)) not in inventory and name not in skipped[area]
-                           for name in now_files):
-                        transfer[area] = 'cache_missing_source_files'
+                    missing = [name for name in now_files
+                               if str(Path(label, area, name)) not in inventory and name not in skipped[area]]
+                    if missing:
+                        if (transfer[area] in ('ok', 'new_files_after_initial_inventory') and
+                                all(name not in before['roots'][area]['files'] for name in missing)):
+                            transfer[area] = 'new_files_after_initial_inventory'
+                        else:
+                            transfer[area] = 'cache_missing_source_files'
+                    initial_files = before['roots'][area]['files']
+                    changed_existing = [name for name, item in initial_files.items()
+                                        if now_files.get(name) != item]
+                    growth_only = (copied and before['roots'][area]['status'] == after['roots'][area]['status'] == 'ok' and
+                                   bool(changed_existing) and
+                                   all(name in now_files and now_files[name]['size'] >= initial_files[name]['size']
+                                       for name in changed_existing) and
+                                   all(name not in initial_files for name in missing) and
+                                   transfer[area] in ('source_changed_during_pull', 'cache_missing_source_files'))
+                    checks = {name: {'size': inventory[str(Path(label, area, name))]['size'],
+                                     'sha256': inventory[str(Path(label, area, name))]['sha256']}
+                              for name in changed_existing if str(Path(label, area, name)) in inventory}
+                    if growth_only and len(checks) == len(changed_existing):
+                        try:
+                            proofs = probe_appended_tail(spec, area, checks)
+                            if all(proofs.get(name, {}).get('prefix_matches') for name in checks):
+                                unread = [proofs[name]['tail_min'] for name in checks if proofs[name]['tail_min']]
+                                entry['source_growth_proofs'][area] = {
+                                    'verified_files': len(checks),
+                                    'earliest_unread_activity': min(unread) if unread else None}
+                                transfer[area] = 'source_growth_after_initial_inventory_verified'
+                        except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+                            pass  # Preserve the partial source status and its gap.
                 reconcile_evictions(root, label, evicted, inventory, transfer, inventory_completed_at)
+                # Source observations can refine successful copies, but cannot
+                # erase an independently recorded transfer failure.
+                for area, code in rsync_exit_codes.items():
+                    if code is not None and code != 0:
+                        transfer[area] = 'rsync_incomplete'
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
+                             rsync_exit_codes=rsync_exit_codes,
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
                              status='ok' if all(v == 'ok' for v in transfer.values()) else 'partial')
                 if entry['status'] == 'ok':

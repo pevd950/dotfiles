@@ -33,6 +33,10 @@ def plan(root, snapshot, connection, cutoff):
         sum(CASE WHEN r.excluded=0 AND r.kind IN ('user_message','assistant_message','tool_call','tool_result') THEN 1 ELSE 0 END) activity_count
         FROM files f LEFT JOIN records r ON r.file=f.id WHERE f.listed=1 GROUP BY f.id""")
     for file in rows:
+        if file['path'] in snapshot.get('evicted', {}):
+            # An interrupted eviction may leave a copy and a stale inventory
+            # entry. The tombstone owns that path until a verified pull restores it.
+            continue
         source = snapshot['sources'].get(file['source'], {})
         item = source.get('files', {}).get(file['path'], {})
         area_state = source.get('transfer', {}).get(file['area'])
@@ -70,6 +74,31 @@ def plan(root, snapshot, connection, cutoff):
     return result
 
 
+def recoverable_legacy_markers(root, snapshot, connection):
+    """Recover bounds only from a complete index of the exact evicted bytes."""
+    repairs = []
+    for relative, marker in snapshot.get('evicted', {}).items():
+        if 'first_activity' in marker and 'exclude_sessions' in marker:
+            continue
+        path = cache_path(root, relative)
+        file = connection.execute('SELECT * FROM files WHERE path=?', (relative,)).fetchone()
+        if (file is None or file['sha256'] != marker.get('sha256') or
+                file['status'] not in ('complete', 'changed') or
+                file['offset'] != file['size'] or
+                file['malformed'] or file['oversized'] or file['untimestamped'] or
+                (file['status'] == 'changed' and path.exists())):
+            continue
+        row = connection.execute("""SELECT min(stamp) first, max(stamp) last
+            FROM records WHERE file=? AND excluded=0 AND stamp IS NOT NULL
+            AND kind IN ('user_message','assistant_message','tool_call','tool_result')""",
+            (file['id'],)).fetchone()
+        if (not row['first'] or row['last'] != marker.get('last_activity') or
+                ('first_activity' in marker and marker['first_activity'] != row['first'])):
+            continue
+        repairs.append((relative, row['first']))
+    return repairs
+
+
 def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
     cutoff = cutoff_for_days(days, timezone, today=now)
     with locked_cache(cache) as root:
@@ -77,12 +106,28 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
         connection = connect(root)
         try:
             candidates = plan(root, snapshot, connection, cutoff)
+            legacy_repairs = recoverable_legacy_markers(root, snapshot, connection)
         finally:
             connection.close()
         orphaned = []
+        stale_inventory = []
+        pending_reconciliation = []
         for relative, marker in snapshot.get('evicted', {}).items():
             path = cache_path(root, relative)
             if not path.exists():
+                parts = Path(relative).parts
+                if len(parts) >= 3:
+                    item = snapshot['sources'].get(parts[0], {}).get('files', {}).get(relative)
+                    if item and item.get('sha256') == marker.get('sha256'):
+                        if not marker.get('restoration_pending'):
+                            stale_inventory.append((parts[0], relative))
+                        elif (marker.get('restore_sha256') == marker.get('sha256') and
+                              parts[1] in ('sessions', 'archived_sessions') and
+                              RSYNC_SAFE_PATH.fullmatch('/'.join(parts[2:]))):
+                            pending_reconciliation.append({
+                                'path': relative, 'source': parts[0], 'area': parts[1],
+                                'name': '/'.join(parts[2:]), 'sha256': marker['sha256'],
+                                'source_signature': marker['source_signature']})
                 continue
             parts = Path(relative).parts
             if len(parts) < 3 or parts[1] not in ('sessions', 'archived_sessions'):
@@ -99,6 +144,12 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
         result = {'cutoff': cutoff.isoformat(), 'eligible_files': len(candidates) + len(orphaned),
                   'eligible_bytes': sum(c['bytes'] for c in candidates + orphaned),
                   'orphaned_eviction_files': len(orphaned),
+                  'reconcilable_inventory_files': len(stale_inventory),
+                  'reconciled_inventory_files': 0,
+                  'recoverable_legacy_markers': len(legacy_repairs),
+                  'recovered_legacy_markers': 0,
+                  'pending_same_bytes_markers': len(pending_reconciliation),
+                  'resolved_pending_markers': 0,
                   'evicted_files': 0, 'evicted_bytes': 0, 'source_verification_gaps': {},
                   'source_status_gaps': {label: {'status': entry.get('status'), 'error': entry.get('error')}
                       for label, entry in snapshot['sources'].items() if entry.get('status') != 'ok'}}
@@ -108,14 +159,19 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
         for spec in specs.values():
             validate_source(spec)
         verified = {}
-        for label in {c['source'] for c in candidates + orphaned}:
+        for label in {c['source'] for c in candidates + orphaned + pending_reconciliation}:
             spec = specs.get(label)
             source = snapshot['sources'].get(label)
             if spec is None or source is None or source.get('roots') != spec['roots']:
                 result['source_verification_gaps'][label] = 'config_or_roots_mismatch'
                 continue
+            if source.get('status') in ('unavailable', 'not_attempted', 'transferring'):
+                # The just-failed pull is sufficient to withhold eviction. A
+                # second historical-hash probe can stall for 15 minutes twice.
+                result['source_verification_gaps'][label] = 'latest_pull_unavailable'
+                continue
             try:
-                hash_files = {area: [c['name'] for c in candidates + orphaned
+                hash_files = {area: [c['name'] for c in candidates + orphaned + pending_reconciliation
                                      if c['source'] == label and c['area'] == area]
                               for area in ('sessions', 'archived_sessions')}
                 current, _ = probe_with_retry({**spec, '_hash_files': hash_files}, snapshot.get('exclude_sessions', []))
@@ -129,6 +185,10 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
             current = verified.get(item['source'])
             if current is None:
                 continue
+            listed = snapshot['sources'][item['source']].get('files', {}).get(item['path'])
+            if listed and listed.get('sha256') != item['sha256']:
+                result['source_verification_gaps'][item['source']] = 'inventory_tombstone_mismatch'
+                continue
             if current['roots'][item['area']]['status'] != 'ok':
                 result['source_verification_gaps'][item['source']] = 'source_inventory_incomplete'
                 continue
@@ -138,17 +198,47 @@ def run(cache, config, *, days=60, timezone='UTC', apply=False, now=None):
                 result['source_verification_gaps'][item['source']] = 'source_file_changed_or_missing'
                 continue
             selected.append(item)
+        resolved_pending = []
+        for item in pending_reconciliation:
+            current = verified.get(item['source'])
+            if current is None:
+                continue
+            if current['roots'][item['area']]['status'] != 'ok':
+                result['source_verification_gaps'][item['source']] = 'source_inventory_incomplete'
+                continue
+            source_item = current['roots'][item['area']]['files'].get(item['name'], {})
+            if ({k: source_item.get(k) for k in ('size', 'mtime_ns')} != item['source_signature'] or
+                    source_item.get('sha256') != item['sha256']):
+                result['source_verification_gaps'][item['source']] = 'source_file_changed_or_missing'
+                continue
+            resolved_pending.append(item)
         # Commit tombstones before unlinking. An interruption can leave an
         # extra local copy, never an unrecorded deletion or remote mutation.
         evicted = snapshot.setdefault('evicted', {})
         timestamp = dt.datetime.now(dt.timezone.utc).isoformat()
+        for relative, first_activity in legacy_repairs:
+            marker = evicted[relative]
+            marker['first_activity'] = first_activity
+            marker['exclude_sessions'] = sorted(snapshot.get('exclude_sessions', []))
+            result['recovered_legacy_markers'] += 1
+        for label, relative in stale_inventory:
+            del snapshot['sources'][label]['files'][relative]
+            result['reconciled_inventory_files'] += 1
+        for item in resolved_pending:
+            marker = evicted[item['path']]
+            marker.pop('restoration_pending', None)
+            marker.pop('restore_sha256', None)
+            if snapshot['sources'][item['source']]['files'].pop(item['path'], None) is not None:
+                result['reconciled_inventory_files'] += 1
+            result['resolved_pending_markers'] += 1
         for item in selected:
             if item['path'] not in evicted:
                 evicted[item['path']] = {k: item[k] for k in ('source_signature','sha256','first_activity','last_activity','archive_observed_after','archive_observed_through')}
                 evicted[item['path']]['evicted_at'] = timestamp
                 evicted[item['path']]['exclude_sessions'] = sorted(snapshot.get('exclude_sessions', []))
-                del snapshot['sources'][item['source']]['files'][item['path']]
-        if selected:
+            if snapshot['sources'][item['source']].get('files', {}).pop(item['path'], None) is not None:
+                result['reconciled_inventory_files'] += 1
+        if selected or stale_inventory or legacy_repairs or resolved_pending:
             snapshot['observed_at'] = timestamp
             snapshot['retention_applied_at'] = timestamp
             write_json(root / 'snapshot.json', snapshot)
