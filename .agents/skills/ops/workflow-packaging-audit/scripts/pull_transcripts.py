@@ -303,12 +303,14 @@ def pull(cache, config):
                 source_dir = private_dir(root / label)
                 # Publish invalidation before rsync can replace any cached bytes.
                 # Keep prior hashes only in the private in-memory recovery input.
-                entry.update(files={}, status='transferring', source_growth_proofs={})
+                entry.update(files={}, status='transferring', source_growth_proofs={}, rsync_exit_codes={})
                 write_json(metadata, snapshot)
                 transfer = {}
+                rsync_exit_codes = {}
                 for area in ('sessions', 'archived_sessions'):
                     if before['roots'][area]['status'] != 'ok':
                         transfer[area] = 'source_inventory_incomplete'
+                        rsync_exit_codes[area] = None
                         continue
                     phase = 'rsync_' + area
                     destination = private_dir(source_dir / area)
@@ -318,6 +320,7 @@ def pull(cache, config):
                             cache_path(root, str((Path(base) / name).relative_to(root)))
                     result = subprocess.run(rsync_command(spec, area, destination, exclude, skipped[area]),
                                             capture_output=True, timeout=3600)
+                    rsync_exit_codes[area] = result.returncode
                     # Apple openrsync accepts symbolic --chmod but can retain
                     # source modes. The enclosing 0700 cache stays private;
                     # normalize only owned cache copies before inventorying.
@@ -336,7 +339,7 @@ def pull(cache, config):
                 for area in ('sessions', 'archived_sessions'):
                     copied = transfer[area] == 'ok'
                     now_files = after['roots'][area]['files']
-                    if before['roots'][area] != after['roots'][area]:
+                    if copied and before['roots'][area] != after['roots'][area]:
                         initial = before['roots'][area]
                         final = after['roots'][area]
                         # Files first seen after the initial inventory may
@@ -418,7 +421,7 @@ def pull(cache, config):
                     initial_files = before['roots'][area]['files']
                     changed_existing = [name for name, item in initial_files.items()
                                         if now_files.get(name) != item]
-                    growth_only = (before['roots'][area]['status'] == after['roots'][area]['status'] == 'ok' and
+                    growth_only = (copied and before['roots'][area]['status'] == after['roots'][area]['status'] == 'ok' and
                                    bool(changed_existing) and
                                    all(name in now_files and now_files[name]['size'] >= initial_files[name]['size']
                                        for name in changed_existing) and
@@ -439,7 +442,13 @@ def pull(cache, config):
                         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
                             pass  # Preserve the partial source status and its gap.
                 reconcile_evictions(root, label, evicted, inventory, transfer, inventory_completed_at)
+                # Source observations can refine successful copies, but cannot
+                # erase an independently recorded transfer failure.
+                for area, code in rsync_exit_codes.items():
+                    if code is not None and code != 0:
+                        transfer[area] = 'rsync_incomplete'
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
+                             rsync_exit_codes=rsync_exit_codes,
                              coverage_through=coverage_through, inventory_completed_at=inventory_completed_at,
                              status='ok' if all(v == 'ok' for v in transfer.values()) else 'partial')
                 if entry['status'] == 'ok':
