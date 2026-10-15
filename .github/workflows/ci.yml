@@ -12,21 +12,15 @@ permissions:
 
 jobs:
   agent-setup:
-    name: Agent setup (${{ matrix.os }})
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    name: Windows agent setup
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Test agent-only PowerShell deployment
-        shell: pwsh
+        shell: powershell
         run: ./scripts/test-setup-windows.ps1
-      - name: Test WSL entry point in a disposable Linux home
-        if: runner.os == 'Linux'
-        run: |
-          shellcheck scripts/setup-wsl-agents.sh scripts/test-setup-wsl-agents.sh
-          bash scripts/test-setup-wsl-agents.sh
 
   validate:
     name: Validate dotfiles

@@ -1,4 +1,0 @@
-# New shell entry points must remain executable by Bash after Windows checkout.
-scripts/setup-wsl-agents.sh text eol=lf
-scripts/test-setup-wsl-agents.sh text eol=lf
-scripts/agent-skills.txt text eol=lf

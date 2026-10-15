@@ -1,65 +1,49 @@
 $ErrorActionPreference = 'Stop'
-$scriptPath = Join-Path $PSScriptRoot 'setup-windows.ps1'
+$installer = Join-Path $PSScriptRoot 'setup-windows.ps1'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('dotfiles-agents-' + [guid]::NewGuid())
-$targetRoot = Join-Path $testRoot 'profile with spaces'
-function Assert-True($Condition, $Message) { if (-not $Condition) { throw $Message } }
+$target = Join-Path $testRoot 'profile with spaces'
+$untracked = Join-Path (Split-Path $PSScriptRoot -Parent) ('.agents/skills/productivity/craft/untracked-' + [guid]::NewGuid() + '.tmp')
+function Assert($Condition, $Message) { if (-not $Condition) { throw $Message } }
 try {
-    & $scriptPath -TargetHome $targetRoot
-    Assert-True (-not (Test-Path $targetRoot)) 'Preview changed target home'
-    New-Item -ItemType Directory -Path (Join-Path $targetRoot '.codex') -Force | Out-Null
-    $instructionsPath = Join-Path $targetRoot '.codex/AGENTS.md'
-    Set-Content $instructionsPath 'host-local instructions'
+    & $installer -TargetHome $target
+    Assert (-not (Test-Path $target)) 'Preview wrote files'
+    New-Item -ItemType Directory -Path (Join-Path $target '.codex') -Force | Out-Null
+    $instructions = Join-Path $target '.codex/AGENTS.md'
+    [IO.File]::WriteAllText($instructions, '')
     $failed = $false
-    try { & $scriptPath -TargetHome $targetRoot -Apply } catch { $failed = $true }
-    Assert-True $failed 'Conflicting instructions were silently replaced'
-    Assert-True ((Get-Content $instructionsPath -Raw).Trim() -eq 'host-local instructions') 'Conflict changed'
-    $unrelatedPath = Join-Path $targetRoot '.codex/config.toml'
-    Set-Content $unrelatedPath 'keep me'
-    & $scriptPath -TargetHome $targetRoot -Apply -BackupConflicts
-    Assert-True ((Get-Content $instructionsPath -Raw) -match 'Craft is my knowledge base') 'Instructions missing'
-    Assert-True (Test-Path (Join-Path $targetRoot '.agents/skills/productivity/craft/references/formatting.md')) 'Craft references missing'
-    Assert-True (-not (Test-Path (Join-Path $targetRoot '.agents/skills/design'))) 'Unselected skills copied'
-    Assert-True ((Get-Content $unrelatedPath -Raw).Trim() -eq 'keep me') 'Unrelated config changed'
-    $backupFiles = @(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File -Force)
-    Assert-True (@($backupFiles | Where-Object Name -eq 'AGENTS.md').Count -eq 1) 'Conflict backup missing'
-    $backupCount = $backupFiles.Count
-    & $scriptPath -TargetHome $targetRoot -Apply
-    Assert-True (@(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File -Force).Count -eq $backupCount) 'Rerun created backups'
-    Set-Content (Join-Path $targetRoot '.codex/AGENTS.override.md') 'override'
+    try { & $installer -TargetHome $target -Apply } catch { $failed = $true }
+    Assert $failed 'Existing empty file was overwritten'
+    Assert ((Get-Item $instructions).Length -eq 0) 'Conflict changed'
+    Assert (-not (Test-Path (Join-Path $target '.agents'))) 'Partial deployment before conflict rejection'
+    Remove-Item -LiteralPath $instructions
+    $unrelated = Join-Path $target '.codex/config.toml'
+    Set-Content $unrelated 'preserve me'
+    Set-Content $untracked 'not part of the shared skill'
+    & $installer -TargetHome $target -Apply
+    Assert ((Get-Content $instructions -Raw) -match 'Craft is my knowledge base') 'Instructions missing'
+    Assert (Test-Path (Join-Path $target '.agents/skills/productivity/craft/references/formatting.md')) 'Supporting references missing'
+    Assert (-not (Test-Path (Join-Path $target '.agents/skills/design'))) 'Unselected skills deployed'
+    Assert (-not (Test-Path (Join-Path $target ('.agents/skills/productivity/craft/' + (Split-Path $untracked -Leaf))))) 'Untracked source file copied'
+    Assert ((Get-Content $unrelated -Raw).Trim() -eq 'preserve me') 'Unrelated configuration changed'
+    & $installer -TargetHome $target -Apply
+    Assert (-not (Test-Path (Join-Path $target '.local'))) 'Unnecessary deployment state created'
+    Set-Content (Join-Path $target '.codex/AGENTS.override.md') 'override'
     $failed = $false
-    try { & $scriptPath -TargetHome $targetRoot -Apply } catch { $failed = $true }
-    Assert-True $failed 'Shadowing override not rejected'
-    Remove-Item -LiteralPath (Join-Path $targetRoot '.codex/AGENTS.override.md')
-    $customCodex = Join-Path $targetRoot 'custom codex'
-    & $scriptPath -TargetHome $targetRoot -CodexHome $customCodex -Apply
-    Assert-True (Test-Path (Join-Path $customCodex 'AGENTS.md')) 'Custom Codex home ignored'
+    try { & $installer -TargetHome $target -Apply } catch { $failed = $true }
+    Assert $failed 'Shadowing override ignored'
+    $linked = Join-Path $testRoot 'linked'
     $outside = Join-Path $testRoot 'outside'
-    New-Item -ItemType Directory -Path $outside | Out-Null
-    $linkedHome = Join-Path $testRoot 'linked profile'
-    New-Item -ItemType Directory -Path $linkedHome | Out-Null
-    if ($IsWindows) { New-Item -ItemType Junction -Path (Join-Path $linkedHome '.agents') -Target $outside | Out-Null }
-    else { New-Item -ItemType SymbolicLink -Path (Join-Path $linkedHome '.agents') -Target $outside | Out-Null }
+    New-Item -ItemType Directory -Path $linked,$outside | Out-Null
+    New-Item -ItemType Junction -Path (Join-Path $linked '.agents') -Target $outside | Out-Null
     $failed = $false
-    try { & $scriptPath -TargetHome $linkedHome -Apply } catch { $failed = $true }
-    Assert-True $failed 'Linked target directory accepted'
-    Assert-True (@(Get-ChildItem $outside -Force).Count -eq 0) 'Wrote outside target through link'
-    $backupHome = Join-Path $testRoot 'backup profile'
-    New-Item -ItemType Directory -Path (Join-Path $backupHome '.codex') -Force | Out-Null
-    New-Item -ItemType Directory -Path (Join-Path $backupHome '.local/state/dotfiles-agents') -Force | Out-Null
-    Set-Content (Join-Path $backupHome '.codex/AGENTS.md') 'preserve backup fixture'
-    $backupLink = Join-Path $backupHome '.local/state/dotfiles-agents/backups'
-    if ($IsWindows) { New-Item -ItemType Junction -Path $backupLink -Target $outside | Out-Null }
-    else { New-Item -ItemType SymbolicLink -Path $backupLink -Target $outside | Out-Null }
-    $failed = $false
-    try { & $scriptPath -TargetHome $backupHome -Apply -BackupConflicts } catch { $failed = $true }
-    Assert-True $failed 'Linked backup directory accepted'
-    Assert-True (@(Get-ChildItem $outside -Force).Count -eq 0) 'Backup escaped profile'
-    Assert-True ((Get-Content (Join-Path $backupHome '.codex/AGENTS.md') -Raw).Trim() -eq 'preserve backup fixture') 'Deployment occurred before backup validation'
-    'PASS: Windows agent deployment safety tests'
+    try { & $installer -TargetHome $linked -Apply } catch { $failed = $true }
+    Assert $failed 'Linked target accepted'
+    Assert (@(Get-ChildItem $outside -Force).Count -eq 0) 'Wrote through target link'
+    'PASS: Windows agent setup tests'
 } finally {
-    # Delete only the verified disposable test root, never a live profile.
-    $resolvedRoot = [IO.Path]::GetFullPath($testRoot)
+    if (Test-Path $untracked) { Remove-Item -LiteralPath $untracked }
+    $resolved = [IO.Path]::GetFullPath($testRoot)
     $tempBase = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-    if (-not $resolvedRoot.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe cleanup target' }
-    if (Test-Path $resolvedRoot) { Remove-Item -LiteralPath $resolvedRoot -Recurse -Force }
+    if (-not $resolved.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe test cleanup' }
+    if (Test-Path $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }
