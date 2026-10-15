@@ -20,11 +20,11 @@ try {
     Assert-True (Test-Path (Join-Path $targetRoot '.agents/skills/productivity/craft/references/formatting.md')) 'Craft references missing'
     Assert-True (-not (Test-Path (Join-Path $targetRoot '.agents/skills/design'))) 'Unselected skills copied'
     Assert-True ((Get-Content $unrelatedPath -Raw).Trim() -eq 'keep me') 'Unrelated config changed'
-    $backupFiles = @(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File)
+    $backupFiles = @(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File -Force)
     Assert-True (@($backupFiles | Where-Object Name -eq 'AGENTS.md').Count -eq 1) 'Conflict backup missing'
     $backupCount = $backupFiles.Count
     & $scriptPath -TargetHome $targetRoot -Apply
-    Assert-True (@(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File).Count -eq $backupCount) 'Rerun created backups'
+    Assert-True (@(Get-ChildItem (Join-Path $targetRoot '.local/state/dotfiles-agents/backups') -Recurse -File -Force).Count -eq $backupCount) 'Rerun created backups'
     Set-Content (Join-Path $targetRoot '.codex/AGENTS.override.md') 'override'
     $failed = $false
     try { & $scriptPath -TargetHome $targetRoot -Apply } catch { $failed = $true }
@@ -43,6 +43,18 @@ try {
     try { & $scriptPath -TargetHome $linkedHome -Apply } catch { $failed = $true }
     Assert-True $failed 'Linked target directory accepted'
     Assert-True (@(Get-ChildItem $outside -Force).Count -eq 0) 'Wrote outside target through link'
+    $backupHome = Join-Path $testRoot 'backup profile'
+    New-Item -ItemType Directory -Path (Join-Path $backupHome '.codex') -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $backupHome '.local/state/dotfiles-agents') -Force | Out-Null
+    Set-Content (Join-Path $backupHome '.codex/AGENTS.md') 'preserve backup fixture'
+    $backupLink = Join-Path $backupHome '.local/state/dotfiles-agents/backups'
+    if ($IsWindows) { New-Item -ItemType Junction -Path $backupLink -Target $outside | Out-Null }
+    else { New-Item -ItemType SymbolicLink -Path $backupLink -Target $outside | Out-Null }
+    $failed = $false
+    try { & $scriptPath -TargetHome $backupHome -Apply -BackupConflicts } catch { $failed = $true }
+    Assert-True $failed 'Linked backup directory accepted'
+    Assert-True (@(Get-ChildItem $outside -Force).Count -eq 0) 'Backup escaped profile'
+    Assert-True ((Get-Content (Join-Path $backupHome '.codex/AGENTS.md') -Raw).Trim() -eq 'preserve backup fixture') 'Deployment occurred before backup validation'
     'PASS: Windows agent deployment safety tests'
 } finally {
     # Delete only the verified disposable test root, never a live profile.

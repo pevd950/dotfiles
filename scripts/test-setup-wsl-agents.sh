@@ -30,4 +30,13 @@ if bash "$installer" --target-home "$test_root/linked" --apply; then
   echo 'Linked destination accepted' >&2; exit 1
 fi
 test -z "$(ls -A "$test_root/outside")"
+backup_home="$test_root/backup-profile"
+mkdir -p "$backup_home/.codex" "$backup_home/.local/state/dotfiles-agents"
+printf 'preserve backup fixture\n' > "$backup_home/.codex/AGENTS.md"
+ln -s "$test_root/outside" "$backup_home/.local/state/dotfiles-agents/backups"
+if bash "$installer" --target-home "$backup_home" --apply --backup-conflicts; then
+  echo 'Linked backup directory accepted' >&2; exit 1
+fi
+test -z "$(ls -A "$test_root/outside")"
+grep -qx 'preserve backup fixture' "$backup_home/.codex/AGENTS.md"
 echo 'PASS: WSL agent deployment safety tests'

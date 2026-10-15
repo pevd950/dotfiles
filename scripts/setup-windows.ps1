@@ -85,6 +85,7 @@ $stateRoot = Join-Path $TargetHome '.local/state/dotfiles-agents'
 Assert-UnlinkedPath $stateRoot
 Assert-UnlinkedPath (Join-Path $stateRoot 'manifest.json')
 $backupRoot = Join-Path $stateRoot ('backups/' + [guid]::NewGuid().ToString('N'))
+Assert-UnlinkedPath $backupRoot
 if (-not $PSCmdlet.ShouldProcess($TargetHome, "Deploy $($changes.Count) agent files")) { return }
 foreach ($file in $changes) {
     if ($file.Conflict) {

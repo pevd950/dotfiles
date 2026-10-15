@@ -73,6 +73,7 @@ if ((${#changes[@]} == 0)); then echo 'Already current; no files changed.'; exit
 state_root="$target_home/.local/state/dotfiles-agents"
 reject_links "$state_root"
 reject_links "$state_root/source.txt"
+reject_links "$state_root/backups"
 mkdir -p "$state_root/backups"
 backup_root=$(mktemp -d "$state_root/backups/deploy-XXXXXXXX")
 for i in "${changes[@]}"; do
