@@ -11,6 +11,17 @@ permissions:
   contents: read
 
 jobs:
+  agent-setup:
+    name: Windows agent setup
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test agent-only PowerShell deployment
+        shell: powershell
+        run: ./scripts/test-setup-windows.ps1
+
   validate:
     name: Validate dotfiles
     runs-on: ubuntu-latest
