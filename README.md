@@ -39,3 +39,10 @@ yadm alt
 ```
 
 Run `yadm bootstrap` only when you need setup changes applied.
+
+## Windows and WSL: minimal agent setup
+
+Use the separate [Windows/WSL agent setup](docs/windows-agents.md). It previews
+changes by default, installs no packages, and deploys only shared Codex guidance
+and four selected skills. It does not run the Mac/Linux bootstrap or configure
+shells, runtimes, credentials, or applications.

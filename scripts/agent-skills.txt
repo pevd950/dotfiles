@@ -1,0 +1,5 @@
+# Only skills referenced by the shared Codex AGENTS.md; no helpers are executed.
+productivity/craft
+productivity/task-management
+ops/cross-host-context
+development/babysit-pr
