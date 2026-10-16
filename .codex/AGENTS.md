@@ -15,6 +15,8 @@ Do not expose private information to third parties without authorization. Treat 
 - GitHub Issues own technical plans, acceptance criteria, and implementation history for bugs, features, and substantial coding work. Personal tasks may track when I work on an Issue; link to it instead of duplicating its plan.
 - Put source URLs in Reminders notes and Markdown source links in Todoist descriptions.
 - Keep one source of truth per responsibility and verify live state there. Use descriptive, stable cross-device links, including labeled `craftdocs://` links where supported.
+- For Home Assistant links sent to me on iPhone, prefer `homeassistant://navigate/<dashboard>/<view>`; I verified that `homeassistant://navigate/dashboard-host/gohan` opens the installed app at the correct page. Keep credentials and server URLs out of these app links.
+- Avoid the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper for these links: my iPhone test opened Home Assistant with “www.home-assistant.io is not a valid route”. A separately labeled web fallback is fine. macOS/Codex behavior is untested; do not assume the iPhone result applies there.
 - Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
 - Offer unrequested follow-ups as labeled drafts or quick-add handoffs; create them only when asked. Use [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, linking, and updates.
 
