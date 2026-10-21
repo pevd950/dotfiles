@@ -22,6 +22,9 @@ try {
     Set-Content $untracked 'not part of the shared skill'
     & $installer -TargetHome $target -Apply
     Assert ((Get-FileHash -LiteralPath $instructions).Hash -eq (Get-FileHash -LiteralPath $sourceInstructions).Hash) 'Installed instructions differ from source'
+    $installedInstructions = Get-Content -LiteralPath $instructions -Raw
+    Assert (-not [string]::IsNullOrWhiteSpace($installedInstructions)) 'Installed instructions are empty'
+    Assert ($installedInstructions -match '(?m)^## Authority and scope\r?$') 'Installed instructions are missing the authority heading'
     Assert (Test-Path (Join-Path $target '.agents/skills/productivity/craft/references/formatting.md')) 'Supporting references missing'
     Assert (-not (Test-Path (Join-Path $target '.agents/skills/design'))) 'Unselected skills deployed'
     Assert (-not (Test-Path (Join-Path $target ('.agents/skills/productivity/craft/' + (Split-Path $untracked -Leaf))))) 'Untracked source file copied'
