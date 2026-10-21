@@ -39,3 +39,38 @@ yadm alt
 ```
 
 Run `yadm bootstrap` only when you need setup changes applied.
+
+## Windows
+
+From a separate Git checkout of this repo, preview and apply:
+
+```powershell
+.\scripts\setup-windows.ps1
+.\scripts\setup-windows.ps1 -Apply
+```
+
+Copies Codex guidance, Craft, task management, cross-host context, and the linked
+GitHub media reference. No packages installed. Different existing files, linked
+paths, and custom `CODEX_HOME` require manual review. Move reviewed conflicts
+aside and rerun; start a fresh Codex chat to load the guidance.
+
+## WSL (optional source checkout)
+
+After reviewing the distro, run in **PowerShell as Administrator**:
+
+```powershell
+wsl --install --distribution Ubuntu-24.04 --no-launch
+```
+
+Launch Ubuntu to create a user. Inside Ubuntu, review packages before installing:
+
+```sh
+sudo apt-get update
+apt-get --simulate install --no-install-recommends git yadm ca-certificates
+sudo apt-get install --no-install-recommends git yadm ca-certificates
+mkdir -p "$HOME/.local/share/dotfiles-source"
+yadm clone --no-bootstrap -w "$HOME/.local/share/dotfiles-source" https://github.com/pevd950/dotfiles.git
+```
+
+Use an account without an existing YADM repository. This only checks out source;
+Windows Codex uses the Windows setup above. Do not run the full bootstrap here.
