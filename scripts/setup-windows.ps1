@@ -12,6 +12,7 @@ if (-not $PSBoundParameters.ContainsKey('TargetHome') -and $env:CODEX_HOME -and
 function Assert-Unlinked([string]$Path) {
     for ($cursor = $Path; $cursor; $cursor = Split-Path $cursor -Parent) {
         $item = Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
+        if ($cursor -ne $Path -and $item -and -not $item.PSIsContainer) { throw "Directory ancestor is a file: $cursor" }
         if ($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             throw "Review linked path manually: $cursor"
         }
@@ -24,10 +25,14 @@ $selected = @(
     '.agents/skills/productivity/craft',
     '.agents/skills/productivity/task-management',
     '.agents/skills/ops/cross-host-context',
-    '.agents/skills/development/babysit-pr'
+    '.agents/skills/development/babysit-pr/references/github-media-evidence.md'
 )
 $paths = @(git -C $sourceRoot ls-files -- @selected)
 if ($LASTEXITCODE -ne 0 -or $paths.Count -eq 0) { throw 'Run from a Git checkout with Git available.' }
+foreach ($entry in $selected) {
+    $required = if ($entry.EndsWith('.md')) { $entry } else { "$entry/SKILL.md" }
+    if ($paths -notcontains $required) { throw "Missing tracked source: $required" }
+}
 $changes = @()
 $conflicts = @()
 foreach ($path in $paths) {
