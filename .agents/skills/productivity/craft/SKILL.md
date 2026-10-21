@@ -35,7 +35,7 @@ Apply these rules regardless of transport:
 6. Use native structure. Create structured page blocks for nested pages; markdown headings alone do not create pages that accept child blocks.
 7. Make the smallest authorized mutation, then read the changed object back before reporting success.
 8. Create directly in the correct folder or document instead of leaving cleanup in an unsorted location.
-9. Return descriptive links to verified document/block destinations, preferring supported native mobile links; never invent deep links. Check the actual destination audience before sharing private links or contents. A private repository is not automatically public, but its audience still needs authorization; never publish private links in public GitHub content or public tracked files.
+9. Link to verified documents or blocks with descriptive labels. Prefer supported native mobile links; never invent them. Share private links only with an authorized audience. Check who can access a repository rather than assuming all GitHub content is public.
 
 ## Rich documents
 
@@ -56,8 +56,8 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 
 ## Daily notes and collections
 
-- Keep daily views glanceable: separate actionable work, waiting dependencies, optional items, and evidence-backed done items. Use reference bullets for permanent guidance, not unfinished checkboxes. Preserve unfinished scope, real deadlines, existing owners, and paused work when reorganizing; do not mechanically roll tasks forward.
-- For authorized material changes, add a few short timestamped outcomes with verified links in the existing note/view; do not create a new inbox or duplicate task home.
+- Make actionable, waiting, optional, and done items easy to distinguish where useful. Keep permanent guidance as reference bullets. Follow task-management rules when reorganizing commitments.
+- For material changes, add a few short timestamped outcomes with verified links to the existing note when useful and authorized. Link to the canonical task rather than creating another inbox or task copy.
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.

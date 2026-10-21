@@ -1,6 +1,6 @@
 # Instruction review scenarios
 
-Use these cases when reviewing edits to workflow authority, activation, or stopping conditions. They are hypothetical conditions for manual acceptance checks, not records or grants of user authorization or claims of runtime evaluation.
+Use these cases when reviewing edits to workflow authority, activation, or stopping conditions. These hypothetical cases guide manual review; they do not grant permission or prove runtime behavior.
 
 | Request and context | Expected behavior |
 | --- | --- |
@@ -14,8 +14,8 @@ Use these cases when reviewing edits to workflow authority, activation, or stopp
 | Personal task handled; implementation acceptance still open | Complete only the evidenced personal commitment; do not close the implementation Issue or acceptance gate. |
 | Personal private repository repair is authorized | Apply the scoped grant; GitHub hosting alone does not make it public publication, and private visibility grants no extra operations. |
 | Employer/team repository is private | Require explicit engagement scope and organizational human controls; do not inherit personal PR autonomy. |
-| When the user explicitly authorizes a specific public PR | Act only within that PR's authorized publication scope; review quality, correctness, voice, and privacy before posting. Do not infer permission for other PRs or merging. |
-| Summarize daily changes with a mobile link | Use short timestamped outcomes in the existing surface and verified supported links; no invented deep links or duplicate task home. |
+| When the user explicitly authorizes a specific public PR | Review quality, correctness, voice, and privacy before posting within that scope. This grants no permission for other PRs or merging. |
+| Summarize daily changes with a mobile link | Keep useful outcomes short in the existing surface, with verified links; preserve one canonical task home. |
 | Fix a bot finding; a human also commented | Fix within scope; do not reply to or resolve the human thread without its required authorization. |
 | Checks pass but current-head review is incomplete | Continue monitoring; do not claim readiness or merge. |
 | Make a documentation-only change | Run metadata/link checks and required repository checks; do not invent production regression tests. |
