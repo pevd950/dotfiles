@@ -35,7 +35,7 @@ Apply these rules regardless of transport:
 6. Use native structure. Create structured page blocks for nested pages; markdown headings alone do not create pages that accept child blocks.
 7. Make the smallest authorized mutation, then read the changed object back before reporting success.
 8. Create directly in the correct folder or document instead of leaving cleanup in an unsorted location.
-9. Link to verified documents or blocks with descriptive labels. Prefer supported native mobile links; never invent them. Share private links only with an authorized audience. Check who can access a repository rather than assuming all GitHub content is public.
+9. Return descriptive, verified document/block links, preferring supported native mobile links. Never invent links or share private content beyond its authorized audience; GitHub hosting alone does not make a destination public.
 
 ## Rich documents
 
@@ -56,8 +56,8 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 
 ## Daily notes and collections
 
-- Make actionable, waiting, optional, and done items easy to distinguish where useful. Keep permanent guidance as reference bullets. Follow task-management rules when reorganizing commitments.
-- For material changes, add a few short timestamped outcomes with verified links to the existing note when useful and authorized. Link to the canonical task rather than creating another inbox or task copy.
+- Make daily views easy to scan: distinguish actions, waiting, optional work, and done items where useful. Keep standing guidance as reference, not tasks.
+- When useful and authorized, record material outcomes with timestamps and verified links in the existing note. Link to canonical tasks instead of copying them.
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.

@@ -28,9 +28,9 @@ Apply current user routing defaults when no stronger owner is established; do no
 4. Preserve recurrence, due dates, deadlines, priority, owners, structure, labels, and paused work. When splitting or reorganizing, keep unfinished requirements in the canonical record or linked successors. Reorganization is not completion.
 5. Make the smallest authorized mutation and read it back. Report the chosen system and placement.
 
-Honor explicit standing task-management grants as well as the current request. Continue routine work within that scope without asking again. Draft commitments outside it or offer a provider-native quick-add handoff.
+The current request or an explicit standing grant can cover task creation and routine maintenance. Continue within that scope; draft commitments outside it.
 
-Use realistic next actions. Make waiting dependencies and optional work clear where useful; keep permanent guidance as reference bullets, not checkboxes. Do not invent deadlines or roll unfinished tasks forward each day without a reason.
+Use realistic next actions and show blocking dependencies. Keep permanent guidance as reference, not tasks. Do not invent deadlines or reschedule unfinished work by habit.
 
 ## Ownership boundaries
 
@@ -43,4 +43,4 @@ Use realistic next actions. Make waiting dependencies and optional work clear wh
 
 ## Safety
 
-Creation, completion, closure, reassignment, and notifications are real writes. Check that the current request or standing grant covers the destination, audience, and action. Personal task housekeeping does not grant authority over implementation acceptance, employer/team work, or public publication. Ask when a material ambiguity affects permission; continue independent authorized work. Keep private links and contents within their authorized audience, and preserve safeguards for credentials, permissions, security, destructive actions, merges, and deployments.
+Task and Issue changes, including notifications, are real writes. Check authority for the destination, audience, and action; clarify material uncertainty while continuing independent work. Personal housekeeping does not authorize implementation acceptance, employer/team work, or public publication. Protect private content and preserve safeguards for credentials, permissions, security, destructive actions, merges, and deployments.

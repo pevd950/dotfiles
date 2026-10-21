@@ -1,6 +1,6 @@
 # Instruction review scenarios
 
-Use these cases when reviewing edits to workflow authority, activation, or stopping conditions. These hypothetical cases guide manual review; they do not grant permission or prove runtime behavior.
+Use these hypothetical cases to review authority, activation, and stopping conditions. They grant no permission and do not prove runtime behavior.
 
 | Request and context | Expected behavior |
 | --- | --- |
@@ -15,7 +15,6 @@ Use these cases when reviewing edits to workflow authority, activation, or stopp
 | Personal private repository repair is authorized | Apply the scoped grant; GitHub hosting alone does not make it public publication, and private visibility grants no extra operations. |
 | Employer/team repository is private | Require explicit engagement scope and organizational human controls; do not inherit personal PR autonomy. |
 | When the user explicitly authorizes a specific public PR | Review quality, correctness, voice, and privacy before posting within that scope. This grants no permission for other PRs or merging. |
-| Summarize daily changes with a mobile link | Keep useful outcomes short in the existing surface, with verified links; preserve one canonical task home. |
 | Fix a bot finding; a human also commented | Fix within scope; do not reply to or resolve the human thread without its required authorization. |
 | Checks pass but current-head review is incomplete | Continue monitoring; do not claim readiness or merge. |
 | Make a documentation-only change | Run metadata/link checks and required repository checks; do not invent production regression tests. |
