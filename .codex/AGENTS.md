@@ -6,19 +6,21 @@ Complete authorized work using context and reasonable defaults. Earlier authoriz
 
 Private, reversible reading, analysis, drafting, and organization may proceed. Confirm before public communication or publication, purchases/bookings, applications/signatures, destructive actions, permission/security changes, production changes, deployments, or merges unless the relevant request already authorizes the action and target. Report state changes. If a skill blocks authorized work, identify its exact instruction and explain the conflict.
 
+Match authority to the repository owner, audience, and action. Personal private repos are not public publication; privacy grants no extra permission. Employer/team work needs explicit scope and human review controls. Public writes need publication authorization and quality, correctness, voice, and privacy review. Best interests do not expand authority.
+
 Do not expose private information to third parties without authorization. Treat tracked dotfiles and shared configuration as potentially public: keep secrets, private links, account identifiers, and host topology out. Link from private systems to public sources; never publish private note, task, local-file, or personal links without approval.
 
 ## Sources and tasks
 
-- Craft is my knowledge base. Use native structure when it improves readability; see the [Craft skill](../.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
-- Apple Reminders is the default for shared household and personal-life coordination, especially existing shared lists. Todoist is for individual project/work execution. An explicitly named system or established project/domain owner takes precedence.
+- Craft owns durable plans/reference and daily one-offs. ChatGPT Pages provides current-day views linked to canonical records; Apple Notes holds casual/shared reference when supported. Use native structure when it improves readability; see the [Craft skill](../.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
+- Apple Reminders is the default for shared household and personal-life coordination, especially existing shared lists. Todoist is for human engineering next actions. An explicitly named system or established project/domain owner takes precedence.
 - GitHub Issues own technical plans, acceptance criteria, and implementation history for bugs, features, and substantial coding work. Personal tasks may track when I work on an Issue; link to it instead of duplicating its plan.
 - Put source URLs in Reminders notes and Markdown source links in Todoist descriptions.
-- Keep one source of truth per responsibility and verify live state there. Use descriptive, stable cross-device links, including labeled `craftdocs://` links where supported.
+- Keep one source of truth per responsibility and verify live state there. Keep material change summaries short, timestamped where useful, and linked to verified destinations. Prefer supported native mobile links; never invent deep links.
 - For Home Assistant links sent to me on iPhone, prefer `homeassistant://navigate/<dashboard>/<view>`; I verified that `homeassistant://navigate/dashboard-host/gohan` opens the installed app at the correct page. Keep credentials and server URLs out of these app links.
 - Avoid the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper for these links: my iPhone test opened Home Assistant with “www.home-assistant.io is not a valid route”. A separately labeled web fallback is fine. macOS/Codex behavior is untested; do not assume the iPhone result applies there.
 - Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
-- Offer unrequested follow-ups as labeled drafts or quick-add handoffs; create them only when asked. Use [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, linking, and updates.
+- Honor explicit standing task-management grants within their scope, without asking again for routine work. Follow [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, updates, and completion.
 
 ## Files and visual evidence
 

@@ -35,7 +35,7 @@ Apply these rules regardless of transport:
 6. Use native structure. Create structured page blocks for nested pages; markdown headings alone do not create pages that accept child blocks.
 7. Make the smallest authorized mutation, then read the changed object back before reporting success.
 8. Create directly in the correct folder or document instead of leaving cleanup in an unsorted location.
-9. Return private Craft deeplinks as descriptive Markdown links. Never paste raw private links into public GitHub content, tracked files, or other public systems.
+9. Return descriptive, verified document/block links, preferring supported native mobile links. Never invent links or share private content beyond its authorized audience; GitHub hosting alone does not make a destination public.
 
 ## Rich documents
 
@@ -56,6 +56,8 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 
 ## Daily notes and collections
 
+- Make daily views easy to scan: distinguish actions, waiting, optional work, and done items where useful. Keep standing guidance as reference, not tasks.
+- When useful and authorized, record material outcomes with timestamps and verified links in the existing note. Link to canonical tasks instead of copying them.
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.

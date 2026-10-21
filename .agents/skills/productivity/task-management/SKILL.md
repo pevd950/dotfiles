@@ -25,20 +25,22 @@ Apply current user routing defaults when no stronger owner is established; do no
 1. Load the selected provider's owning skill or inspect its live tool schema. Link source material in the selected provider's documented field and format, applying user preferences rather than copying source content. For private sources, include only the brief context needed by the authorized audience.
 2. Before creating, inspect existing projects, lists, sections, labels/tags, and nearby related tasks when available. Never default to a generic Inbox when a better destination is evident.
 3. Search for an existing task before creating a duplicate.
-4. Preserve recurrence, due/deadline semantics, priority, assignment, parent/child structure, and labels when updating.
+4. Preserve recurrence, due dates, deadlines, priority, owners, structure, labels, and paused work. When splitting or reorganizing, keep unfinished requirements in the canonical record or linked successors. Reorganization is not completion.
 5. Make the smallest authorized mutation and read it back. Report the chosen system and placement.
 
-When the user has not asked for creation, prefer a clearly labeled draft or provider-native quick-add handoff over silently creating a commitment.
+The current request or an explicit standing grant can cover task creation and routine maintenance. Continue within that scope; draft commitments outside it.
+
+Use realistic next actions and show blocking dependencies. Keep permanent guidance as reference, not tasks. Do not invent deadlines or reschedule unfinished work by habit.
 
 ## Ownership boundaries
 
 - For project bugs, features, and substantial coding work, the owning repository's issue tracker is authoritative for the implementation plan, acceptance criteria, decisions, and delivery history.
 - A personal task-manager item may coexist with a GitHub Issue to track when the user plans to work on it. Keep that item short, link it to the Issue, and do not copy the Issue's technical plan into it.
-- Treat these records as different responsibilities rather than duplicates: closing an Issue means the project work is resolved; completing the personal task means the user's scheduled commitment is handled. Do not assume one state change authorizes the other.
+- Require evidence for the outcome being claimed. Completing a personal task does not prove implementation or acceptance; closing an Issue needs its own authority and evidence.
 - Craft, Notes, and document skills own their content mechanics, not task-manager selection. A document-local checklist is appropriate only after that document system has been selected as the task surface.
 - Provider-specific schemas, recurrence behavior, Inbox semantics, and permission rules belong in the provider's own skill or live tool documentation.
 - Cross-host context may explain routing, but it is supplementary and possibly stale; verify the selected task system live before writing.
 
 ## Safety
 
-Treat task or Issue creation, completion/closure, reassignment, and notification as real writes. An explicit request naming the action and target authorizes only that scoped write. Confirm whenever the system, repository, visibility, destination, audience, or commitment is materially ambiguous. Never expose private task links or contents to a broader system without authorization.
+Task and Issue changes, including notifications, are real writes. Check authority for the destination, audience, and action; clarify material uncertainty while continuing independent work. Personal housekeeping does not authorize implementation acceptance, employer/team work, or public publication. Protect private content and preserve safeguards for credentials, permissions, security, destructive actions, merges, and deployments.
