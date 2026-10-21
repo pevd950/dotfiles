@@ -1,0 +1,6 @@
+interface:
+  display_name: "Home Assistant Dashboards"
+  short_description: "Native-first dashboards with clear status and controls"
+  default_prompt: "Use $home-assistant-dashboards to audit or improve this Home Assistant dashboard while preserving its useful details and controls."
+policy:
+  allow_implicit_invocation: true
