@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $installer = Join-Path $PSScriptRoot 'setup-windows.ps1'
+$sourceInstructions = Join-Path (Split-Path $PSScriptRoot -Parent) '.codex/AGENTS.md'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('dotfiles-agents-' + [guid]::NewGuid())
 $target = Join-Path $testRoot 'profile with spaces'
 $untracked = Join-Path (Split-Path $PSScriptRoot -Parent) ('.agents/skills/productivity/craft/untracked-' + [guid]::NewGuid() + '.tmp')
@@ -20,7 +21,7 @@ try {
     Set-Content $unrelated 'preserve me'
     Set-Content $untracked 'not part of the shared skill'
     & $installer -TargetHome $target -Apply
-    Assert ((Get-Content $instructions -Raw) -match 'Craft is my knowledge base') 'Instructions missing'
+    Assert ((Get-FileHash -LiteralPath $instructions).Hash -eq (Get-FileHash -LiteralPath $sourceInstructions).Hash) 'Installed instructions differ from source'
     Assert (Test-Path (Join-Path $target '.agents/skills/productivity/craft/references/formatting.md')) 'Supporting references missing'
     Assert (-not (Test-Path (Join-Path $target '.agents/skills/design'))) 'Unselected skills deployed'
     Assert (-not (Test-Path (Join-Path $target ('.agents/skills/productivity/craft/' + (Split-Path $untracked -Leaf))))) 'Untracked source file copied'
