@@ -1,0 +1,113 @@
+# Composition example only. No real household entities or commands are included.
+# Map sources, units and routes before merging intended views into fresh config.
+# The visible numeric feature is an editable control: do not move it to smoke-test.
+# Sidebar syntax must be checked against the installed frontend version.
+views:
+  - title: Example Device
+    path: device
+    subview: true
+    back_path: /example-dashboard/overview
+    type: sections
+    max_columns: 2
+    dense_section_placement: false
+    header:
+      layout: start
+      badges_position: bottom
+    badges:
+      - type: entity
+        entity: binary_sensor.example_device_connected
+        name: Connection
+        show_name: true
+        tap_action:
+          action: more-info
+      - type: entity
+        entity: sensor.example_device_battery
+        name: Battery
+        show_name: true
+        tap_action:
+          action: more-info
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Example Device
+            icon: mdi:devices
+            heading_style: title
+          - type: tile
+            entity: sensor.example_device_status
+            name: Status
+            grid_options:
+              columns: 12
+              rows: 1
+            tap_action:
+              action: more-info
+            icon_tap_action:
+              action: more-info
+          - type: tile
+            entity: number.example_device_target
+            name: Target
+            features_position: bottom
+            features:
+              - type: numeric-input
+                style: slider
+            grid_options:
+              columns: 12
+              rows: 2
+            tap_action:
+              action: more-info
+            icon_tap_action:
+              action: more-info
+          - type: history-graph
+            title: History
+            hours_to_show: 24
+            entities:
+              - entity: sensor.example_device_measurement
+            grid_options:
+              columns: 12
+              rows: 4
+    sidebar:
+      sections:
+        - type: grid
+          cards:
+            - type: heading
+              heading: Health
+              icon: mdi:heart-pulse
+              heading_style: title
+            - type: tile
+              entity: binary_sensor.example_device_problem
+              name: Problem
+              tap_action:
+                action: more-info
+              icon_tap_action:
+                action: more-info
+            - type: shortcut
+              label: Device details and history
+              icon: mdi:information-outline
+              tap_action:
+                action: navigate
+                navigation_path: /example-dashboard/diagnostics
+  - title: Device Details
+    path: diagnostics
+    subview: true
+    back_path: /example-dashboard/device
+    type: sections
+    max_columns: 1
+    header:
+      layout: start
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Diagnostics
+            icon: mdi:information-outline
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - sensor.example_device_battery
+              - sensor.example_device_signal
+          - type: logbook
+            hours_to_show: 24
+            target:
+              entity_id:
+                - binary_sensor.example_device_connected
+                - binary_sensor.example_device_problem

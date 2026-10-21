@@ -1,0 +1,59 @@
+# Composition example only. Map example entities/routes to verified sources.
+# Merge intended views into fresh configuration; never replace a live dashboard
+# with this example. Uses native cards only and invokes no device services.
+views:
+  - title: Overview
+    path: overview
+    type: sections
+    max_columns: 2
+    dense_section_placement: false
+    header:
+      layout: start
+      badges_position: bottom
+    badges:
+      - type: entity
+        entity: sensor.example_active_count
+        name: Active
+        show_name: true
+        tap_action:
+          action: navigate
+          navigation_path: /example-dashboard/device
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Devices
+            icon: mdi:devices
+            heading_style: title
+          - type: tile
+            entity: sensor.example_device_status
+            name: Example device
+            icon: mdi:devices
+            grid_options:
+              columns: 6
+              rows: 1
+            tap_action:
+              action: navigate
+              navigation_path: /example-dashboard/device
+            icon_tap_action:
+              action: more-info
+    sidebar:
+      sections:
+        - type: grid
+          cards:
+            - type: heading
+              heading: Room Presence
+              icon: mdi:motion-sensor
+              heading_style: title
+            - type: tile
+              entity: binary_sensor.example_room_occupancy
+              name: Example room
+              icon: mdi:motion-sensor
+              color: amber
+              grid_options:
+                columns: 6
+                rows: 1
+              tap_action:
+                action: more-info
+              icon_tap_action:
+                action: more-info
