@@ -14,7 +14,7 @@ Use these cases when reviewing edits to workflow authority, activation, or stopp
 | Personal task handled; implementation acceptance still open | Complete only the evidenced personal commitment; do not close the implementation Issue or acceptance gate. |
 | Personal private repository repair is authorized | Apply the scoped grant; GitHub hosting alone does not make it public publication, and private visibility grants no extra operations. |
 | Employer/team repository is private | Require explicit engagement scope and organizational human controls; do not inherit personal PR autonomy. |
-| Public PR publication is authorized | Review quality, correctness, voice, and privacy before posting; no AI detector approval gate. |
+| Public PR publication is authorized | Review quality, correctness, voice, and privacy before posting. |
 | Summarize daily changes with a mobile link | Use short timestamped outcomes in the existing surface and verified supported links; no invented deep links or duplicate task home. |
 | Fix a bot finding; a human also commented | Fix within scope; do not reply to or resolve the human thread without its required authorization. |
 | Checks pass but current-head review is incomplete | Continue monitoring; do not claim readiness or merge. |
