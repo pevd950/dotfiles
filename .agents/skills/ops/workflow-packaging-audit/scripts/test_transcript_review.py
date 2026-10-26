@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import socket
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -123,6 +124,166 @@ class TranscriptReviewTests(unittest.TestCase):
         with patch.object(puller,'probe',wraps=real) as spy:
             self.assertEqual(self.pull()['source-a']['status'],'unavailable')
         self.assertEqual(spy.call_count,1)
+
+    def test_failed_transfer_retries_only_its_root_and_records_recovery(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}},
+                    record('user_message', message='dated')])
+        real = puller.subprocess.run
+        transfers = []
+        def interrupted_once(command, **kwargs):
+            if command[0] == 'rsync':
+                transfers.append(command)
+                if command[-2] == self.spec['roots']['sessions'] + '/' and len(transfers) == 1:
+                    return puller.subprocess.CompletedProcess(command, 255, b'',
+                        b'Connection reset by peer; sensitive diagnostic content')
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=interrupted_once), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(transfers[0], transfers[1])
+        self.assertEqual(len(transfers), 3)  # sessions retry; archive once
+        source = read_json(self.cache/'snapshot.json')['sources']['source-a']
+        self.assertEqual([a['exit_code'] for a in source['rsync_attempts']['sessions']], [255, 0])
+        self.assertEqual(source['rsync_exit_codes']['sessions'], 0)
+        self.assertNotIn('sensitive diagnostic content', json.dumps(source))
+        self.scan()
+        self.assertTrue(self.report()['all_sources_covered'])
+
+    def test_transfer_retries_are_bounded_and_failed_copy_stays_unverified(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='dated')])
+        real = puller.subprocess.run
+        attempts = []
+        def unavailable(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                attempts.append(command)
+                return puller.subprocess.CompletedProcess(command, 255, b'', b'Connection closed')
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=unavailable), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(result['transfer']['sessions'], 'rsync_incomplete')
+        self.assertEqual(result['transfer']['archived_sessions'], 'ok')
+        source = read_json(self.cache/'snapshot.json')['sources']['source-a']
+        self.assertEqual(len(source['rsync_attempts']['sessions']), 3)
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
+
+    def test_transfer_access_security_storage_and_config_failures_do_not_retry(self):
+        real = puller.subprocess.run
+        for error in [b'Permission denied (publickey)', b'Host key verification failed',
+                      b'REMOTE HOST IDENTIFICATION HAS CHANGED', b'No space left on device',
+                      b'rsync: command not found', b'communication with agent failed']:
+            attempts = []
+            def refused(command, **kwargs):
+                if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                    attempts.append(command)
+                    return puller.subprocess.CompletedProcess(command, 255, b'', error)
+                return real(command, **kwargs)
+            with self.subTest(error=error), patch.object(puller.subprocess, 'run', side_effect=refused), patch.object(time, 'sleep'):
+                self.assertEqual(self.pull()['source-a']['transfer']['sessions'], 'rsync_incomplete')
+            self.assertEqual(len(attempts), 1)
+
+    def test_transfer_timeout_can_recover_without_discarding_other_root(self):
+        real = puller.subprocess.run
+        attempts = []
+        def timeout_once(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                attempts.append(kwargs['timeout'])
+                if len(attempts) == 1:
+                    raise puller.subprocess.TimeoutExpired(command, 60)
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=timeout_once), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(len(attempts), 2)
+        self.assertLessEqual(attempts[1], attempts[0])
+        history = read_json(self.cache/'snapshot.json')['sources']['source-a']['rsync_attempts']['sessions']
+        self.assertEqual(history[0]['failure'], 'timeout')
+        self.assertEqual(history[-1]['exit_code'], 0)
+
+    def test_transfer_retry_rechecks_identity_before_recopied_bytes(self):
+        real_run = puller.subprocess.run
+        real_probe = puller.probe
+        attempts = []
+        transferred = []
+        probes = []
+        def failed(command, **kwargs):
+            if command[0] == 'rsync':
+                transferred.append(command)
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                attempts.append(command)
+                return puller.subprocess.CompletedProcess(command, 255, b'', b'Connection closed')
+            return real_run(command, **kwargs)
+        def changed(spec, excluded):
+            result = real_probe(spec, excluded)
+            probes.append(result)
+            if len(probes) == 2:
+                return {**result, 'hostname':'unexpected-source'}
+            return result
+        with patch.object(puller.subprocess, 'run', side_effect=failed), patch.object(puller, 'probe', side_effect=changed), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(len(transferred), 1)  # no archive copy after rejected identity
+        self.assertEqual(result['status'], 'unavailable')
+        attempt = read_json(self.cache/'snapshot.json')['sources']['source-a']['rsync_attempts']['sessions'][-1]
+        self.assertEqual(attempt['retry_stopped'], 'source_identity_changed')
+
+    def test_rejected_identity_during_retry_aborts_every_remaining_root(self):
+        real_run = puller.subprocess.run
+        real_probe = puller.probe
+        transferred = []
+        probes = []
+        def failed(command, **kwargs):
+            if command[0] == 'rsync':
+                transferred.append(command)
+                return puller.subprocess.CompletedProcess(command, 255, b'', b'Connection closed')
+            return real_run(command, **kwargs)
+        def rejected(spec, excluded):
+            probes.append(spec)
+            if len(probes) == 2:
+                raise puller.ProbeRejected('identity_mismatch')
+            return real_probe(spec, excluded)
+        with patch.object(puller.subprocess, 'run', side_effect=failed), patch.object(puller, 'probe', side_effect=rejected), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(len(transferred), 1)
+        self.assertEqual(result['error'], 'rsync_sessions_identity_mismatch')
+
+    def test_transfer_retry_does_not_extend_one_hour_budget(self):
+        real = puller.subprocess.run
+        clock = [0.0]
+        attempts = []
+        def exhausted(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                attempts.append(command)
+                clock[0] += 3600
+                raise puller.subprocess.TimeoutExpired(command, kwargs['timeout'])
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=exhausted), patch.object(time, 'monotonic', side_effect=lambda: clock[0]), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(result['transfer']['sessions'], 'rsync_incomplete')
+        self.assertEqual(result['transfer']['archived_sessions'], 'ok')
+
+    def test_probe_access_denial_does_not_prompt_again(self):
+        self.spec['ssh'] = 'source-review'
+        with patch.object(puller.subprocess, 'run', return_value=
+                          puller.subprocess.CompletedProcess(['ssh'], 255, '', 'Permission denied (publickey)')) as run:
+            result = self.pull()['source-a']
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(result['error'], 'initial_probe_access_denied')
+
+    def test_exhausted_transfer_timeout_remains_a_gap_after_inventory(self):
+        self.write([{'type':'session_meta','payload':{'id':'keep'}}, record('user_message', message='dated')])
+        real = puller.subprocess.run
+        def timeout(command, **kwargs):
+            if command[0] == 'rsync' and command[-2] == self.spec['roots']['sessions'] + '/':
+                raise puller.subprocess.TimeoutExpired(command, 60)
+            return real(command, **kwargs)
+        with patch.object(puller.subprocess, 'run', side_effect=timeout), patch.object(time, 'sleep'):
+            result = self.pull()['source-a']
+        self.assertEqual(result['transfer']['sessions'], 'rsync_incomplete')
+        self.scan()
+        self.assertFalse(self.report()['all_sources_covered'])
 
     def test_retention_evicts_only_old_verified_duplicate_and_does_not_recopy(self):
         old = record('user_message', message='old')

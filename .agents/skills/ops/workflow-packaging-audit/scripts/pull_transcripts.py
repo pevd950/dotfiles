@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 import stat
+import time
 
 from transcript_cache import cache_path, file_hash, locked_cache, private_dir, private_file, read_json, signature, write_json
 
@@ -100,6 +101,10 @@ class ProbeUnavailable(ValueError):
     """A transport failure, distinct from a source identity mismatch."""
 
 
+class ProbeRejected(ValueError):
+    """A non-retryable probe failure with a public-safe reason category."""
+
+
 def validate_source(spec):
     for field in ('label',):
         if not isinstance(spec.get(field), str) or not LABEL.fullmatch(spec[field]):
@@ -129,16 +134,19 @@ def probe(spec, exclude):
     result = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=900 if hashing else 30)
     if result.returncode:
         if spec.get('ssh') and result.returncode == 255:
-            raise ProbeUnavailable('ssh_probe_unavailable')
-        raise ValueError('Source identity/inventory probe command failed')
+            category, retryable = transfer_failure(result.returncode, result.stderr)
+            if retryable:
+                raise ProbeUnavailable('ssh_probe_unavailable')
+            raise ProbeRejected(category)
+        raise ProbeRejected('command_failed')
     value = json.loads(result.stdout)
     if value.get('hostname', '').casefold() not in {h.casefold() for h in spec['hostnames']} or value.get('user') != spec['user']:
-        raise ValueError('Source identity mismatch')
+        raise ProbeRejected('identity_mismatch')
     return value
 
 
 def probe_with_retry(spec, exclude):
-    """Retry one transient metadata probe; never retry a transfer or change identity."""
+    """Retry one transient metadata probe without changing identity."""
     def attempt():
         if spec.get('ssh') and any(spec.get('_hash_files', {}).values()):
             # A historical hash probe may wait up to 15 minutes. Check that
@@ -147,7 +155,10 @@ def probe_with_retry(spec, exclude):
             preflight = subprocess.run(SSH + [spec['ssh'], 'true'],
                                       capture_output=True, timeout=30)
             if preflight.returncode == 255:
-                raise ProbeUnavailable('ssh_probe_unavailable')
+                category, retryable = transfer_failure(preflight.returncode, preflight.stderr)
+                if retryable:
+                    raise ProbeUnavailable('ssh_probe_unavailable')
+                raise ProbeRejected(category)
             if preflight.returncode:
                 raise ValueError('Source transport preflight failed')
         return probe(spec, exclude)
@@ -179,6 +190,87 @@ def rsync_command(spec, area, destination, exclude, skipped=()):
         command += ['-e', shlex.join(SSH)]
     command += ['--exclude=/' + name for name in sorted(skipped)]
     return command + ['--exclude=.~tmp~/', '--include=*/', '--include=*.jsonl', '--exclude=*', '--', origin, str(destination) + '/']
+
+
+def transfer_failure(code, stderr):
+    """Classify locally; persist categories, never raw SSH/rsync diagnostics."""
+    text = (stderr.decode('utf-8', errors='replace') if isinstance(stderr, bytes) else stderr or '').casefold()
+    for category, phrases in (
+        ('access_denied', ('permission denied', 'authentication failed', 'agent refused',
+                          'communication with agent failed', 'sign_and_send_pubkey',
+                          'too many authentication failures', 'no supported authentication')),
+        ('host_key_failure', ('host key verification failed', 'remote host identification has changed')),
+        ('storage_error', ('no space left', 'disk quota exceeded', 'read-only file system', 'input/output error')),
+        ('configuration_error', ('command not found', 'unknown option', 'protocol version mismatch', 'incompatible protocol')),
+    ):
+        if any(phrase in text for phrase in phrases):
+            return category, False
+    if code in (10, 12, 30, 35, 255):
+        return ('timeout' if code in (30, 35) else 'transport_error'), True
+    return 'transfer_failed', False
+
+
+def transfer_with_retry(spec, area, destination, exclude, skipped, identity, attempts, checkpoint):
+    """Retry only a failed root, at most twice within its original hour budget.
+
+    The caller publishes attempts in the private snapshot before each process.
+    A retry must revalidate the same source/account and complete inventory;
+    the original inventory still owns coverage and archive observation bounds.
+    """
+    command = rsync_command(spec, area, destination, exclude, skipped)
+    deadline = time.monotonic() + 3600
+    code = None
+    for number in range(3):
+        if number:
+            delay = (2, 5)[number - 1]
+            if deadline - time.monotonic() < delay + 30:
+                attempts[-1]['retry_stopped'] = 'budget_exhausted'
+                checkpoint()
+                break
+            time.sleep(delay)
+            try:
+                # Inventory only: do not repeat historical content hashing.
+                current = probe({**spec, '_hash_files': {}}, exclude)
+                if {k: current[k] for k in ('hostname', 'user')} != identity:
+                    raise ProbeRejected('source_identity_changed')
+            except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
+                # Once a source cannot be revalidated, do not copy another
+                # root under its earlier identity/inventory observation.
+                attempts[-1]['retry_stopped'] = (str(error) if isinstance(error, ProbeRejected)
+                    else 'retry_probe_timeout' if isinstance(error, subprocess.TimeoutExpired)
+                    else 'retry_probe_unavailable' if isinstance(error, ProbeUnavailable)
+                    else 'retry_probe_invalid')
+                checkpoint()
+                raise
+            if current['roots'][area]['status'] != 'ok':
+                attempts[-1]['retry_stopped'] = 'source_inventory_incomplete'
+                checkpoint()
+                break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            if attempts:
+                attempts[-1]['retry_stopped'] = 'budget_exhausted'
+                checkpoint()
+            break
+        attempt = {'attempt': number + 1, 'started_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                   'exit_code': None, 'failure': 'running', 'retryable': False}
+        attempts.append(attempt)
+        checkpoint()
+        try:
+            result = subprocess.run(command, capture_output=True, timeout=remaining)
+            code = result.returncode
+            failure, retryable = (None, False) if code == 0 else transfer_failure(code, result.stderr)
+        except subprocess.TimeoutExpired:
+            code, failure, retryable = None, 'timeout', True
+        attempt.update(completed_at=dt.datetime.now(dt.timezone.utc).isoformat(),
+                       exit_code=code, failure=failure, retryable=retryable)
+        checkpoint()
+        if code == 0 or not retryable:
+            break
+        if number == 2:
+            attempt['retry_stopped'] = 'attempt_limit'
+            checkpoint()
+    return code
 
 
 def reconcile_evictions(root, label, evicted, inventory, transfer, observed_through):
@@ -259,7 +351,7 @@ def pull(cache, config):
         for spec in sources:
             label = spec['label']
             old = previous['sources'].get(label, {})
-            entry = {**old, 'status': 'unavailable', 'error': None}
+            entry = {**old, 'status': 'unavailable', 'error': None, 'rsync_attempts': {}}
             snapshot['sources'][label] = entry
             try:
                 phase = 'initial_probe'
@@ -318,9 +410,10 @@ def pull(cache, config):
                     for base, dirs, files in os.walk(destination):
                         for name in dirs + files:
                             cache_path(root, str((Path(base) / name).relative_to(root)))
-                    result = subprocess.run(rsync_command(spec, area, destination, exclude, skipped[area]),
-                                            capture_output=True, timeout=3600)
-                    rsync_exit_codes[area] = result.returncode
+                    attempts = entry['rsync_attempts'][area] = []
+                    code = transfer_with_retry(spec, area, destination, exclude, skipped[area],
+                                               identity, attempts, lambda: write_json(metadata, snapshot))
+                    rsync_exit_codes[area] = code
                     # Apple openrsync accepts symbolic --chmod but can retain
                     # source modes. The enclosing 0700 cache stays private;
                     # normalize only owned cache copies before inventorying.
@@ -330,7 +423,7 @@ def pull(cache, config):
                             if info.st_uid != os.getuid() or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)) or (stat.S_ISREG(info.st_mode) and info.st_nlink != 1):
                                 raise ValueError('Unsafe cache entry')
                             path.chmod(0o700 if stat.S_ISDIR(info.st_mode) else 0o600)
-                    transfer[area] = 'ok' if result.returncode == 0 else 'rsync_incomplete'
+                    transfer[area] = 'ok' if code == 0 else 'rsync_incomplete'
                 phase = 'final_probe'
                 after, extra_retries = probe_with_retry(probe_spec, exclude)
                 entry['probe_timeout_retries'] += extra_retries
@@ -443,9 +536,10 @@ def pull(cache, config):
                             pass  # Preserve the partial source status and its gap.
                 reconcile_evictions(root, label, evicted, inventory, transfer, inventory_completed_at)
                 # Source observations can refine successful copies, but cannot
-                # erase an independently recorded transfer failure.
+                # erase an exhausted transfer failure. Earlier failed attempts
+                # stay visible even when a later verified transfer succeeds.
                 for area, code in rsync_exit_codes.items():
-                    if code is not None and code != 0:
+                    if area in entry['rsync_attempts'] and code != 0:
                         transfer[area] = 'rsync_incomplete'
                 entry.update(files=inventory, transfer=transfer, roots=spec['roots'],
                              rsync_exit_codes=rsync_exit_codes,
@@ -457,11 +551,14 @@ def pull(cache, config):
                 entry.update(status='unavailable', error=phase + '_timeout')
             except ProbeUnavailable:
                 entry.update(status='unavailable', error=phase + '_ssh_unavailable')
+            except ProbeRejected as error:
+                entry.update(status='unavailable', error=phase + '_' + str(error))
             except (OSError, ValueError, KeyError, TypeError):
                 entry.update(status='unavailable', error='source_unavailable_or_invalid')
             write_json(metadata, snapshot)
         return {label: {'status': entry['status'], 'error': entry.get('error'),
-                        'cached_files': len(entry.get('files', {})), 'transfer': entry.get('transfer', {})}
+                        'cached_files': len(entry.get('files', {})), 'transfer': entry.get('transfer', {}),
+                        'rsync_attempts': entry.get('rsync_attempts', {})}
                 for label, entry in snapshot['sources'].items()}
 
 
