@@ -21,8 +21,11 @@ try {
     Set-Content $unrelated 'preserve me'
     Set-Content $untracked 'not part of the shared skill'
     & $installer -TargetHome $target -Apply
-    Assert ((Get-FileHash -LiteralPath $instructions).Hash -eq (Get-FileHash -LiteralPath $sourceInstructions).Hash) 'Installed instructions differ from source'
     $installedInstructions = Get-Content -LiteralPath $instructions -Raw
+    $expectedInstructions = (Get-Content -LiteralPath $sourceInstructions -Raw) -replace '\]\(\.agents/', '](../.agents/'
+    Assert ($installedInstructions -eq $expectedInstructions) 'Installed instructions differ from source after link relocation'
+    Assert ($installedInstructions -notmatch '\]\(\.agents/') 'Installed instructions keep home-relative links'
+    Assert ($installedInstructions -match '\]\(\.\./\.agents/skills/productivity/plan-execution/SKILL\.md\)') 'Installed instructions lack the relocated plan-execution link'
     Assert (-not [string]::IsNullOrWhiteSpace($installedInstructions)) 'Installed instructions are empty'
     Assert ($installedInstructions -match '(?m)^## Authority and scope\r?$') 'Installed instructions are missing the authority heading'
     Assert (Test-Path (Join-Path $target '.agents/skills/productivity/craft/references/formatting.md')) 'Supporting references missing'

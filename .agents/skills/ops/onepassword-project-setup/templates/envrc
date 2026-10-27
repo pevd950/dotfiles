@@ -1,0 +1,6 @@
+# direnv: load this project's local service-account token so `op run` works headless.
+# Replace PROJECT. Install direnv (brew install direnv) and run `direnv allow` once. Without direnv:
+#   OP_SERVICE_ACCOUNT_TOKEN=$(cat ~/.config/op/sa/PROJECT-local.token) op run --env-file .env.op -- <command>
+if [ -r "$HOME/.config/op/sa/PROJECT-local.token" ]; then
+  export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$HOME/.config/op/sa/PROJECT-local.token")"
+fi
