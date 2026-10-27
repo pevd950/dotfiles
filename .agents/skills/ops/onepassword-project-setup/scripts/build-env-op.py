@@ -34,8 +34,8 @@ def parse_dotenv_value(raw):
     """Return the value a dotenv loader would see: quoted literals verbatim inside the quotes,
     unquoted values cut at the first ' #' inline comment and trimmed."""
     raw = raw.strip()
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
-        return raw[1:-1]
+    q = re.match(r"""^(["'])(.*?)\1(\s+#.*)?$""", raw)  # quoted literal, optionally followed by an inline comment
+    if q: return q.group(2)
     m = re.match(r"^(.*?)(\s+#.*)?$", raw)
     return m.group(1).strip()
 
@@ -51,11 +51,12 @@ for line in open(env_path):
 index = {}
 for vault in a.vault:
     for it in json.loads(op("item", "list", "--vault", vault, "--format", "json")):
-        if it["category"] not in ("API_CREDENTIAL", "PASSWORD", "LOGIN", "DATABASE"): continue
+        if it["category"] in ("DOCUMENT", "SSH_KEY", "SECURE_NOTE", "SOFTWARE_LICENSE", "IDENTITY", "CREDIT_CARD"): continue
+        # Every other category (API Credential, Login, Password, Database, Server, custom...) may hold a credential field.
         full = json.loads(op("item", "get", it["id"], "--vault", vault, "--format", "json"))
         for f in full.get("fields", []):
             v = f.get("value"); lab = f.get("label") or f.get("id")
-            if not v or "\n" in v or len(v) < 4 or f.get("purpose") == "NOTES": continue
+            if not v or "\n" in v or len(v) < 4 or f.get("purpose") == "NOTES" or f.get("type") not in ("CONCEALED", "STRING", "URL"): continue
             # Prefer the reference the CLI supplies; it uses IDs where a title, section or label
             # contains characters a secret reference cannot carry. Skip fields with neither.
             ref = f.get("reference")

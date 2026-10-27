@@ -24,12 +24,19 @@ ref="${ref:-$DEFAULT_REF}"
 log_dir="$HOME/.local/state/github-release-dispatch"; mkdir -p "$log_dir"; log="$log_dir/deploys.log"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
-# Standing grants: the manifest may carry STANDING_APPROVAL_<ENV> with an explicit scope and expiry written by Pablo.
-# It counts as the go for that environment (AGENTS.md: earlier authorization stays valid within its scope).
+# Standing grants: the manifest may carry STANDING_APPROVAL_<ENV> (Pablo's words, with scope) plus
+# STANDING_APPROVAL_<ENV>_UNTIL (a UTC date, YYYY-MM-DD, the last day the grant is valid). Both are required;
+# an expired or undated grant is ignored. AGENTS.md: earlier authorization stays valid within its scope.
+to_epoch() { date -u -j -f %Y-%m-%d "$1" +%s 2>/dev/null || date -u -d "$1" +%s 2>/dev/null || echo ""; }
 if [ -z "$approval" ]; then
   env_upper=$(printf '%s' "$environment" | tr '[:lower:]-' '[:upper:]_'); standing_var="STANDING_APPROVAL_${env_upper}"
-  standing="${!standing_var:-}"
-  [ -n "$standing" ] && approval="standing grant ($standing_var): $standing"
+  standing="${!standing_var:-}"; until_var="${standing_var}_UNTIL"; until="${!until_var:-}"
+  if [ -n "$standing" ]; then
+    until_epoch=$(to_epoch "$until")
+    if [ -z "$until_epoch" ]; then echo "$standing_var is set but $until_var is missing or not YYYY-MM-DD; grant ignored" >&2
+    elif [ "$(date -u +%s)" -ge $((until_epoch + 86400)) ]; then echo "$standing_var expired on $until; grant ignored" >&2
+    else approval="standing grant ($standing_var, until $until): $standing"; fi
+  fi
 fi
 if [ "$environment" = "$PROD_ENV_NAME" ]; then
   [ "$watch" = 1 ] || [ -z "${GATE_VAR:-}" ] || { echo "production with a managed gate variable must be watched: --no-watch would reset $GATE_VAR before the run evaluates it" >&2; exit 3; }
@@ -43,7 +50,8 @@ CALLER_GH_TOKEN="${GH_TOKEN:-}"
 gh_caller() { if [ -n "$CALLER_GH_TOKEN" ]; then GH_TOKEN="$CALLER_GH_TOKEN" gh "$@"; else env -u GH_TOKEN gh "$@"; fi; }
 APP_TOKEN="$("$S/scripts/mint-installation-token.sh" "$OP_APP_ITEM")"
 gh_app() { GH_TOKEN="$APP_TOKEN" gh "$@"; }
-gh_app api /installation/repositories -q '.repositories[].full_name' | grep -qx "$REPO" || { echo "app token cannot see $REPO" >&2; exit 4; }
+app_repos=$(gh_app api --paginate /installation/repositories -q '.repositories[].full_name')
+printf '%s\n' "$app_repos" | grep -qxF "$REPO" || { echo "app token cannot see $REPO" >&2; exit 4; }
 
 # 2. production gate variable (set with Pablo's own gh auth, not the app token)
 gate_set_by_us=0
@@ -58,7 +66,8 @@ keep_gate=0
 reset_gate() {
   [ "$gate_set_by_us" = 1 ] || return 0
   if [ "$keep_gate" = 1 ]; then echo "$GATE_VAR left at true: the run was not confirmed finished. Reset it after the run completes: gh variable set $GATE_VAR -R $REPO --body false" >&2; return 0; fi
-  gh_caller variable set "$GATE_VAR" -R "$REPO" --body false >/dev/null 2>&1 && echo "$GATE_VAR reset to false" >&2
+  if gh_caller variable set "$GATE_VAR" -R "$REPO" --body false >/dev/null 2>&1; then echo "$GATE_VAR reset to false" >&2
+  else echo "WARNING: could not reset $GATE_VAR; run: gh variable set $GATE_VAR -R $REPO --body false" >&2; fi
 }
 trap reset_gate EXIT
 
@@ -87,10 +96,14 @@ done
 url="https://github.com/$REPO/actions/runs/$run_id"
 echo "run: $url"
 
-# 5. watch
+# 5. watch. The gate stays open until the run is confirmed completed; a watch interrupted by a network error,
+#    an expired token or Ctrl-C leaves it open with the reset command printed.
 if [ "$watch" = 1 ]; then
-  gh_app run watch "$run_id" -R "$REPO" --exit-status >/dev/null 2>&1 && conclusion=success || conclusion=$(gh_app run view "$run_id" -R "$REPO" --json conclusion -q .conclusion)
-  echo "$(stamp) RESULT project=$project env=$environment tag=${tag:-latest} run=$url conclusion=$conclusion" >> "$log"
+  keep_gate=1
+  gh_app run watch "$run_id" -R "$REPO" --exit-status >/dev/null 2>&1 || true
+  IFS=$'\t' read -r status conclusion < <(gh_app run view "$run_id" -R "$REPO" --json status,conclusion -q '[.status, .conclusion] | @tsv' 2>/dev/null || printf 'unknown\tunknown\n')
+  if [ "$status" = "completed" ]; then keep_gate=0; else echo "run $run_id is $status, not completed" >&2; fi
+  echo "$(stamp) RESULT project=$project env=$environment tag=${tag:-latest} run=$url status=$status conclusion=$conclusion" >> "$log"
   echo "conclusion: $conclusion"
-  [ "$conclusion" = "success" ] || exit 1
+  [ "$status" = "completed" ] && [ "$conclusion" = "success" ] || exit 1
 fi

@@ -18,7 +18,7 @@ sig=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign <(printf 
 jwt="$header.$payload.$sig"
 
 # The bearer JWT goes to curl as a config file on stdin (-K -), never as a process argument.
-resp=$(curl -fsS -X POST -K - -H "Accept: application/vnd.github+json" \
+resp=$(curl -fsS --connect-timeout 10 --max-time 60 -X POST -K - -H "Accept: application/vnd.github+json" \
   "https://api.github.com/app/installations/$inst_id/access_tokens" <<CFG
 header = "Authorization: Bearer $jwt"
 CFG
