@@ -18,7 +18,7 @@ Names: items `<Provider> <Project>-<env>` or `<Project> local <purpose>`; tags `
 
 ## Steps for a project
 
-Ask before each step that creates access (vaults are cheap; service accounts are immutable).
+Steps 1 and 3 create access and need Pablo's authorization, but a request that already covers setting the project up on this model ("put PROJECT on the 1Password model", "create the vaults and service accounts for PROJECT") is that authorization: do not ask again per step. Ask only for an access change the request does not cover, such as a service account with a grant outside the three below (grant lists are permanent) or a vault for a project he did not name.
 
 1. **Vaults**: `op vault create "<Project> Dev"` and `"<Project> Prod"` with one-line descriptions saying who reads them.
 2. **Items**: move or create the project's credentials in the right tier; tag them. Keep human logins in `Developer Accounts`.

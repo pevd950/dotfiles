@@ -17,9 +17,12 @@ payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now-30))" "$((now+540))" "
 sig=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign <(printf '%s\n' "$key") -binary | b64url)
 jwt="$header.$payload.$sig"
 
-resp=$(curl -fsS -X POST \
-  -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/app/installations/$inst_id/access_tokens") || { echo "token request failed" >&2; exit 1; }
+# The bearer JWT goes to curl as a config file on stdin (-K -), never as a process argument.
+resp=$(curl -fsS -X POST -K - -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/app/installations/$inst_id/access_tokens" <<CFG
+header = "Authorization: Bearer $jwt"
+CFG
+) || { echo "token request failed" >&2; exit 1; }
 tok=$(printf '%s' "$resp" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["token"])')
 exp=$(printf '%s' "$resp" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("expires_at",""))')
 echo "installation token minted for app $app_id, installation $inst_id, expires $exp" >&2
