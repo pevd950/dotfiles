@@ -2,7 +2,6 @@
 # Print the image tag (sha-<7>) for a project: the head sha of the latest successful build workflow run on <ref>,
 # falling back to the ref's current sha. Usage: resolve-image-tag.sh <project> [ref]
 set -euo pipefail
-S="$(cd "$(dirname "$0")/.." && pwd)"
 project="${1:?usage: resolve-image-tag.sh <project> [ref]}"; ref="${2:-}"
 cfg="${RELEASE_DISPATCH_CONFIG_DIR:-$HOME/Developer/indie-infra/control-plane/apps}/$project/release-dispatch.env"
 [ -r "$cfg" ] || { echo "no release-dispatch manifest for $project at $cfg (set RELEASE_DISPATCH_CONFIG_DIR or add it to indie-infra control-plane/apps)" >&2; exit 2; }
@@ -15,6 +14,7 @@ if [ -n "${BUILD_WORKFLOW_FILE:-}" ]; then
 fi
 if [ -z "$sha" ]; then
   sha=$(gh api "repos/$REPO/commits/$ref" -q .sha)
-  echo "no successful $BUILD_WORKFLOW_FILE run found on $ref; using the ref's head sha (image may not exist yet)" >&2
+  if [ -n "${BUILD_WORKFLOW_FILE:-}" ]; then echo "no successful $BUILD_WORKFLOW_FILE run found on $ref; using the ref's head sha (image may not exist yet)" >&2
+  else echo "no BUILD_WORKFLOW_FILE configured for $project; using the ref's head sha (image may not exist yet)" >&2; fi
 fi
 echo "sha-${sha:0:7}"

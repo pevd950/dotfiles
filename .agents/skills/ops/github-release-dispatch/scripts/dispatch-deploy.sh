@@ -45,19 +45,26 @@ fi
 reset_gate() { if [ "$gate_set_by_us" = 1 ]; then env -u GH_TOKEN gh variable set "$GATE_VAR" -R "$REPO" --body false >/dev/null 2>&1 && echo "$GATE_VAR reset to false" >&2; fi; }
 trap reset_gate EXIT
 
-# 3. dispatch
-before=$(gh run list -R "$REPO" --workflow "$WORKFLOW_FILE" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || echo 0)
+# 3. dispatch. Snapshot existing dispatch runs on this ref first so the new one can be told apart.
+list_runs() { gh run list -R "$REPO" --workflow "$WORKFLOW_FILE" --event workflow_dispatch --branch "$ref" --limit 20 --json databaseId,createdAt -q "$1" 2>/dev/null || true; }
+before_ids=" $(list_runs '.[].databaseId' | tr '\n' ' ') "
+dispatched_epoch=$(date -u +%s)
 args=(-f "$ENV_INPUT=$environment"); [ -n "$tag" ] && args+=(-f "$TAG_INPUT=$tag")
 gh workflow run "$WORKFLOW_FILE" -R "$REPO" --ref "$ref" "${args[@]}"
 echo "$(stamp) DISPATCH project=$project env=$environment tag=${tag:-latest} ref=$ref approval=\"${approval:-n/a}\"" >> "$log"
 
-# 4. find the run
+# 4. find the run: a workflow_dispatch run on this ref, created at or after the dispatch, not in the snapshot
 run_id=""
-for _ in 1 2 3 4 5 6; do
+for _ in 1 2 3 4 5 6 7 8; do
   sleep 5
-  run_id=$(gh run list -R "$REPO" --workflow "$WORKFLOW_FILE" --event workflow_dispatch --limit 1 --json databaseId,createdAt -q '.[0].databaseId' 2>/dev/null || echo "")
-  [ -n "$run_id" ] && [ "$run_id" != "$before" ] && break
-  run_id=""
+  while IFS=$'\t' read -r id created; do
+    [ -n "$id" ] || continue
+    case "$before_ids" in *" $id "*) continue;; esac
+    created_epoch=$(date -u -j -f %Y-%m-%dT%H:%M:%SZ "$created" +%s 2>/dev/null || date -u -d "$created" +%s 2>/dev/null || echo 0)
+    [ "$created_epoch" -ge $((dispatched_epoch - 60)) ] || continue
+    run_id="$id"; break
+  done < <(list_runs '.[] | [.databaseId, .createdAt] | @tsv')
+  [ -n "$run_id" ] && break
 done
 [ -n "$run_id" ] || { echo "dispatched, but could not find the new run; check https://github.com/$REPO/actions/workflows/$WORKFLOW_FILE" >&2; exit 0; }
 url="https://github.com/$REPO/actions/runs/$run_id"

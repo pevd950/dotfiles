@@ -4,7 +4,7 @@ Values never leave this process; only variable names and references are printed.
 
 Usage: build-env-op.py --repo PATH --project SLUG --vault "Project Dev" [--vault "Agent Tools Dev" ...]
                        [--secret NAME ...] [--config NAME ...] [--env-file .env] [--out .env.op]
-Credential detection: names matching KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|DSN|_URL with user:pass@,
+Credential detection: names matching KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|DSN, or any URL carrying a password,
 plus any --secret names; --config names are forced literal.
 """
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -28,16 +28,25 @@ def h(v): return hashlib.sha256(v.encode()).hexdigest()[:16]
 def is_secret(name, value):
     if name in a.config: return False
     if name in a.secret or SECRET_RE.search(name): return True
-    return bool(re.match(r"^[a-z][a-z0-9+.-]*://[^/@\s]+:[^/@\s]+@", value))  # DSN with credentials
+    return bool(re.match(r"^[a-z][a-z0-9+.-]*://[^/@\s]*:[^/@\s]+@", value))  # URL with a password, username may be empty
 
-order, vals = [], {}
+def parse_dotenv_value(raw):
+    """Return the value a dotenv loader would see: quoted literals verbatim inside the quotes,
+    unquoted values cut at the first ' #' inline comment and trimmed."""
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+        return raw[1:-1]
+    m = re.match(r"^(.*?)(\s+#.*)?$", raw)
+    return m.group(1).strip()
+
+order, vals, raw = [], {}, {}
 for line in open(env_path):
     s = line.strip()
     if not s or s.startswith("#") or "=" not in s: continue
-    k, v = s.split("=", 1); v = v.strip()
-    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'": v = v[1:-1]
+    if s.startswith("export "): s = s[7:]
+    k, v = s.split("=", 1); k = k.strip()
     if k not in vals: order.append(k)
-    vals[k] = v
+    raw[k] = v.strip(); vals[k] = parse_dotenv_value(v)
 
 index = {}
 for vault in a.vault:
@@ -47,8 +56,15 @@ for vault in a.vault:
         for f in full.get("fields", []):
             v = f.get("value"); lab = f.get("label") or f.get("id")
             if not v or "\n" in v or len(v) < 4 or f.get("purpose") == "NOTES": continue
-            sec = f["section"]["label"] if f.get("section") and f["section"].get("label") else None
-            index.setdefault(h(v), f"op://{vault}/{full['title']}/{sec + '/' if sec else ''}{lab}")
+            # Prefer the reference the CLI supplies; it uses IDs where a title, section or label
+            # contains characters a secret reference cannot carry. Skip fields with neither.
+            ref = f.get("reference")
+            if not ref:
+                sec = f["section"]["label"] if f.get("section") and f["section"].get("label") else None
+                parts = [vault, full["title"], sec, lab]
+                if any(part and re.search(r"[/()\[\]{}·]", part) for part in parts): continue
+                ref = f"op://{vault}/{full['title']}/{sec + '/' if sec else ''}{lab}"
+            index.setdefault(h(v), ref)
 
 refs, created = {}, []
 for k in order:
@@ -68,7 +84,7 @@ lines = [f"# {a.project} local environment, 1Password reference edition. Generat
          "# Usage: op run --env-file .env.op -- <command>   (OP_SERVICE_ACCOUNT_TOKEN from .envrc, or desktop-app auth)",
          "# Credentials are op:// references; non-secret config is literal. No secret values live in this file.", ""]
 for k in order:
-    lines.append(f'{k}="{refs[k]}"' if k in refs else f"{k}={vals[k]}")
+    lines.append(f'{k}="{refs[k]}"' if k in refs else f"{k}={raw[k]}")  # literals keep their original quoting and comments
 if not a.dry_run:
     open(out_path, "w").write("\n".join(lines) + "\n"); os.chmod(out_path, 0o600)
     excl = os.path.join(repo, ".git", "info", "exclude")
