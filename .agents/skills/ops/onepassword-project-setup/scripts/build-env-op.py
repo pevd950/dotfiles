@@ -30,23 +30,36 @@ def is_secret(name, value):
     if name in a.secret or SECRET_RE.search(name): return True
     return bool(re.match(r"^[a-z][a-z0-9+.-]*://[^/@\s]*:[^/@\s]+@", value))  # URL with a password, username may be empty
 
+QUOTED_RE = re.compile(r"""^(["'])(.*?)\1[ \t]*(#.*)?$""", re.S)  # quoted literal, optional inline comment, may span lines
+
 def parse_dotenv_value(raw):
-    """Return the value a dotenv loader would see: quoted literals verbatim inside the quotes,
+    """Return the value a dotenv loader would see: quoted literals verbatim inside the quotes (newlines kept),
     unquoted values cut at the first ' #' inline comment and trimmed."""
     raw = raw.strip()
-    q = re.match(r"""^(["'])(.*?)\1(\s+#.*)?$""", raw)  # quoted literal, optionally followed by an inline comment
+    q = QUOTED_RE.match(raw)
     if q: return q.group(2)
     m = re.match(r"^(.*?)(\s+#.*)?$", raw)
     return m.group(1).strip()
 
+def read_dotenv(path):
+    """Yield (name, raw_value) per assignment. A quoted value that does not close on its line continues
+    on the following lines until the closing quote, so multiline keys and certificates stay whole."""
+    lines = open(path).read().split("\n"); i = 0
+    while i < len(lines):
+        s = lines[i].strip(); i += 1
+        if not s or s.startswith("#") or "=" not in s: continue
+        if s.startswith("export "): s = s[7:]
+        k, v = s.split("=", 1); k, v = k.strip(), v.strip()
+        if v[:1] in ("\"", "'") and not QUOTED_RE.match(v):
+            while i < len(lines) and not QUOTED_RE.match(v):
+                v += "\n" + lines[i].rstrip("\r"); i += 1
+            if not QUOTED_RE.match(v): sys.exit(f"{path}: unterminated quoted value for {k}")
+        yield k, v
+
 order, vals, raw = [], {}, {}
-for line in open(env_path):
-    s = line.strip()
-    if not s or s.startswith("#") or "=" not in s: continue
-    if s.startswith("export "): s = s[7:]
-    k, v = s.split("=", 1); k = k.strip()
+for k, v in read_dotenv(env_path):
     if k not in vals: order.append(k)
-    raw[k] = v.strip(); vals[k] = parse_dotenv_value(v)
+    raw[k] = v; vals[k] = parse_dotenv_value(v)
 
 index = {}
 for vault in a.vault:
