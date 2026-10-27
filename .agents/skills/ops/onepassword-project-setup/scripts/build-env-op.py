@@ -44,7 +44,8 @@ def parse_dotenv_value(raw):
     q = quoted_match(raw)
     if q:
         body = q.group(1)
-        return re.sub(r'\\(.)', lambda m: DQ_ESCAPES.get(m.group(1), m.group(1)), body) if raw[0] == '"' else body
+        # Only the supported escapes decode; any other backslash sequence is kept as written.
+        return re.sub(r'\\(["\\nrt$])', lambda m: DQ_ESCAPES.get(m.group(1), m.group(1)), body) if raw[0] == '"' else body
     m = re.match(r"^(.*?)(\s+#.*)?$", raw)
     return m.group(1).strip()
 
