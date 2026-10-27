@@ -346,8 +346,13 @@ write_agent_toml_from_1password() {
     return 0
   fi
 
-  vault_id="$(op vault list --format json 2>/dev/null </dev/null \
-    | jq -r --arg n "$vault_name" '.[] | select(.name == $n) | .id' | head -n1)"
+  local vault_json
+  if ! vault_json="$(op vault list --format json 2>/dev/null </dev/null)"; then
+    status "agent.toml" "skipped; op vault list unavailable (not signed in?); existing config kept"
+    return 0
+  fi
+  vault_id="$(printf '%s' "$vault_json" \
+    | jq -r --arg n "$vault_name" '.[] | select(.name == $n) | .id' 2>/dev/null | head -n1)"
   if [[ -z "$vault_id" ]]; then
     status "agent.toml" "skipped; vault '$vault_name' not found (set ONEPASSWORD_SSH_KEY_VAULT)"
     return 0
