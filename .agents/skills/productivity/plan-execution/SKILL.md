@@ -15,6 +15,8 @@ The global instructions define the contract; this skill holds the mechanics. It 
 
 ## Starting a plan
 
+First decide the scope. If the work fits one GitHub Issue, do not create a plan document: update that Issue (create it if missing) and place any personal next action through [task-management](../task-management/SKILL.md). Create a plan document only for a program: work spanning several Issues, repositories, or non-code systems. Tie-breaker for mixed cases: if steps outside the repository need the user's approvals or touch other systems, it is a program; its repository-side pieces still get Issues, and the plan links them with a one-line why rather than restating their plans or acceptance criteria. A checkbox for an Issue ticks when the Issue closes.
+
 Search the Plans folder by exact title before creating. One document per plan, tagged as a plan, with these sections in this order:
 
 1. **Aim**: two or three sentences in the user's own framing, plus the date and the statement that saving the plan authorizes nothing by itself.
