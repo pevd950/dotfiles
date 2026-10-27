@@ -35,6 +35,7 @@ Use realistic next actions and show blocking dependencies. Keep permanent guidan
 ## Ownership boundaries
 
 - For project bugs, features, and substantial coding work, the owning repository's issue tracker is authoritative for the implementation plan, acceptance criteria, decisions, and delivery history.
+- A plan document (see the plan-execution skill) is never the destination for a single Issue's implementation detail. It coordinates programs that span Issues, repositories, or non-code systems, and links each repository item to its Issue instead of restating it.
 - A personal task-manager item may coexist with a GitHub Issue to track when the user plans to work on it. Keep that item short, link it to the Issue, and do not copy the Issue's technical plan into it.
 - Require evidence for the outcome being claimed. Completing a personal task does not prove implementation or acceptance; closing an Issue needs its own authority and evidence.
 - Craft, Notes, and document skills own their content mechanics, not task-manager selection. A document-local checklist is appropriate only after that document system has been selected as the task surface.
