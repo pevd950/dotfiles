@@ -45,7 +45,7 @@ When a plan step creates keys or tokens in a web console:
 - Prefer an API or CLI that returns the value into a script which writes it straight to the password manager without printing it.
 - In a browser, use the page's own copy control, then read the clipboard in the very next call and store it; clear the clipboard afterwards. Dialog copy buttons work reliably; some table-row copy icons do not, in which case ask the user to click and say when done.
 - Never take a screenshot of a reveal dialog, never search the accessibility tree for a secret field, and never print field labels of multi-line notes. Compare values by hash of single-line fields only.
-- If a value is exposed anyway, say so plainly, record it in the plan's Gaps list, and create a personal task to regenerate it.
+- If a value is exposed anyway, say so plainly and revoke or disable it immediately when the current authorization covers that credential. If it does not, stop any work that depends on the exposed value and ask for revocation before continuing. In both cases record the exposure in the plan's Gaps list and create a personal task to regenerate and redeploy it.
 
 ## Closing a session
 
