@@ -27,7 +27,15 @@ stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # Standing grants: the manifest may carry STANDING_APPROVAL_<ENV> (Pablo's words, with scope) plus
 # STANDING_APPROVAL_<ENV>_UNTIL (a UTC date, YYYY-MM-DD, the last day the grant is valid). Both are required;
 # an expired or undated grant is ignored. AGENTS.md: earlier authorization stays valid within its scope.
-to_epoch() { date -u -j -f %Y-%m-%d "$1" +%s 2>/dev/null || date -u -d "$1" +%s 2>/dev/null || echo ""; }
+# Epoch of UTC midnight for a strict YYYY-MM-DD calendar date; empty for anything else (GNU date would otherwise
+# accept "" as today and relative words like "tomorrow"; a round trip rejects dates such as 2026-02-30).
+to_epoch() {
+  local d="$1" e
+  printf '%s' "$d" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || return 0
+  e=$(date -u -j -f %Y-%m-%dT%H:%M:%SZ "${d}T00:00:00Z" +%s 2>/dev/null || date -u -d "${d}T00:00:00Z" +%s 2>/dev/null) || return 0
+  [ "$(date -u -r "$e" +%Y-%m-%d 2>/dev/null || date -u -d "@$e" +%Y-%m-%d 2>/dev/null)" = "$d" ] && printf '%s' "$e"
+  return 0
+}
 if [ -z "$approval" ]; then
   env_upper=$(printf '%s' "$environment" | tr '[:lower:]-' '[:upper:]_'); standing_var="STANDING_APPROVAL_${env_upper}"
   standing="${!standing_var:-}"; until_var="${standing_var}_UNTIL"; until="${!until_var:-}"
