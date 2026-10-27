@@ -16,8 +16,10 @@ while [ $# -gt 0 ]; do
     *) tag="$1"; shift;;
   esac
 done
+cfg="${RELEASE_DISPATCH_CONFIG_DIR:-$HOME/Developer/indie-infra/control-plane/apps}/$project/release-dispatch.env"
+[ -r "$cfg" ] || { echo "no release-dispatch manifest for $project at $cfg (set RELEASE_DISPATCH_CONFIG_DIR or add it to indie-infra control-plane/apps)" >&2; exit 2; }
 # shellcheck disable=SC1090
-source "$S/config/projects/$project.env"
+source "$cfg"
 ref="${ref:-$DEFAULT_REF}"
 log_dir="$HOME/.local/state/github-release-dispatch"; mkdir -p "$log_dir"; log="$log_dir/deploys.log"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }

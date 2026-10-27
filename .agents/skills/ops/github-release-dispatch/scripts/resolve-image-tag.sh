@@ -4,8 +4,10 @@
 set -euo pipefail
 S="$(cd "$(dirname "$0")/.." && pwd)"
 project="${1:?usage: resolve-image-tag.sh <project> [ref]}"; ref="${2:-}"
+cfg="${RELEASE_DISPATCH_CONFIG_DIR:-$HOME/Developer/indie-infra/control-plane/apps}/$project/release-dispatch.env"
+[ -r "$cfg" ] || { echo "no release-dispatch manifest for $project at $cfg (set RELEASE_DISPATCH_CONFIG_DIR or add it to indie-infra control-plane/apps)" >&2; exit 2; }
 # shellcheck disable=SC1090
-source "$S/config/projects/$project.env"
+source "$cfg"
 ref="${ref:-$DEFAULT_REF}"
 sha=""
 if [ -n "${BUILD_WORKFLOW_FILE:-}" ]; then

@@ -10,7 +10,7 @@ One identity per project (a GitHub App installed only on that repository, creden
 ## When to use
 
 - "Deploy plato-ai to production", "ship main", "roll out sha-abc1234", "deploy staging now".
-- Not for: building locally, Xcode Cloud / TestFlight (separate), repos with no `config/projects/<project>.env` here (add one first, see below).
+- Not for: building locally, Xcode Cloud / TestFlight (separate), apps with no release-dispatch manifest in indie-infra (add one first, see below).
 
 ## The gate (non-negotiable)
 
@@ -26,7 +26,7 @@ S="$HOME/.agents/skills/ops/github-release-dispatch"
 "$S/scripts/dispatch-deploy.sh" plato-ai production sha-abc1234 --approval "Pablo 2026-10-27 14:05 'deploy sha-abc1234 to prod'"
 ```
 
-What `dispatch-deploy.sh` does: reads the project config; mints an installation token from the 1Password item (desktop-app auth or a service account token in `OP_SERVICE_ACCOUNT_TOKEN`); verifies the token sees the repository; for production, checks or sets the gate variable; runs `gh workflow run <workflow> --ref <ref> -f environment=<env> -f image-tag=<tag>` with `GH_TOKEN` set to the installation token; finds the new run; watches it to completion; prints the run URL and conclusion; appends an audit line to `~/.local/state/github-release-dispatch/deploys.log`; resets the gate variable.
+What `dispatch-deploy.sh` does: reads the app's manifest from `indie-infra/control-plane/apps/<project>/release-dispatch.env` (override the directory with `RELEASE_DISPATCH_CONFIG_DIR`); mints an installation token from the 1Password item (desktop-app auth or a service account token in `OP_SERVICE_ACCOUNT_TOKEN`); verifies the token sees the repository; for production, checks or sets the gate variable; runs `gh workflow run <workflow> --ref <ref> -f environment=<env> -f image-tag=<tag>` with `GH_TOKEN` set to the installation token; finds the new run; watches it to completion; prints the run URL and conclusion; appends an audit line to `~/.local/state/github-release-dispatch/deploys.log`; resets the gate variable.
 
 4. **Notify**: after the run finishes, send the result through `$notify-user` (project, environment, tag, conclusion, run URL). Also when it fails.
 5. **Record**: add a line to the project's Craft page or the deploy log in Todoist if Pablo tracks releases there; never paste tokens anywhere.
@@ -39,7 +39,7 @@ What `dispatch-deploy.sh` does: reads the project config; mints an installation 
 
 ## Adding a project
 
-Create `config/projects/<project>.env` with `REPO`, `WORKFLOW_FILE`, `DEFAULT_REF`, `OP_APP_ITEM` (an `op://Vault/Item` base whose item has `app_id`, `installation_id`, `private_key` fields), `GATE_VAR` (empty if the workflow has no variable gate), `ENV_INPUT`, `TAG_INPUT`, `PROD_ENV_NAME`. Create the GitHub App through the manifest flow (actions: write, contents: read, metadata: read; install only on that repo) and store its credentials in the project's Prod vault.
+Project configuration does not live in this skill (dotfiles are host tooling). Add `control-plane/apps/<project>/release-dispatch.env` to `pevd950/indie-infra` via a PR, with `REPO`, `WORKFLOW_FILE`, `DEFAULT_REF`, `OP_APP_ITEM` (an `op://Vault/Item` base whose item has `app_id`, `installation_id`, `private_key` fields), `GATE_VAR` (empty if the workflow has no variable gate), `ENV_INPUT`, `TAG_INPUT`, `PROD_ENV_NAME`, optional `BUILD_WORKFLOW_FILE`. Identifiers only, never secrets. The skill reads it from `~/Developer/indie-infra` (or `RELEASE_DISPATCH_CONFIG_DIR`). Create the GitHub App through the manifest flow (actions: write, contents: read, metadata: read; install only on that repo) and store its credentials in the project's Prod vault.
 
 ## Failure modes
 
