@@ -32,6 +32,7 @@ if [ -z "$approval" ]; then
   [ -n "$standing" ] && approval="standing grant ($standing_var): $standing"
 fi
 if [ "$environment" = "$PROD_ENV_NAME" ]; then
+  [ "$watch" = 1 ] || [ -z "${GATE_VAR:-}" ] || { echo "production with a managed gate variable must be watched: --no-watch would reset $GATE_VAR before the run evaluates it" >&2; exit 3; }
   [ -n "$approval" ] || { echo "production needs --approval \"<Pablo's explicit go for this deploy>\" or a STANDING_APPROVAL_$(printf "%s" "$PROD_ENV_NAME" | tr "[:lower:]-" "[:upper:]_") grant in the manifest" >&2; exit 3; }
   [ -n "$tag" ] || { echo "production needs an explicit image tag (use resolve-image-tag.sh)" >&2; exit 3; }
 fi
@@ -53,7 +54,12 @@ if [ "$environment" = "$PROD_ENV_NAME" ] && [ -n "${GATE_VAR:-}" ]; then
     gate_set_by_us=1; echo "$GATE_VAR set to true for this deploy (will be reset)" >&2
   fi
 fi
-reset_gate() { if [ "$gate_set_by_us" = 1 ]; then gh_caller variable set "$GATE_VAR" -R "$REPO" --body false >/dev/null 2>&1 && echo "$GATE_VAR reset to false" >&2; fi; }
+keep_gate=0
+reset_gate() {
+  [ "$gate_set_by_us" = 1 ] || return 0
+  if [ "$keep_gate" = 1 ]; then echo "$GATE_VAR left at true: the run was not confirmed finished. Reset it after the run completes: gh variable set $GATE_VAR -R $REPO --body false" >&2; return 0; fi
+  gh_caller variable set "$GATE_VAR" -R "$REPO" --body false >/dev/null 2>&1 && echo "$GATE_VAR reset to false" >&2
+}
 trap reset_gate EXIT
 
 # 3. dispatch. Snapshot existing dispatch runs on this ref first so the new one can be told apart.
@@ -77,7 +83,7 @@ for _ in 1 2 3 4 5 6 7 8; do
   done < <(list_runs '.[] | [.databaseId, .createdAt] | @tsv')
   [ -n "$run_id" ] && break
 done
-[ -n "$run_id" ] || { echo "dispatched, but could not find the new run; check https://github.com/$REPO/actions/workflows/$WORKFLOW_FILE" >&2; exit 0; }
+[ -n "$run_id" ] || { keep_gate=1; echo "dispatched, but could not find the new run; check https://github.com/$REPO/actions/workflows/$WORKFLOW_FILE" >&2; exit 6; }
 url="https://github.com/$REPO/actions/runs/$run_id"
 echo "run: $url"
 

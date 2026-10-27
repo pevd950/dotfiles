@@ -75,9 +75,13 @@ for k in order:
     if is_secret(k, vals[k]) and vals[k] and k not in refs:
         title = f"{a.project} local {k}"
         if not a.dry_run:
-            op("item", "create", "--category", "API Credential", "--vault", create_vault, "--title", title,
-               "--tags", f"project:{a.project},env:local", f"credential={vals[k]}",
-               f"notesPlain=Local-dev value of {k} imported from {a.env_file} on {datetime.date.today()} by onepassword-project-setup.")
+            # JSON on stdin keeps the value out of process arguments (visible to other processes via ps).
+            item = {"title": title, "category": "API_CREDENTIAL", "tags": [f"project:{a.project}", "env:local"], "fields": [
+                {"id": "credential", "type": "CONCEALED", "label": "credential", "value": vals[k]},
+                {"id": "notesPlain", "type": "STRING", "purpose": "NOTES", "label": "notesPlain",
+                 "value": f"Local-dev value of {k} imported from {a.env_file} on {datetime.date.today()} by onepassword-project-setup."}]}
+            r = subprocess.run(["op", "item", "create", "-", "--vault", create_vault], input=json.dumps(item), capture_output=True, text=True)
+            if r.returncode: sys.exit("op item create failed: " + r.stderr.strip()[:160])
         refs[k] = f"op://{create_vault}/{title}/credential"; created.append(title)
 
 lines = [f"# {a.project} local environment, 1Password reference edition. Generated {datetime.date.today()} from {a.env_file}.",
