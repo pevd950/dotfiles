@@ -38,6 +38,14 @@ foreach ($entry in $selected) {
 }
 $changes = @()
 $conflicts = @()
+function Get-DeployedBytes([string]$Source, [string]$RelativePath) {
+    $bytes = [IO.File]::ReadAllBytes($Source)
+    if ($RelativePath -ne 'AGENTS.md') { return $bytes }
+    # The canonical file lives at the home root; installed under .codex/ its
+    # home-relative skill links must climb one directory.
+    $text = [Text.Encoding]::UTF8.GetString($bytes) -replace '\]\(\.agents/', '](../.agents/'
+    return [Text.Encoding]::UTF8.GetBytes($text)
+}
 foreach ($path in $paths) {
     $source = Join-Path $sourceRoot $path
     $targetPath = if ($path -eq 'AGENTS.md') { '.codex/AGENTS.md' } else { $path }
@@ -46,12 +54,14 @@ foreach ($path in $paths) {
     Assert-Unlinked $target
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing source: $path" }
     if (Test-Path -LiteralPath $target -PathType Container) { throw "File target is a directory: $target" }
+    $deployed = Get-DeployedBytes $source $path
     if (Test-Path -LiteralPath $target) {
-        if ((Get-FileHash -LiteralPath $source).Hash -eq (Get-FileHash -LiteralPath $target).Hash) { continue }
+        $existing = [IO.File]::ReadAllBytes($target)
+        if ([Linq.Enumerable]::SequenceEqual([byte[]]$deployed, [byte[]]$existing)) { continue }
         $conflicts += $target
         "CONFLICT: $target"
     } else {
-        $changes += @{ Source = $source; Target = $target }
+        $changes += @{ Bytes = $deployed; Target = $target }
         "CREATE: $target"
     }
 }
@@ -59,6 +69,6 @@ if (-not $Apply) { 'Preview only. Use -Apply after reviewing the paths.'; return
 if ($conflicts.Count) { throw 'No files changed. Move conflicting files aside after reviewing them, then rerun.' }
 foreach ($file in $changes) {
     New-Item -ItemType Directory -Path (Split-Path $file.Target -Parent) -Force | Out-Null
-    Copy-Item -LiteralPath $file.Source -Destination $file.Target
+    [IO.File]::WriteAllBytes($file.Target, $file.Bytes)
 }
 "Copied $($changes.Count) files. No packages installed. Start a fresh Codex chat to load the guidance."
