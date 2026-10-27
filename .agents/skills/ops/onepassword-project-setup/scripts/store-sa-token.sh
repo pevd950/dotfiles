@@ -3,7 +3,7 @@
 # and without putting it in a process argument: the item is sent to `op item create -` as JSON on stdin.
 # Usage: store-sa-token.sh <sa-name> <project> <consumer> "<grants text>" "<deployed-to text>" < token-on-stdin
 # Example: op service-account create sa-foo-ci --expires-in 89d --vault "Foo Dev:read_items" --raw \
-#            | store-sa-token.sh sa-foo-ci foo ci "Foo Dev: read_items" "GitHub pevd950/foo ci environment"
+#            | store-sa-token.sh sa-foo-ci foo ci "Foo Dev: read_items" "GitHub OWNER/foo ci environment"
 set -euo pipefail
 name="${1:?sa name}"; project="${2:?project}"; consumer="${3:?consumer}"; grants="${4:?grants}"; deployed="${5:?deployed-to}"
 token="$(cat)"; [ -n "$token" ] || { echo "no token on stdin" >&2; exit 1; }

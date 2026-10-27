@@ -30,14 +30,21 @@ def is_secret(name, value):
     if name in a.secret or SECRET_RE.search(name): return True
     return bool(re.match(r"^[a-z][a-z0-9+.-]*://[^/@\s]*:[^/@\s]+@", value))  # URL with a password, username may be empty
 
-QUOTED_RE = re.compile(r"""^(["'])(.*?)\1[ \t]*(#.*)?$""", re.S)  # quoted literal, optional inline comment, may span lines
+# Quoted literals, optional inline comment after the closing quote, may span lines. Double quotes allow
+# backslash escapes (\" \\ \n \r \t \$), single quotes are verbatim: the same rules dotenv loaders apply.
+DQ_RE = re.compile(r'^"((?:[^"\\]|\\.)*)"[ \t]*(#.*)?$', re.S)
+SQ_RE = re.compile(r"^'([^']*)'[ \t]*(#.*)?$", re.S)
+DQ_ESCAPES = {"n": "\n", "r": "\r", "t": "\t"}
+def quoted_match(raw): return DQ_RE.match(raw) if raw[:1] == '"' else SQ_RE.match(raw) if raw[:1] == "'" else None
 
 def parse_dotenv_value(raw):
-    """Return the value a dotenv loader would see: quoted literals verbatim inside the quotes (newlines kept),
-    unquoted values cut at the first ' #' inline comment and trimmed."""
+    """Return the value a dotenv loader would see: quoted literals with their quotes removed and, for double
+    quotes, escapes decoded (newlines kept); unquoted values cut at the first ' #' inline comment and trimmed."""
     raw = raw.strip()
-    q = QUOTED_RE.match(raw)
-    if q: return q.group(2)
+    q = quoted_match(raw)
+    if q:
+        body = q.group(1)
+        return re.sub(r'\\(.)', lambda m: DQ_ESCAPES.get(m.group(1), m.group(1)), body) if raw[0] == '"' else body
     m = re.match(r"^(.*?)(\s+#.*)?$", raw)
     return m.group(1).strip()
 
@@ -50,10 +57,10 @@ def read_dotenv(path):
         if not s or s.startswith("#") or "=" not in s: continue
         if s.startswith("export "): s = s[7:]
         k, v = s.split("=", 1); k, v = k.strip(), v.strip()
-        if v[:1] in ("\"", "'") and not QUOTED_RE.match(v):
-            while i < len(lines) and not QUOTED_RE.match(v):
+        if v[:1] in ("\"", "'") and not quoted_match(v):
+            while i < len(lines) and not quoted_match(v):
                 v += "\n" + lines[i].rstrip("\r"); i += 1
-            if not QUOTED_RE.match(v): sys.exit(f"{path}: unterminated quoted value for {k}")
+            if not quoted_match(v): sys.exit(f"{path}: unterminated quoted value for {k}")
         yield k, v
 
 order, vals, raw = [], {}, {}
