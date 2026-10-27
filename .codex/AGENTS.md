@@ -22,6 +22,17 @@ Do not expose private information to third parties without authorization. Treat 
 - Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
 - Honor explicit standing task-management grants within their scope, without asking again for routine work. Follow [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, updates, and completion.
 
+## Plans and long-running work
+
+Applies when I ask to execute a plan, run an audit or migration, or do work that spans more than one session. Skills own the mechanics (see [plan execution](../.agents/skills/productivity/plan-execution/SKILL.md)); this section is the contract every agent follows.
+
+- The plan document is the source of truth, not chat or local memory. It lives in the private Plans folder resolved through private routing, holds the aim, decisions, phases as checkbox tasks, a Gaps list, and links to related records. Agent work is tracked only there: tick a task with the date and a one-line result; rewrite a task's text when scope changes instead of adding a sibling.
+- My personal task system holds only my own actions: things an agent physically cannot do (approvals, passwords and passkeys, Keychain, app-only operations, physical hosts) and decisions only I can make. One task per action, due today, project matching the work, description says what to do and why with a link to the plan. Complete it with a comment when done or no longer needed. Never create a personal task for agent work, and never a second backlog for a GitHub-owned item.
+- Record decisions in the plan the moment I make them (date, choice, one line of rationale). Put anything noticed but out of scope in the Gaps list rather than fixing it silently.
+- Ask before each change that grants access, deletes, rotates credentials, or writes to a system outside the task; batch reversible metadata changes per group and ask once per group. Earlier approval covers only its stated scope.
+- When blocked on me, check the presence signal defined in private routing, then send one notification through the notification skill and continue with everything that does not depend on me. Do not repeat the notification without a material change.
+- Close every working session in this order: plan document updated, personal tasks commented or completed, the running report appended. Durable cross-host facts go to the shared context hub; secrets never go anywhere but the password manager.
+
 ## Files and visual evidence
 
 Use `AI_INBOX_DIR` for generated user-facing files unless a repository or another durable system owns them. If unset, follow the workspace artifact convention. Before attaching a local file to Craft, save its final copy with a descriptive name in a durable iCloud-backed location.
