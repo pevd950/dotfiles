@@ -20,10 +20,13 @@ function Assert-Unlinked([string]$Path) {
 }
 $override = Join-Path $codexPath 'AGENTS.override.md'
 if (Test-Path -LiteralPath $override) { throw 'Review AGENTS.override.md before deploying global guidance.' }
+# AGENTS.md is the canonical global guidance; it is installed as .codex/AGENTS.md
+# because this minimal Windows setup targets Codex only (no symlinks on Windows).
 $selected = @(
-    '.codex/AGENTS.md',
+    'AGENTS.md',
     '.agents/skills/productivity/craft',
     '.agents/skills/productivity/task-management',
+    '.agents/skills/productivity/plan-execution',
     '.agents/skills/ops/cross-host-context',
     '.agents/skills/development/babysit-pr/references/github-media-evidence.md'
 )
@@ -37,7 +40,8 @@ $changes = @()
 $conflicts = @()
 foreach ($path in $paths) {
     $source = Join-Path $sourceRoot $path
-    $target = Join-Path $TargetHome $path
+    $targetPath = if ($path -eq 'AGENTS.md') { '.codex/AGENTS.md' } else { $path }
+    $target = Join-Path $TargetHome $targetPath
     Assert-Unlinked $source
     Assert-Unlinked $target
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing source: $path" }

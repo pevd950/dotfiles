@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $installer = Join-Path $PSScriptRoot 'setup-windows.ps1'
-$sourceInstructions = Join-Path (Split-Path $PSScriptRoot -Parent) '.codex/AGENTS.md'
+$sourceInstructions = Join-Path (Split-Path $PSScriptRoot -Parent) 'AGENTS.md'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('dotfiles-agents-' + [guid]::NewGuid())
 $target = Join-Path $testRoot 'profile with spaces'
 $untracked = Join-Path (Split-Path $PSScriptRoot -Parent) ('.agents/skills/productivity/craft/untracked-' + [guid]::NewGuid() + '.tmp')

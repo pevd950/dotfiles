@@ -12,7 +12,7 @@ Do not expose private information to third parties without authorization. Treat 
 
 ## Sources and tasks
 
-- Craft owns durable plans/reference and daily one-offs. ChatGPT Pages provides current-day views linked to canonical records; Apple Notes holds casual/shared reference when supported. Use native structure when it improves readability; see the [Craft skill](../.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
+- Craft owns durable plans/reference and daily one-offs. ChatGPT Pages provides current-day views linked to canonical records; Apple Notes holds casual/shared reference when supported. Use native structure when it improves readability; see the [Craft skill](.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
 - Apple Reminders is the default for shared household and personal-life coordination, especially existing shared lists. Todoist is for human engineering next actions. An explicitly named system or established project/domain owner takes precedence.
 - GitHub Issues own technical plans, acceptance criteria, and implementation history for bugs, features, and substantial coding work. Personal tasks may track when I work on an Issue; link to it instead of duplicating its plan.
 - Put source URLs in Reminders notes and Markdown source links in Todoist descriptions.
@@ -20,11 +20,11 @@ Do not expose private information to third parties without authorization. Treat 
 - For Home Assistant links sent to me on iPhone, prefer `homeassistant://navigate/<dashboard>/<view>`; I verified that `homeassistant://navigate/dashboard-host/gohan` opens the installed app at the correct page. Keep credentials and server URLs out of these app links.
 - Avoid the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper for these links: my iPhone test opened Home Assistant with “www.home-assistant.io is not a valid route”. A separately labeled web fallback is fine. macOS/Codex behavior is untested; do not assume the iPhone result applies there.
 - Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
-- Honor explicit standing task-management grants within their scope, without asking again for routine work. Follow [task management](../.agents/skills/productivity/task-management/SKILL.md) for placement, updates, and completion.
+- Honor explicit standing task-management grants within their scope, without asking again for routine work. Follow [task management](.agents/skills/productivity/task-management/SKILL.md) for placement, updates, and completion.
 
 ## Plans and long-running work
 
-Applies when I ask to execute a plan, run an audit or migration, or do work that spans more than one session. Skills own the mechanics (see [plan execution](../.agents/skills/productivity/plan-execution/SKILL.md)); this section is the contract every agent follows.
+Applies when I ask to execute a plan, run an audit or migration, or do work that spans more than one session. Skills own the mechanics (see [plan execution](.agents/skills/productivity/plan-execution/SKILL.md)); this section is the contract every agent follows.
 
 - Scope decides the home. Work that fits a single GitHub Issue is tracked in that Issue, which keeps its plan, acceptance criteria, decisions and delivery evidence; it gets no plan document. A plan document is for a program: work spanning several Issues, repositories, or non-code systems. It lives in the private Plans folder resolved through private routing and holds the aim, cross-cutting decisions, phases as checkbox tasks, a Gaps list, and links. Repository items appear in it only as links to their Issues, never as restated plans. Tie-breaker: if the outside steps need my approvals or touch other systems, it is a program.
 - Within a plan, agent work is tracked only there, not in chat or local memory: tick a task with the date and a one-line result; rewrite a task's text when scope changes instead of adding a sibling.
@@ -38,11 +38,11 @@ Applies when I ask to execute a plan, run an audit or migration, or do work that
 
 Use `AI_INBOX_DIR` for generated user-facing files unless a repository or another durable system owns them. If unset, follow the workspace artifact convention. Before attaching a local file to Craft, save its final copy with a descriptive name in a durable iCloud-backed location.
 
-For authorized GitHub writes, attach the smallest useful sanitized visual evidence beside its claim, with meaningful alt text and the tested commit/build, scenario, platform, device, and OS as relevant. Prefer before/after evidence for visual changes. Follow the [media workflow](../.agents/skills/development/babysit-pr/references/github-media-evidence.md) for upload and rendering verification; the upload uses the same publication authority as the GitHub write.
+For authorized GitHub writes, attach the smallest useful sanitized visual evidence beside its claim, with meaningful alt text and the tested commit/build, scenario, platform, device, and OS as relevant. Prefer before/after evidence for visual changes. Follow the [media workflow](.agents/skills/development/babysit-pr/references/github-media-evidence.md) for upload and rendering verification; the upload uses the same publication authority as the GitHub write.
 
 ## Hosts and Git
 
-For host selection, host-targeted work, handoffs, or capabilities/blockers that may differ elsewhere, consult [cross-host context](../.agents/skills/ops/cross-host-context/SKILL.md). Resolve `AGENT_HOST_ALIAS` or the local hostname and validate it uniquely through private routing before reading subject context. Missing or ambiguous routing must not block ordinary local work. Verify tools, credentials, paths, and services on their owning host. Other-host agents have partial context; they are not a substitute for live delegation.
+For host selection, host-targeted work, handoffs, or capabilities/blockers that may differ elsewhere, consult [cross-host context](.agents/skills/ops/cross-host-context/SKILL.md). Resolve `AGENT_HOST_ALIAS` or the local hostname and validate it uniquely through private routing before reading subject context. Missing or ambiguous routing must not block ordinary local work. Verify tools, credentials, paths, and services on their owning host. Other-host agents have partial context; they are not a substitute for live delegation.
 
 Use `<host>-codex` for unattended work under the restricted account, and `<host>` for my user-owned files, apps, Keychain, or administrative context. Never silently switch identities after a failure.
 

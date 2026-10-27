@@ -101,8 +101,11 @@ def validate(root, paths, tracked_paths=None):
                 errors.append(f'{path.relative_to(root)}: {exc}')
         if path.suffix != '.md':
             continue
+        # A symlinked instruction file (for example .codex/AGENTS.md -> ../AGENTS.md)
+        # carries links written for its real location; resolve them from there.
+        link_base = path.resolve().parent if path.is_symlink() else path.parent
         for target in local_links(text):
-            resolved = (path.parent / target).resolve()
+            resolved = (link_base / target).resolve()
             # Directory references are valid when they contain tracked files.
             if not resolved.is_relative_to(root.resolve()) or not resolved.exists() or (resolved not in tracked and not any(resolved in p.parents for p in tracked)):
                 errors.append(f'{path.relative_to(root)}: untracked or missing link target {target}')
