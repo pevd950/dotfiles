@@ -17,6 +17,9 @@ truthy() {
 
 DRY_RUN=0
 truthy "${ONEPASSWORD_SETUP_DRY_RUN:-0}" && DRY_RUN=1
+# Decided here, at top level: inside a command substitution stdout is never a terminal.
+INTERACTIVE=0
+[[ -t 0 && -t 1 ]] && INTERACTIVE=1
 for arg in "$@"; do
   case "$arg" in
     --dry-run|-n) DRY_RUN=1 ;;
@@ -75,11 +78,20 @@ onepassword_agent_socket_path() {
 }
 
 # The desktop app is what runs the SSH agent; its presence (not the socket, which only exists after
-# sign-in) decides whether ssh config should point at the 1Password agent.
+# sign-in) decides whether ssh config should point at the 1Password agent. Only install artefacts
+# count: the ~/.1password data directory outlives an uninstall and would leave IdentityAgent pointing
+# at a socket that never comes back.
 onepassword_app_installed() {
   case "$OS" in
     macos) [[ -d /Applications/1Password.app ]] ;;
-    linux) command -v 1password >/dev/null 2>&1 || [[ -x /opt/1Password/1password ]] || [[ -d "$HOME/.1password" ]] ;;
+    linux)
+      command -v 1password >/dev/null 2>&1 \
+        || [[ -x /opt/1Password/1password ]] \
+        || [[ -f /usr/share/applications/1password.desktop ]] \
+        || [[ -f "$HOME/.local/share/applications/1password.desktop" ]] \
+        || [[ -d /var/lib/flatpak/app/com.onepassword.OnePassword ]] \
+        || [[ -d "$HOME/.local/share/flatpak/app/com.onepassword.OnePassword" ]]
+      ;;
     *) return 1 ;;
   esac
 }
@@ -256,9 +268,9 @@ ensure_op_cli() {
 managed_vault_id() {
   local vault_name="$1"
   command -v op >/dev/null 2>&1 || return 0
-  [[ -t 0 && -t 1 ]] || return 0
+  [[ "$INTERACTIVE" -eq 1 ]] || return 0
   op vault get "$vault_name" --format json 2>/dev/null </dev/null \
-    | sed -nE 's/^[[:space:]]*"id":[[:space:]]*"([^"]+)".*/\1/p' | head -n1 || true
+    | sed -nE 's/.*"id":[[:space:]]*"([^"]+)".*/\1/p' | head -n1 || true
 }
 
 # Writes agent.toml with ONE vault-level [[ssh-keys]] entry so the 1Password SSH agent offers every
@@ -295,14 +307,16 @@ ensure_agent_toml() {
           }
           in_block = 0; has_item = 0; is_managed = 0; lines = ""
         }
-        /^[[:space:]]*\[\[ssh-keys\]\][[:space:]]*$/ { flush(); in_block = 1; next }
+        # A header or key line may carry a trailing TOML comment: `[[ssh-keys]] # work`, `vault = "X" # y`.
+        /^[[:space:]]*\[\[ssh-keys\]\][[:space:]]*(#.*)?$/ { flush(); in_block = 1; next }
         /^[[:space:]]*\[/ { flush(); next }
         in_block {
           line = $0
           sub(/^[[:space:]]+/, "", line)
           if (line == "" || line ~ /^#/) next
           key = line; sub(/[[:space:]]*=.*$/, "", key)
-          value = line; sub(/^[^=]*=[[:space:]]*/, "", value); gsub(/^"|"[[:space:]]*(#.*)?$/, "", value)
+          value = line; sub(/^[^=]*=[[:space:]]*/, "", value)
+          if (value ~ /^"/) { sub(/^"/, "", value); sub(/"[[:space:]]*(#.*)?$/, "", value) } else { sub(/[[:space:]]*#.*$/, "", value) }
           if (key == "item") has_item = 1
           if (key == "vault" && (value == managed_name || (managed_id != "" && value == managed_id))) is_managed = 1
           lines = lines line "\n"
