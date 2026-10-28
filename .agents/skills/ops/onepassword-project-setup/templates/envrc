@@ -1,6 +1,16 @@
 # direnv: load this project's local service-account token so `op run` works headless.
-# Replace PROJECT. Install direnv (brew install direnv) and run `direnv allow` once. Without direnv:
-#   OP_SERVICE_ACCOUNT_TOKEN=$(cat ~/.config/op/sa/PROJECT-local.token) op run --env-file .env.op -- <command>
-if [ -r "$HOME/.config/op/sa/PROJECT-local.token" ]; then
-  export OP_SERVICE_ACCOUNT_TOKEN="$(cat "$HOME/.config/op/sa/PROJECT-local.token")"
+# Replace PROJECT. Install direnv (brew install direnv) and run `direnv allow` once. Without direnv,
+# use scripts/op-run.sh (templates/op-run.sh), which loads the same file with the same mode check.
+# A token file readable by others is refused rather than loaded: fix it with chmod 600.
+op_token_file="$HOME/.config/op/sa/PROJECT-local.token"
+if [ -e "$op_token_file" ]; then
+  if stat --version >/dev/null 2>&1; then op_token_mode="$(stat -c '%a' "$op_token_file")"; else op_token_mode="$(stat -f '%Lp' "$op_token_file")"; fi
+  if [ "$op_token_mode" = "600" ]; then
+    OP_SERVICE_ACCOUNT_TOKEN="$(cat "$op_token_file")"
+    export OP_SERVICE_ACCOUNT_TOKEN
+  else
+    echo "direnv: not loading $op_token_file: mode is $op_token_mode, expected 600" >&2
+  fi
+  unset op_token_mode
 fi
+unset op_token_file

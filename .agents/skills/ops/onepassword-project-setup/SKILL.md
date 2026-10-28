@@ -16,6 +16,18 @@ Model (decided 2026-10-27, see Craft "1Password Audit and Migration Plan"): one 
 
 Names: items `<Provider> <Project>-<env>` or `<Project> local <purpose>`; tags `project:<slug>`, `env:<dev|ci|staging|local|prod|runtime>`, `consumer:<local|ci|release|runtime>`. Item titles must not contain `·`, `/`, or parentheses: secret references reject them (reference by item ID otherwise). Service accounts: `sa-<project>-<consumer>`, 89-day expiry from the CLI (the maximum), tokens recorded in the human-only `SA Tokens` vault with grants, consumer, deploy location, expiry.
 
+## Files in this skill
+
+| File | Use |
+| --- | --- |
+| `scripts/build-env-op.py` | Builds `.env.op` from an existing `.env`; creates items for unmatched credentials. |
+| `scripts/store-sa-token.sh` | Stores a service-account token as an `SA Tokens` item from stdin, without printing it. |
+| `templates/env.op.example` | Starting `.env.op` for a project with no `.env`: `op://` references for secrets, literals for config. |
+| `templates/op-run.sh` | `op run` wrapper: loads `~/.config/op/sa/<project>-local.token` (refuses a mode other than 0600) and runs `op run --env-file .env.op -- "$@"`. |
+| `templates/envrc` | direnv loader that exports the same token for shells and editors, with the same 0600 check. |
+| `templates/load-secrets-step.yml` | GitHub Actions step: `1password/load-secrets-action` pinned to `70062d7a876d3eb6334754fa26efd2fbd90c32f2` (v5.0.1), CLI 2.41.0, step outputs only. |
+| `references/xcode-cloud.md` | Where Xcode Cloud secrets live and which App Store Connect key the Dev vault may hold. |
+
 ## Steps for a project
 
 Steps 1 and 3 create access and need Pablo's authorization, but a request that already covers setting the project up on this model ("put PROJECT on the 1Password model", "create the vaults and service accounts for PROJECT") is that authorization: do not ask again per step. Ask only for an access change the request does not cover, such as a service account with a grant outside the three below (grant lists are permanent) or a vault for a project he did not name.
@@ -30,10 +42,10 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
    ```
    Add `--vault "Indie Infra Prod:read_items"` to the release account only when that project's deploy reads shared providers (Cloudflare, Resend, Azure); grants are permanent, so decide before creating. Plato AI's release account has it because its deploy does.
    Capture each `--raw` token into a variable, write the local one to `~/.config/op/sa/<project>-local.token` (0600), upload ci/release with `gh secret set OP_SERVICE_ACCOUNT_TOKEN --env <ci|production> < file`, store all three as items in `SA Tokens` (`scripts/store-sa-token.sh`), then delete the local copies of the ci/release tokens. Never echo a token.
-4. **Local .env.op**: `scripts/build-env-op.py --repo <path> --project <slug> --vault "<Project> Dev"` reads `.env` (values stay in-process), matches each credential to an existing item by value hash (single-line fields only), creates `<Project> local <VAR>` items for unmatched credentials, writes `.env.op` with references for credentials and literals for config, and adds `.env.op` and `.envrc` to `.git/info/exclude`. Write `.envrc` from `templates/envrc` (direnv optional). Run agents with `op run --env-file .env.op -- claude` (wrap the agent process, not each command: the Families quota is 1,000 requests/day).
-5. **GitHub Actions**: add the step from `templates/load-secrets-step.yml` to each job that needs secrets, with `op://` references per variable, and map `steps.op.outputs.<NAME>` only into the steps that call the provider (never `export-env: true`); remove the matching `${{ secrets.X }}` lines; keep `OP_SERVICE_ACCOUNT_TOKEN` as the only secret in the `ci` environment. Production jobs use `environment: production`, whose secret is the release token. Pin `1password/load-secrets-action` by commit SHA (v5.0.1 = `70062d7a876d3eb6334754fa26efd2fbd90c32f2`).
-6. **Deploys by agents**: if the project has a deploy workflow, create its GitHub App and config per the `github-release-dispatch` skill.
-7. **Verify**: `OP_SERVICE_ACCOUNT_TOKEN=$(cat ~/.config/op/sa/<project>-local.token) op run --env-file .env.op --no-masking -- sh -c 'env | grep -c op://'` must print 0 unresolved; run the test suite under `op run`; open a PR for the workflow change and let CI prove it.
+4. **Local .env.op**: with an existing `.env`, `scripts/build-env-op.py --repo <path> --project <slug> --vault "<Project> Dev"` reads it (values stay in-process), matches each credential to an existing item by value hash (single-line fields only), creates `<Project> local <VAR>` items for unmatched credentials, writes `.env.op` with references for credentials and literals for config, and adds `.env.op` and `.envrc` to `.git/info/exclude`. Without a `.env`, copy `templates/env.op.example` to `.env.op`, edit the references, and exclude both files yourself: `for f in .env.op .envrc; do grep -qxF "$f" .git/info/exclude || echo "$f" >> .git/info/exclude; done`. Copy `templates/op-run.sh` into the repo (for example `scripts/op-run.sh`, replace `PROJECT`) and write `.envrc` from `templates/envrc` (direnv optional). Run agents through the wrapper, `scripts/op-run.sh claude` (wrap the agent process, not each command: the Families quota is 1,000 requests/day).
+5. **GitHub Actions**: add the step from `templates/load-secrets-step.yml` to each job that needs secrets, with `op://` references per variable, and map `steps.op.outputs.<NAME>` only into the steps that call the provider (never `export-env: true`); remove the matching `${{ secrets.X }}` lines; keep `OP_SERVICE_ACCOUNT_TOKEN` as the only secret in the `ci` environment. Production jobs use `environment: production`, whose secret is the release token. Keep the action pinned by commit SHA (v5.0.1 = `70062d7a876d3eb6334754fa26efd2fbd90c32f2`) and the CLI pinned (`version: 2.41.0`).
+6. **Deploys by agents**: if the project has a deploy workflow, create its GitHub App and config per the `github-release-dispatch` skill. Apple projects built by Xcode Cloud: follow `references/xcode-cloud.md` (Xcode Cloud keeps its own secret variables; the Dev vault holds only a Developer-role key for triggering builds).
+7. **Verify**: `scripts/op-run.sh sh -c '! env | grep -q op://'` exits 0 only when no reference is left unresolved (`grep -c` alone exits 1 on zero matches, so a clean run would look like a failure); run the test suite through the wrapper; open a PR for the workflow change and let CI prove it.
 8. **Record**: tick the project in the Craft plan; add a Todoist reminder for the service-account expiry (about five days before).
 
 ## Gotchas learned on plato-ai
