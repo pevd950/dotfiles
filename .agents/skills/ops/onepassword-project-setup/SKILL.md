@@ -51,6 +51,7 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
 ## Gotchas learned on plato-ai
 
 - Always run `build-env-op.py --dry-run` first and read the list: a stale value in `.env` (e.g. a rotated key) will not match its item and would become a duplicate item; fix `.env` or hand-edit the reference instead.
+- Output paths must be relative to the selected repository, with existing real parent directories. The helper rejects symlinks, hardlinks, and non-regular output or exclusion files before contacting 1Password, including during dry-run. Writes replace files atomically with mode 0600; linked worktrees continue to leave shared Git exclusions alone. Treat generated dotenv literals as data for `op run`, never as a shell script.
 
 - `op item move` and `op item create` read stdin: in loops, append `</dev/null`.
 - `op run` masks any output that contains a secret value; a short local password like a username word mangles test output. Use `--no-masking` for test runs or choose distinctive local credentials.

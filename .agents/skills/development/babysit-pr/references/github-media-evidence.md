@@ -10,20 +10,24 @@ Check local `gh --version` and the intended command’s `--help`. Native `--atta
 
 Use `--body-file` for multiline Markdown. Repeat `--attach` for different files. Local references matching attached files are rewritten in place and preserve their Markdown alt text; otherwise files are appended. The `path#alt text` form sets alt text only for appended images. Videos have no alt text and need a standalone paragraph to render a player.
 
-For an already-authorized PR edit, replace the repository and PR placeholders. Run from the directory containing the sanitized media. First fetch the saved description into an unused local body file (stop if the fetch fails):
+For an already-authorized PR edit, replace the repository and PR placeholders. Run from the directory containing the sanitized media. Use one dedicated shell session for the following commands. Create a private temporary directory under the system `/tmp`, outside the checkout; never redirect into a repository-supplied `body.md` or symlink. The exit trap removes the body when that shell session ends. Stop if allocation or fetch fails:
 
 ```sh
-gh pr view PR_NUMBER --repo OWNER/REPO --json body --jq .body > body.md
+umask 077
+pr_body_dir="$(mktemp -d /tmp/github-pr-body.XXXXXXXXXX)" || exit 1
+trap 'rm -rf -- "$pr_body_dir"' EXIT
+pr_body_file="$pr_body_dir/body.md"
+gh pr view PR_NUMBER --repo OWNER/REPO --json body --jq .body > "$pr_body_file" || exit 1
 ```
 
-Edit that complete body to insert evidence beside its claim, preserving existing scope, validation details, and generated sections. `--body-file` replaces the entire description. Immediately before saving, reread the live body and reconcile any intervening edits, then upload:
+Edit the complete body at `"$pr_body_file"` to insert evidence beside its claim, preserving existing scope, validation details, and generated sections. Keep the same shell variables; other tools should use the resulting absolute path. `--body-file` replaces the entire description. Immediately before saving, reread the live body into another file in `"$pr_body_dir"` and reconcile any intervening edits, then upload:
 
 ```sh
-gh pr edit PR_NUMBER --repo OWNER/REPO --body-file body.md \
+gh pr edit PR_NUMBER --repo OWNER/REPO --body-file "$pr_body_file" \
   --attach ./before.png --attach ./after.png --attach ./interaction.mp4
 ```
 
-Example fragment to insert into the complete `body.md`, not a replacement description (replace the test-context placeholders):
+Example fragment to insert into the complete temporary body, not a replacement description (replace the test-context placeholders):
 
 ```markdown
 Tested COMMIT_OR_BUILD: SCENARIO on PLATFORM / DEVICE / OS.
