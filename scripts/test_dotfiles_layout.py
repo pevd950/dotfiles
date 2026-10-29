@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -74,6 +75,171 @@ class LayoutTests(unittest.TestCase):
         self.assertFalse((self.custom / "bin/private-tool").exists())
         self.assertEqual((self.custom / "exports-local.zsh").read_text(), "different private override\n")
 
+    def test_private_directory_merge_aborts_without_changing_either_tree(self):
+        old = self.local_additions()
+        old.chmod(0o700)
+        self.custom.chmod(0o755)
+        private = old / "readable-inside-private-directory"
+        private.write_text("synthetic private fixture\n")
+        private.chmod(0o644)
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                with self.assertRaisesRegex(ValueError, "permissions"), \
+                        patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+                    MIGRATION.migrate(self.home, apply)
+                rename.assert_not_called()
+                self.assertFalse(old.is_symlink())
+                self.assertEqual(private.read_text(), "synthetic private fixture\n")
+                self.assertFalse((self.custom / private.name).exists())
+                self.assertEqual(old.stat().st_mode & 0o777, 0o700)
+                self.assertEqual(self.custom.stat().st_mode & 0o777, 0o755)
+
+    def test_nested_private_directory_is_checked_before_any_move(self):
+        old = self.local_additions()
+        (old / "plugins").chmod(0o700)
+        (self.custom / "plugins").mkdir(mode=0o755)
+        with self.assertRaisesRegex(ValueError, "permissions"), \
+                patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+            MIGRATION.migrate(self.home, True)
+        rename.assert_not_called()
+        self.assertTrue((old / "bin/private-tool").is_file())
+        self.assertTrue((old / "plugins/example/.git/config").is_file())
+        self.assertFalse((self.custom / "bin/private-tool").exists())
+
+    def test_destination_ancestry_cannot_escape_private_home(self):
+        for component in (".config", ".config/zsh"):
+            for apply in (False, True):
+                with self.subTest(component=component, apply=apply):
+                    case = f"{component.replace('/', '-')}-{apply}"
+                    home = self.home / ("home-" + case)
+                    home.mkdir(mode=0o700)
+                    target = home / ".config/zsh/custom"
+                    target.mkdir(parents=True)
+                    old = home / ".zshrc_custom"
+                    old.mkdir()
+                    (old / "whole-directory").mkdir()
+                    for path in (old / "private-file", old / "whole-directory/private-file"):
+                        path.write_text("synthetic private fixture\n")
+                        path.chmod(0o644)
+                    outside = self.home / ("shared-" + case)
+                    original = home / component
+                    original.rename(outside)
+                    original.symlink_to(outside, target_is_directory=True)
+                    with self.assertRaisesRegex(ValueError, "home layout"), \
+                            patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+                        MIGRATION.migrate(home, apply)
+                    rename.assert_not_called()
+                    self.assertFalse(old.is_symlink())
+                    self.assertTrue((old / "private-file").is_file())
+                    self.assertTrue((old / "whole-directory/private-file").is_file())
+                    self.assertFalse((target / "private-file").exists())
+                    self.assertFalse((target / "whole-directory").exists())
+
+    def test_home_alias_and_internal_config_alias_preserve_relative_links(self):
+        old = self.local_additions()
+        external = self.home / "external-tool"
+        external.write_text("synthetic local tool\n")
+        (old / "bin/external").symlink_to("../../external-tool")
+        storage = self.home / "nested/config-storage"
+        storage.parent.mkdir()
+        (self.home / ".config").rename(storage)
+        (self.home / ".config").symlink_to("nested/config-storage", target_is_directory=True)
+        alias = self.home / "home-alias"
+        alias.symlink_to(self.home, target_is_directory=True)
+        self.assertEqual(MIGRATION.migrate(alias), 5)
+        self.assertEqual(MIGRATION.migrate(alias, True), 5)
+        self.assertEqual((old / "bin/external").resolve(), external)
+        self.assertEqual((old / "bin/private-tool").stat().st_mode & 0o777, 0o700)
+        self.assertEqual(MIGRATION.migrate(alias, True), 0)
+
+    def test_destination_cannot_overlap_source_tree(self):
+        old = self.local_additions()
+        shutil.rmtree(self.home / ".config")
+        (old / "config/zsh/custom").mkdir(parents=True)
+        (self.home / ".config").symlink_to(old / "config", target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "overlap"), \
+                patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+            MIGRATION.migrate(self.home, True)
+        rename.assert_not_called()
+        self.assertTrue((old / "bin/private-tool").is_file())
+
+    def test_narrower_destination_and_whole_private_directory_rename_work(self):
+        old = self.local_additions()
+        old.chmod(0o755)
+        (old / "plugins").chmod(0o700)
+        self.custom.chmod(0o700)
+        (self.custom / "bin").chmod(0o700)
+        self.assertEqual(MIGRATION.migrate(self.home), 4)
+        self.assertFalse(old.is_symlink())
+        self.assertEqual(MIGRATION.migrate(self.home, True), 4)
+        self.assertEqual(self.custom.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.custom / "bin").stat().st_mode & 0o777, 0o700)
+        self.assertEqual((self.custom / "plugins").stat().st_mode & 0o777, 0o700)
+        self.assertEqual((old / "plugins/example/.git/config").read_text(), "plugin metadata\n")
+        self.assertEqual(MIGRATION.migrate(self.home, True), 0)
+
+    def test_owner_or_group_change_aborts_before_any_move(self):
+        old = self.local_additions()
+        original_stat = Path.stat
+        for field in (4, 5):  # uid and gid in os.stat_result
+            with self.subTest(field=field):
+                def different_identity(path, *args, **kwargs):
+                    result = original_stat(path, *args, **kwargs)
+                    if path == self.custom:
+                        fields = list(result)
+                        fields[field] += 1
+                        return os.stat_result(fields)
+                    return result
+
+                with patch.object(Path, "stat", different_identity), \
+                        patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+                    with self.assertRaisesRegex(ValueError, "ownership"):
+                        MIGRATION.migrate(self.home, True)
+                rename.assert_not_called()
+                self.assertTrue((old / "exports-local.zsh").is_file())
+
+    @unittest.skipUnless(sys.platform == "darwin", "macOS ACL tools required")
+    def test_macos_acl_on_either_directory_prevents_merge(self):
+        old = self.local_additions()
+        for directory in (old, self.custom):
+            with self.subTest(directory=directory.name):
+                self.run_command("/bin/chmod", "+a", "everyone allow read,search", str(directory))
+                try:
+                    with self.assertRaisesRegex(ValueError, "Directory ACLs"), \
+                            patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+                        MIGRATION.migrate(self.home, True)
+                    rename.assert_not_called()
+                    self.assertTrue((old / "exports-local.zsh").is_file())
+                finally:
+                    self.run_command("/bin/chmod", "-N", str(directory))
+
+    def test_acl_detection_and_inspection_failures(self):
+        with patch.object(MIGRATION.sys, "platform", "linux"), \
+                patch.object(MIGRATION.os, "listxattr", create=True, return_value=["user.fixture"]):
+            self.assertFalse(MIGRATION.has_acl(self.custom))
+        for attribute in ("system.posix_acl_access", "system.posix_acl_default"):
+            with self.subTest(attribute=attribute), \
+                    patch.object(MIGRATION.sys, "platform", "linux"), \
+                    patch.object(MIGRATION.os, "listxattr", create=True, return_value=[attribute]):
+                self.assertTrue(MIGRATION.has_acl(self.custom))
+        with patch.object(MIGRATION.sys, "platform", "linux"), \
+                patch.object(MIGRATION.os, "listxattr", create=True, side_effect=OSError("fixture failure")):
+            with self.assertRaisesRegex(ValueError, "Cannot verify directory ACLs"):
+                MIGRATION.has_acl(self.custom)
+        with patch.object(MIGRATION.sys, "platform", "darwin"), \
+                patch.object(MIGRATION.subprocess, "run", side_effect=OSError("fixture failure")):
+            with self.assertRaisesRegex(ValueError, "Cannot verify directory ACLs"):
+                MIGRATION.has_acl(self.custom)
+
+    def test_unknown_acl_state_aborts_before_any_move(self):
+        old = self.local_additions()
+        with patch.object(MIGRATION, "has_acl", side_effect=ValueError("Cannot verify directory ACLs")), \
+                patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+            with self.assertRaisesRegex(ValueError, "Cannot verify directory ACLs"):
+                MIGRATION.migrate(self.home, True)
+        rename.assert_not_called()
+        self.assertTrue((old / "exports-local.zsh").is_file())
+
     def test_relative_links_keep_external_and_internal_targets(self):
         old = self.local_additions()
         external = self.home / "external-tool"
@@ -87,6 +253,10 @@ class LayoutTests(unittest.TestCase):
 
     def test_failed_link_creation_rolls_back_moves_and_directories(self):
         old = self.local_additions()
+        old.chmod(0o700)
+        self.custom.chmod(0o700)
+        (old / "bin").chmod(0o700)
+        (self.custom / "bin").chmod(0o700)
         with patch.object(Path, "symlink_to", side_effect=OSError("fixture failure")):
             with self.assertRaises(OSError):
                 MIGRATION.migrate(self.home, True)
@@ -94,6 +264,8 @@ class LayoutTests(unittest.TestCase):
         self.assertTrue((old / "exports-local.zsh").exists())
         self.assertFalse((self.custom / "exports-local.zsh").exists())
         self.assertFalse(old.is_symlink())
+        self.assertEqual(old.stat().st_mode & 0o777, 0o700)
+        self.assertEqual((old / "bin").stat().st_mode & 0o777, 0o700)
 
     def test_fresh_home_and_unexpected_legacy_link(self):
         self.assertEqual(MIGRATION.migrate(self.home, True), 0)
@@ -131,6 +303,22 @@ class LayoutTests(unittest.TestCase):
                      ".config/zsh/custom/bin/private-tool", ".config/zsh/custom/plugins/example"):
             with self.subTest(path=path):
                 self.run_command("git", "check-ignore", "--", path)
+
+    def test_current_and_legacy_private_skills_are_ignored(self):
+        shutil.copy2(ROOT / ".gitignore", self.home / ".gitignore")
+        self.run_command("git", "init")
+        private_paths = (".agents/private-skills/fixture/nested/SKILL.md",
+                         ".agents/skills/private/fixture/nested/SKILL.md")
+        public_path = ".agents/skills/development/fixture/SKILL.md"
+        for path in (*private_paths, public_path):
+            file = self.home / path
+            file.parent.mkdir(parents=True)
+            file.write_text("synthetic skill fixture\n")
+        for path in private_paths:
+            with self.subTest(path=path):
+                self.run_command("git", "check-ignore", "--", path)
+        self.run_command("git", "add", "--all", "--", ".agents")
+        self.assertEqual(self.run_command("git", "ls-files").splitlines(), [public_path])
 
     @unittest.skipUnless(shutil.which("zsh"), "zsh required")
     def test_shell_startup_before_and_after_migration(self):

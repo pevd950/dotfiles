@@ -1017,6 +1017,113 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual([r['line'] for r in reader.candidates(self.cache,AFTER,THROUGH)],[5])
         with self.assertRaises(ValueError):reader.context(self.cache,self.relative,3)
 
+    def test_exclusions_quarantine_unknown_provenance_until_valid_header(self):
+        self.config['exclude_sessions'] = ['excluded']
+        failures = {
+            'headerless': b'',
+            'malformed': b'not json\n',
+            'oversized': b'x' * 1025 + b'\n',
+            'invalid_header': b'{"type":"session_meta","payload":null}\n',
+            'invalid_identity': b'{"type":"session_meta","payload":{"id":"\\u0000quarantined"}}\n',
+            'invalid_envelope': b'{"type":"response_item","payload":[]}\n',
+            'nonobject': b'[]\n',
+            'invalid_utf8': b'\xff\n',
+        }
+        for name, failure in failures.items():
+            for after_allowed in (False, True):
+                if after_allowed and not failure:
+                    continue  # An uninterrupted allowed segment is not uncertain.
+                with self.subTest(failure=name, after_allowed=after_allowed):
+                    prefix = ([{'type': 'session_meta', 'payload': {'id': 'parent', 'source': 'vscode'}},
+                               record('user_message', message='visible parent')] if after_allowed else [])
+                    path = self.write(prefix)
+                    hidden_line = len(prefix) + bool(failure) + 1
+                    tail = [record('user_message', message='quarantined request'),
+                            record('function_call', name='exec', call_id='paired', arguments='quarantined call'),
+                            {'type': 'session_meta', 'payload': {'id': 'child', 'source': 'vscode'}},
+                            record('function_call_output', call_id='paired', output='visible result'),
+                            record('user_message', message='visible child')]
+                    with path.open('ab') as handle:
+                        handle.write(failure)
+                        handle.write(''.join(json.dumps(item) + '\n' for item in tail).encode())
+                    self.pull(); self.scan(max_records=1, max_record_bytes=512)
+
+                    expected = ([2] if after_allowed else []) + [hidden_line + 3, hidden_line + 4]
+                    rows = reader.candidates(self.cache, AFTER, THROUGH)
+                    self.assertEqual([row['line'] for row in rows], expected)
+                    self.assertTrue(all(row['owner'] in (None, 'parent', 'child') for row in rows))
+                    self.assertTrue(all(row['scope']['file_session_id'] in (None, 'parent', 'child') for row in rows))
+                    for line in (hidden_line, hidden_line + 1):
+                        with self.assertRaises(ValueError):
+                            reader.context(self.cache, self.relative, line)
+                    context = reader.context(self.cache, self.relative, hidden_line + 3, radius=20)
+                    self.assertEqual([row['line'] for row in context['records']], expected)
+                    self.assertNotIn('quarantined', json.dumps(context))
+
+                    queue = review_worklist.worklist(self.cache, AFTER, THROUGH)
+                    groups = queue['primary'] + queue['supporting']
+                    self.assertEqual({group['session_id'] for group in groups},
+                                     {'parent', 'child'} if after_allowed else {'child'})
+                    state = self.report()['sources']['source-a']
+                    self.assertEqual(state['selected_records'], len(expected))
+                    self.assertGreater(state['malformed_records'] + state['oversized_unparsed'], 0)
+                    self.assertFalse(state['timestamp_selection_complete'])
+                    db = reader.connect(self.cache)
+                    try:
+                        self.assertEqual(cache_retention.plan(self.cache, read_json(self.cache/'snapshot.json'),
+                            db, dt.datetime(2027, 1, 1, tzinfo=dt.timezone.utc)), [])
+                    finally:
+                        db.close()
+
+    def test_exclusions_allow_valid_legacy_header_and_retention(self):
+        self.config['exclude_sessions'] = ['excluded']
+        self.write([{'id': 'legacy', 'timestamp': '2026-09-01T00:00:00Z'},
+                    record('user_message', message='visible legacy')])
+        self.pull(); self.scan(max_records=1)
+        self.assertEqual([row['session'] for row in reader.candidates(self.cache, AFTER, THROUGH)], ['legacy'])
+        self.assertTrue(self.report()['all_sources_covered'])
+        db = reader.connect(self.cache)
+        try:
+            eligible = cache_retention.plan(self.cache, read_json(self.cache/'snapshot.json'),
+                db, dt.datetime(2027, 1, 1, tzinfo=dt.timezone.utc))
+            self.assertEqual([item['path'] for item in eligible], [self.relative])
+        finally:
+            db.close()
+
+    def test_exclusion_policy_rebuilds_complete_and_resumable_v6_indexes(self):
+        self.config['exclude_sessions'] = ['excluded']
+        self.write([record('user_message', message='unknown provenance'),
+                    {'type': 'session_meta', 'payload': {'id': 'child'}},
+                    record('user_message', message='visible child')])
+        for completed in (False, True):
+            with self.subTest(completed=completed):
+                self.cache = self.base / ('complete' if completed else 'partial')
+                self.pull()
+                if completed:
+                    self.scan()
+                else:
+                    reader.scan_batch(self.cache, max_records=1)
+                db = reader.connect(self.cache)
+                with db:
+                    # Reproduce the permissive derived state persisted by version 6.
+                    db.execute("UPDATE settings SET value='6' WHERE key='reader_version'")
+                    db.execute('UPDATE records SET session=NULL,excluded=0 WHERE line=1')
+                    if not completed:
+                        db.execute('UPDATE files SET session=NULL')
+                db.close()
+                self.assertEqual(reader.candidates(self.cache, AFTER, THROUGH), [])
+                db = reader.connect(self.cache)
+                try:
+                    file = db.execute('SELECT * FROM files').fetchone()
+                    self.assertEqual((file['offset'], file['line'], file['status']), (0, 0, 'pending'))
+                    self.assertEqual(db.execute('SELECT count(*) FROM records').fetchone()[0], 0)
+                finally:
+                    db.close()
+                self.scan(max_records=1)
+                self.assertEqual([row['line'] for row in reader.candidates(self.cache, AFTER, THROUGH)], [3])
+                with self.assertRaises(ValueError):
+                    reader.context(self.cache, self.relative, 1)
+
     def test_supported_bad_envelopes_are_gaps(self):
         self.write([{'type':'session_meta','payload':{'id':'keep'}},
                     {'type':'response_item','payload':None},{'type':'event_msg'},

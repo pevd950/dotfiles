@@ -35,4 +35,6 @@ python3 "$HOME/.agents/skills/productivity/video-analysis/scripts/video_analyze.
 
 The script prints the output directory and writes `analysis.md`, `timeline.json`, `frames/frame_*_t*.jpg`, `contact_sheets/sheet_*.jpg`, and `audio/audio.m4a` (skip with `--no-audio-extract`).
 
+Each run creates a fresh private directory (0700), with subdirectories (0700) and files (0600). Successful artifacts remain available for review; failed runs remove their newly created partial output. Remove successful artifacts when no longer needed. `--out-dir` must name a new directory beneath an existing parent owned by you or root, without symlinks, ACLs, or unprotected writes by other users. ACL inspection must succeed on macOS or Linux before any artifacts are written. The conservative ACL check also rejects macOS home-directory paths with the usual deny-delete ACL, including paths under Desktop or Downloads. Use a canonical path for explicit output (for example, `/private/tmp/new-analysis` on macOS); omit the option for a unique private temporary directory.
+
 `GEMINI_API_KEY` preferred (`GOOGLE_API_KEY` accepted); source the user's local shell exports if not visible. Default model `gemini-2.5-flash`; pass `--gemini-model gemini-2.5-pro` when deeper whole-video reasoning justifies the latency/cost.

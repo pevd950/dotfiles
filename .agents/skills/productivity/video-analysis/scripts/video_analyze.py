@@ -8,6 +8,7 @@ import json
 import mimetypes
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -83,10 +86,90 @@ def safe_time_for_name(seconds: float) -> str:
     return format_time(seconds).replace(":", "-").replace(".", "-")
 
 
-def default_out_dir(source: str) -> Path:
-    stem = Path(urllib.parse.urlparse(source).path if is_url(source) else source).stem or "video"
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    return Path(tempfile.gettempdir()) / f"video-analysis-{stem}-{stamp}"
+def validate_output_acl(directory: Path) -> None:
+    """Fail closed when mode bits cannot establish private output access."""
+    try:
+        if sys.platform == "darwin":
+            # macOS ACLs are not returned by listxattr. -e lists ACL entries;
+            # -d inspects the directory itself, including inherited access.
+            result = subprocess.run(
+                ["/bin/ls", "-lde", "--", str(directory)], check=True,
+                capture_output=True, env={**os.environ, "LC_ALL": "C"}, timeout=10,
+            )
+            lines = result.stdout.splitlines()
+            if not lines or not lines[0].startswith(b"d"):
+                raise ValueError("Unexpected directory metadata")
+            has_acl = len(lines) > 1 or lines[0][10:11] == b"+"
+        elif sys.platform.startswith("linux"):
+            has_acl = any(name.startswith("system.posix_acl_") for name in os.listxattr(directory))
+        else:
+            raise ValueError("ACL inspection is unsupported on this platform")
+    except (AttributeError, OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise SystemExit(
+            f"Cannot verify output directory ACLs for {directory}; "
+            "use a filesystem and platform with working ACL inspection."
+        ) from exc
+    if has_acl:
+        raise SystemExit(
+            f"Output directory has ACLs that can override private permissions: {directory}; "
+            "choose a trusted parent without ACLs, or omit --out-dir to use the system temporary directory."
+        )
+
+
+def validate_output_parent(parent: Path) -> None:
+    # A private leaf is insufficient if another user can rename its ancestors.
+    # Sticky shared temp directories protect children owned by this user.
+    for directory in reversed([parent, *parent.parents]):
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise SystemExit(f"Output parent must be a directory without symlinks: {directory}")
+        if info.st_uid not in {0, os.geteuid()}:
+            raise SystemExit(f"Output parent must be owned by you or root: {directory}")
+        if info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX:
+            raise SystemExit(f"Output parent is writable by other users without sticky protection: {directory}")
+        validate_output_acl(directory)
+
+
+@contextmanager
+def private_output_directory(requested: str | None) -> Iterator[Path]:
+    """Own one new directory; retain successful evidence, remove failed partials."""
+    # The CLI runs one pipeline per process. Children (ffmpeg/yt-dlp) inherit
+    # this mask, so downloads, media, reports, and intermediate files are private.
+    previous_mask = os.umask(0o077)
+    try:
+        try:
+            if requested is not None:
+                out_dir = Path(requested).expanduser().absolute()
+                if ".." in out_dir.parts:
+                    raise SystemExit("--out-dir must not contain '..' components")
+                validate_output_parent(out_dir.parent)
+                # Never resolve or reuse an existing destination, including links.
+                out_dir.mkdir(mode=0o700)
+            else:
+                # Platform temp paths can contain system aliases (e.g. /var on
+                # macOS). Canonicalize that parent, never an explicit destination.
+                parent = Path(tempfile.gettempdir()).resolve()
+                validate_output_parent(parent)
+                out_dir = Path(tempfile.mkdtemp(prefix="video-analysis-", dir=parent))
+        except OSError as exc:
+            raise SystemExit(f"Cannot create private output; choose a new directory under an existing trusted parent: {exc}") from exc
+
+        identity = out_dir.lstat()
+        try:
+            validate_output_acl(out_dir)
+            yield out_dir
+        except BaseException:
+            try:
+                current = out_dir.lstat()
+                if stat.S_ISDIR(current.st_mode) and (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino):
+                    shutil.rmtree(out_dir)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                print(f"Could not remove private partial output {out_dir}: {exc}", file=sys.stderr)
+            raise
+    finally:
+        os.umask(previous_mask)
 
 
 def resolve_source(source: str, out_dir: Path) -> Path:
@@ -502,15 +585,20 @@ def main() -> int:
     parser.add_argument("--fps", type=float, default=None, help="Local frame extraction FPS")
     parser.add_argument("--max-frames", type=int, default=None, help="Maximum local frames")
     parser.add_argument("--resolution", type=int, default=None, help="Extracted frame width")
-    parser.add_argument("--out-dir", default=None, help="Output directory")
+    parser.add_argument("--out-dir", default=None, help="New output directory under an existing trusted parent (no symlinks)")
     parser.add_argument("--no-gemini", action="store_true", help="Skip Gemini even if a key is available")
     parser.add_argument("--no-audio-extract", action="store_true", help="Skip local audio extraction")
     parser.add_argument("--gemini-model", default=DEFAULT_GEMINI_MODEL, help=f"Gemini model for video analysis (default: {DEFAULT_GEMINI_MODEL})")
     parser.add_argument("--gemini-api-key-env", default="GEMINI_API_KEY,GOOGLE_API_KEY", help="Comma-separated env var names to check")
     args = parser.parse_args()
 
-    out_dir = Path(args.out_dir).expanduser().resolve() if args.out_dir else default_out_dir(args.source)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    with private_output_directory(args.out_dir) as out_dir:
+        analyze(args, out_dir)
+    print(out_dir)
+    return 0
+
+
+def analyze(args: argparse.Namespace, out_dir: Path) -> None:
     video_path = resolve_source(args.source, out_dir)
     metadata = probe(video_path)
 
@@ -591,8 +679,6 @@ def main() -> int:
         audio_path=audio_path,
         gemini=gemini,
     )
-    print(out_dir)
-    return 0
 
 
 if __name__ == "__main__":
