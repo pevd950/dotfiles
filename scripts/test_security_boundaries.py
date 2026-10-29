@@ -82,6 +82,24 @@ class EnvOutputTests(IsolatedTest):
             self.assertEqual((self.repo / '.env.op').stat().st_mode & 0o777, 0o600)
         self.assertEqual(exclude.read_text().splitlines(), ['existing-entry', '.env.op', '.envrc'])
 
+    def test_unsupported_output_platform_fails_before_provider_access(self):
+        for capability in ('O_DIRECTORY', 'O_NOFOLLOW', 'dir_fd'):
+            with self.subTest(capability=capability):
+                disable = ('os.supports_dir_fd.discard(os.open)' if capability == 'dir_fd'
+                           else f'del os.{capability}')
+                runner = ('import os, runpy, sys\n' + disable + '\n'
+                          f'sys.path.insert(0, {str(BUILDER.parent)!r})\n'
+                          'sys.argv = sys.argv[1:]\n'
+                          'runpy.run_path(sys.argv[0], run_name="__main__")\n')
+                result = self.run_command([sys.executable, '-c', runner, str(BUILDER),
+                                           '--repo', str(self.repo), '--project', 'fixture',
+                                           '--vault', 'Fixture'])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Unsafe or unavailable output destination', result.stderr)
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertFalse(self.calls.exists())
+                self.assertFalse((self.repo / '.env.op').exists())
+
     def test_output_symlink_cannot_overwrite_startup(self):
         target = self.sentinel()
         (self.repo / '.env.op').symlink_to(target)
@@ -216,6 +234,34 @@ class CredentialOutputTests(IsolatedTest):
         self.assertNotIn('private.git', result.stdout + result.stderr)
         self.assertIn('https', result.stdout)
         self.assertIn('custom-shell-helper', result.stdout)
+
+    def test_diagnostic_environment_prevents_git_askpass_sources(self):
+        self.run_command([self.git, 'config', '--global', '--unset-all', 'credential.helper'])
+        marker = self.root / 'askpass-called'
+        askpass = self.stub('askpass', 'from pathlib import Path\n'
+                            f'Path({str(marker)!r}).touch()\n'
+                            'print("synthetic-password")\n')
+        runner = ('import importlib.util, subprocess, sys\n'
+                  f'spec = importlib.util.spec_from_file_location("diagnostics", {str(DIAGNOSTICS)!r})\n'
+                  'module = importlib.util.module_from_spec(spec)\n'
+                  'spec.loader.exec_module(module)\n'
+                  f'result = subprocess.run([{self.git!r}, "credential", "fill"],\n'
+                  '    input="protocol=https\\nhost=example.invalid\\nusername=fixture\\n\\n",\n'
+                  '    text=True, capture_output=True, env=module.git_environment(), timeout=5)\n'
+                  'raise SystemExit(result.returncode)\n')
+        for source in ('GIT_ASKPASS', 'SSH_ASKPASS', 'core.askPass'):
+            with self.subTest(source=source):
+                self.env.pop('GIT_ASKPASS', None)
+                self.env.pop('SSH_ASKPASS', None)
+                self.run_command([self.git, 'config', '--global', '--unset-all', 'core.askPass'])
+                marker.unlink(missing_ok=True)
+                if source == 'core.askPass':
+                    self.run_command([self.git, 'config', '--global', source, str(askpass)])
+                else:
+                    self.env[source] = str(askpass)
+                result = self.run_command([sys.executable, '-c', runner])
+                self.assertFalse(marker.exists(), source + ' must not invoke a prompt helper')
+                self.assertNotEqual(result.returncode, 0, 'missing credentials must fail closed')
 
     def test_multiline_and_scoped_helpers_are_opaque(self):
         self.run_command([self.git, 'config', '--add', 'credential.https://example.invalid.helper',

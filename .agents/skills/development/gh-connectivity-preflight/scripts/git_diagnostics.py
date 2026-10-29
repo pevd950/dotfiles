@@ -13,7 +13,7 @@ def git_environment():
            if not key.startswith('GIT_TRACE') and key != 'GIT_CURL_VERBOSE'}
     # Removing variables is insufficient: trace2.*Target can enable file sinks
     # and trace2.configParams can record credential.helper verbatim.
-    env.update(GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='never',
+    env.update(GIT_TERMINAL_PROMPT='0', GIT_ASKPASS='', GCM_INTERACTIVE='never',
                GIT_TRACE2='0', GIT_TRACE2_EVENT='0', GIT_TRACE2_PERF='0')
     return env
 

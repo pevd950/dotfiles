@@ -20,6 +20,9 @@ class SafeOutput:
         if any('\n' in part or '\r' in part for part in parts):
             raise ValueError('output path must not contain line breaks')
         self.name = parts[-1]
+        if (not hasattr(os, 'O_NOFOLLOW') or not hasattr(os, 'O_DIRECTORY')
+                or os.open not in os.supports_dir_fd):
+            raise ValueError('SafeOutput requires POSIX no-follow directory descriptors')
         self.fd = os.open(repo, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             for part in parts[:-1]:
