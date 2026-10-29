@@ -11,6 +11,8 @@ import sqlite3
 from scan_codex_sessions import _event, _time, _source_class
 from transcript_cache import cache_path, file_hash, locked_cache, private_file, read_json, signature, write_json
 
+QUARANTINED_SESSION = '\0quarantined'
+
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS files (
  id INTEGER PRIMARY KEY, path TEXT UNIQUE, source TEXT, area TEXT,
@@ -52,12 +54,12 @@ def connect(root):
     if 'verified_stat' not in file_columns:
         connection.execute('ALTER TABLE files ADD COLUMN verified_stat TEXT')
     version = connection.execute("SELECT value FROM settings WHERE key='reader_version'").fetchone()
-    if version is None or version[0] != '6':
-        # Rebuild derived cursors once to retain each session header's source class.
+    if version is None or version[0] != '7':
+        # Rebuild permissive indexes and resumable cursors with exclusion quarantine.
         with connection:
             connection.execute('DELETE FROM records')
             connection.execute("UPDATE files SET offset=0,line=0,owner=NULL,session=NULL,status='pending',malformed=0,oversized=0,untimestamped=0")
-            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','6')")
+            connection.execute("INSERT OR REPLACE INTO settings VALUES('reader_version','7')")
     return connection
 
 
@@ -138,6 +140,9 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
         raise ValueError('Batch limits must be positive')
     with locked_cache(cache) as root:
         snapshot = read_json(root / 'snapshot.json')
+        exclusions = set(snapshot.get('exclude_sessions', []))
+        # With exclusions, unknown provenance cannot establish permission to read.
+        unknown_session = QUARANTINED_SESSION if exclusions else None
         connection = connect(root)
         try:
             with connection:
@@ -158,6 +163,8 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                     expected = (file['size'], file['mtime_ns'])
                     offset, line = file['offset'], file['line']
                     owner, session = file['owner'], file['session']
+                    if session is None:
+                        session = unknown_session
                     header_seen = connection.execute("SELECT 1 FROM records WHERE file=? AND kind IN ('session_meta','invalid_session_meta') LIMIT 1", (file['id'],)).fetchone() is not None
                     malformed, oversized, untimestamped = file['malformed'], file['oversized'], file['untimestamped']
                     status = 'pending'
@@ -180,8 +187,6 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                 when = kind = call_id = None
                                 summary = {}
                                 previous_gaps = (malformed, oversized, untimestamped)
-                                was_excluded = session in snapshot.get('exclude_sessions', []) or session == '\0quarantined'
-                                unknown_session = '\0quarantined' if was_excluded else None
                                 if raw is None:
                                     session = unknown_session
                                     oversized += 1
@@ -199,7 +204,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                             valid = isinstance(identity, str) and bool(identity.strip()) and len(identity.encode('utf-8')) <= 256 and '\0' not in identity
                                             session = identity if valid else unknown_session
                                             if not header_seen:
-                                                owner = session
+                                                owner = identity if valid else None
                                             header_seen = True
                                             kind = 'session_meta' if valid else 'invalid_session_meta'
                                             summary = {'source_class': _source_class(payload.get('source'))} if valid else {}
@@ -214,7 +219,7 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                             if decoded:
                                                 summary, call_id = decoded
                                                 kind = summary['kind']
-                                                if session is None:
+                                                if session in (None, QUARANTINED_SESSION):
                                                     malformed += 1  # Activity without session provenance.
                                                 if when is None:
                                                     untimestamped += 1
@@ -224,8 +229,8 @@ def scan_batch(cache, *, max_bytes=64 * 1024 * 1024, max_records=50000,
                                         malformed += 1
                                         kind = 'malformed'
                                         session = unknown_session
-                                excluded = session in snapshot.get('exclude_sessions', []) or session == '\0quarantined'
-                                if excluded and session != '\0quarantined':
+                                excluded = session in exclusions or session == QUARANTINED_SESSION
+                                if excluded and session != QUARANTINED_SESSION:
                                     malformed, oversized, untimestamped = previous_gaps
                                 connection.execute('INSERT INTO records VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                                     (file['id'], line, start, length, digest,

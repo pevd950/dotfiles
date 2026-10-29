@@ -1,19 +1,66 @@
 #!/usr/bin/env python3
 """Move untracked Zsh additions after pulling the reorganized dotfiles.
 
-No file contents are read or copied. A collision aborts before any changes;
-renames preserve modes, symlinks, and plugin repositories. Keep a compatibility
-link for applications that still refer to the former custom directory.
+No file contents are read or copied. Collisions and merges that could discard
+directory protections abort before any changes; renames preserve modes,
+symlinks, and plugin repositories. Keep a compatibility link for applications
+that still refer to the former custom directory.
 """
 
 import argparse
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 
 def present(path):
     return path.exists() or path.is_symlink()
+
+
+def has_acl(path):
+    """Detect ACLs separately: mode bits cannot describe their access rules."""
+    try:
+        if sys.platform == "darwin":
+            # macOS ACLs are not exposed by listxattr. -e prints each ACL entry
+            # on an additional line; -d inspects the directory itself.
+            result = subprocess.run(
+                ["/bin/ls", "-lde", "--", str(path)], check=True,
+                capture_output=True, env={**os.environ, "LC_ALL": "C"}, timeout=10,
+            )
+            lines = result.stdout.splitlines()
+            if not lines or not lines[0].startswith(b"d"):
+                raise ValueError("Unexpected directory metadata")
+            return len(lines) > 1
+        if sys.platform.startswith("linux"):
+            return any(name.startswith("system.posix_acl_") for name in os.listxattr(path))
+        raise ValueError("ACL inspection is unsupported on this platform")
+    except (AttributeError, OSError, subprocess.SubprocessError, ValueError) as error:
+        raise ValueError(
+            f"Cannot verify directory ACLs for {path}; review its access rules and migrate manually."
+        ) from error
+
+
+def check_merge_protection(old, new):
+    """Only merge directories whose existing protections can be compared safely."""
+    previous, destination = old.stat(), new.stat()
+    old_mode, new_mode = previous.st_mode & 0o7777, destination.st_mode & 0o7777
+    if (previous.st_uid, previous.st_gid) != (destination.st_uid, destination.st_gid):
+        raise ValueError(
+            f"Directory ownership differs for {old} and {new}; review ownership before migrating."
+        )
+    if (new_mode & 0o777) & ~(old_mode & 0o777) or (old_mode ^ new_mode) & 0o7000:
+        raise ValueError(
+            f"Merging {old} into {new} could weaken directory permissions "
+            f"({old_mode:04o} to {new_mode:04o}); restrict the destination permissions "
+            "to match the source or migrate manually."
+        )
+    if has_acl(old) or has_acl(new):
+        raise ValueError(
+            f"Directory ACLs prevent a safe automatic merge of {old} into {new}; "
+            "review the access rules and migrate manually."
+        )
+    return old_mode
 
 
 def plan_moves(source, target):
@@ -23,7 +70,9 @@ def plan_moves(source, target):
         if not present(new):
             moves.append((old, new))
         elif old.is_dir() and not old.is_symlink() and new.is_dir() and not new.is_symlink():
-            directories.append((old, old.stat().st_mode & 0o777))
+            # Preflight the entire merge tree before the first rename. Keeping
+            # a file's mode is insufficient when a private ancestor disappears.
+            directories.append((old, check_merge_protection(old, new)))
             for child in sorted(old.iterdir()):
                 visit(child, new / child.name)
         else:
