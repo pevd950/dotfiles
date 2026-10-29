@@ -378,7 +378,13 @@ ensure_ssh_config_identity_agent() {
   if [[ -e "$ssh_config" ]]; then
     awk '
       /^# >>> dotfiles 1Password SSH agent$/ { skip=1; next }
-      /^# <<< dotfiles 1Password SSH agent$/ { skip=0; next }
+      /^# <<< dotfiles 1Password SSH agent$/ { skip=0; restore_scope=1; next }
+      # The old block ended in Match all. Preserve that context if the user
+      # appended directives after it, without accumulating headers on reruns.
+      !skip && restore_scope && /^[[:space:]]*[^#[:space:]]/ {
+        print "Match all"
+        restore_scope=0
+      }
       !skip { print }
     ' "$ssh_config" > "$tmp_file"
   fi

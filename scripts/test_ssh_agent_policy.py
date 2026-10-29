@@ -87,6 +87,21 @@ class AgentPolicyTests(unittest.TestCase):
         self.assertIn(f'IdentityAgent "{LEGACY_AGENT}"', self.config.read_text())
         self.assertTrue(self.agent_for("legacy").endswith("/t/agent.sock"))
 
+    def test_user_rule_appended_after_managed_block_keeps_global_scope(self):
+        for installed in (True, False):
+            with self.subTest(installed=installed):
+                self.config.write_text("Host never-matches\n  User ignored\n")
+                self.setup_policy()
+                with self.config.open("a") as config:
+                    config.write("# User default added after initial setup\nIdentityAgent none\n")
+                self.assertEqual(self.agent_for(), "none")
+                self.setup_policy(installed=installed)
+                self.assertEqual(self.agent_for(), "none")
+                first = self.config.read_bytes()
+                self.setup_policy(installed=installed)
+                self.assertEqual(self.agent_for(), "none")
+                self.assertEqual(first, self.config.read_bytes())
+
     def test_early_wildcard_and_multifile_includes_keep_user_policy(self):
         self.old_fragment()
         other = self.fragments / "user.conf"
