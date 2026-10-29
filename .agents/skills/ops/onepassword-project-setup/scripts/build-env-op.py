@@ -140,4 +140,4 @@ if not a.dry_run:
         sys.exit('Output destination changed or could not be written safely; inspect it before retrying.')
 print(("DRY RUN: " if a.dry_run else "") + f"{out_path}: {len(refs)} references, {len(order) - len(refs)} literals")
 for k in order: print(f"  {k:34s} {refs[k] if k in refs else '(literal)'}")
-if created: print("created items:", created)
+if created: print(("would create items:" if a.dry_run else "created items:"), created)
