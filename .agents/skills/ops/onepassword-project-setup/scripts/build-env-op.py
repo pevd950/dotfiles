@@ -7,7 +7,8 @@ Usage: build-env-op.py --repo PATH --project SLUG --vault "Project Dev" [--vault
 Credential detection: names matching KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|DSN, or any URL carrying a password,
 plus any --secret names; --config names are forced literal.
 """
-import argparse, hashlib, json, os, re, subprocess, sys, datetime
+import argparse, atexit, hashlib, json, os, re, stat, subprocess, sys, datetime
+from safe_output import SafeOutput
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--repo", required=True); ap.add_argument("--project", required=True)
@@ -16,7 +17,23 @@ ap.add_argument("--secret", action="append", default=[]); ap.add_argument("--con
 ap.add_argument("--env-file", default=".env"); ap.add_argument("--out", default=".env.op")
 ap.add_argument("--dry-run", action="store_true", help="do not create items or write files")
 a = ap.parse_args()
-repo = os.path.expanduser(a.repo); env_path = os.path.join(repo, a.env_file); out_path = os.path.join(repo, a.out)
+repo = os.path.realpath(os.path.expanduser(a.repo)); env_path = os.path.join(repo, a.env_file); out_path = os.path.join(repo, a.out)
+# Validate both write destinations before reading credentials or creating items,
+# including dry runs. A linked worktree has a .git file; leave its shared metadata alone.
+try:
+    output = SafeOutput(repo, a.out)
+    atexit.register(output.close)
+    exclude = None
+    git_path = os.path.join(repo, '.git')
+    if os.path.lexists(git_path):
+        git_mode = os.lstat(git_path).st_mode
+        if stat.S_ISLNK(git_mode):
+            raise ValueError('Git metadata must not be a symlink')
+        if stat.S_ISDIR(git_mode) and os.path.lexists(os.path.join(git_path, 'info')):
+            exclude = SafeOutput(repo, '.git/info/exclude')
+            atexit.register(exclude.close)
+except (OSError, ValueError) as exc:
+    sys.exit('Unsafe or unavailable output destination (' + type(exc).__name__ + '). Use a repository-local regular file with real parent directories.')
 create_vault = a.vault[0]
 SECRET_RE = re.compile(r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|DSN)", re.I)
 
@@ -112,13 +129,15 @@ lines = [f"# {a.project} local environment, 1Password reference edition. Generat
 for k in order:
     lines.append(f'{k}="{refs[k]}"' if k in refs else f"{k}={raw[k]}")  # literals keep their original quoting and comments
 if not a.dry_run:
-    open(out_path, "w").write("\n".join(lines) + "\n"); os.chmod(out_path, 0o600)
-    excl = os.path.join(repo, ".git", "info", "exclude")
-    if os.path.isdir(os.path.dirname(excl)):
-        have = open(excl).read().splitlines() if os.path.exists(excl) else []
-        with open(excl, "a") as fh:
-            for p in (a.out, ".envrc"):
-                if p not in have: fh.write(p + "\n")
+    try:
+        if exclude is not None:
+            have = exclude.read().splitlines()
+            for p in (a.out, '.envrc'):
+                if p not in have: have.append(p)
+            exclude.write('\n'.join(have) + '\n')
+        output.write("\n".join(lines) + "\n")
+    except (OSError, ValueError):
+        sys.exit('Output destination changed or could not be written safely; inspect it before retrying.')
 print(("DRY RUN: " if a.dry_run else "") + f"{out_path}: {len(refs)} references, {len(order) - len(refs)} literals")
 for k in order: print(f"  {k:34s} {refs[k] if k in refs else '(literal)'}")
 if created: print("created items:", created)
