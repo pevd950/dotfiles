@@ -376,9 +376,15 @@ ensure_ssh_config_identity_agent() {
 
   tmp_file="$(mktemp)"
   if [[ -e "$ssh_config" ]]; then
-    awk '
-      /^# >>> dotfiles 1Password SSH agent$/ { skip=1; next }
-      /^# <<< dotfiles 1Password SSH agent$/ { skip=0; restore_scope=1; next }
+    if ! awk '
+      /^# >>> dotfiles 1Password SSH agent$/ {
+        if (skip) { invalid=1; exit 1 }
+        skip=1; next
+      }
+      /^# <<< dotfiles 1Password SSH agent$/ {
+        if (!skip) { invalid=1; exit 1 }
+        skip=0; restore_scope=1; next
+      }
       # The old block ended in Match all. Preserve that context if the user
       # appended directives after it, without accumulating headers on reruns.
       !skip && restore_scope && /^[[:space:]]*[^#[:space:]]/ {
@@ -386,7 +392,12 @@ ensure_ssh_config_identity_agent() {
         restore_scope=0
       }
       !skip { print }
-    ' "$ssh_config" > "$tmp_file"
+      END { if (skip || invalid) exit 1 }
+    ' "$ssh_config" > "$tmp_file"; then
+      rm -f "$tmp_file"
+      status "ssh config agent" "stopped; repair unmatched or nested managed block markers in $(display_path "$ssh_config") before rerunning"
+      return 1
+    fi
   fi
   if [[ "$installed" -eq 1 ]]; then
     {

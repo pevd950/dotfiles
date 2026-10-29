@@ -106,6 +106,63 @@ class LayoutTests(unittest.TestCase):
         self.assertTrue((old / "plugins/example/.git/config").is_file())
         self.assertFalse((self.custom / "bin/private-tool").exists())
 
+    def test_destination_ancestry_cannot_escape_private_home(self):
+        for component in (".config", ".config/zsh"):
+            for apply in (False, True):
+                with self.subTest(component=component, apply=apply):
+                    case = f"{component.replace('/', '-')}-{apply}"
+                    home = self.home / ("home-" + case)
+                    home.mkdir(mode=0o700)
+                    target = home / ".config/zsh/custom"
+                    target.mkdir(parents=True)
+                    old = home / ".zshrc_custom"
+                    old.mkdir()
+                    (old / "whole-directory").mkdir()
+                    for path in (old / "private-file", old / "whole-directory/private-file"):
+                        path.write_text("synthetic private fixture\n")
+                        path.chmod(0o644)
+                    outside = self.home / ("shared-" + case)
+                    original = home / component
+                    original.rename(outside)
+                    original.symlink_to(outside, target_is_directory=True)
+                    with self.assertRaisesRegex(ValueError, "home layout"), \
+                            patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+                        MIGRATION.migrate(home, apply)
+                    rename.assert_not_called()
+                    self.assertFalse(old.is_symlink())
+                    self.assertTrue((old / "private-file").is_file())
+                    self.assertTrue((old / "whole-directory/private-file").is_file())
+                    self.assertFalse((target / "private-file").exists())
+                    self.assertFalse((target / "whole-directory").exists())
+
+    def test_home_alias_and_internal_config_alias_preserve_relative_links(self):
+        old = self.local_additions()
+        external = self.home / "external-tool"
+        external.write_text("synthetic local tool\n")
+        (old / "bin/external").symlink_to("../../external-tool")
+        storage = self.home / "nested/config-storage"
+        storage.parent.mkdir()
+        (self.home / ".config").rename(storage)
+        (self.home / ".config").symlink_to("nested/config-storage", target_is_directory=True)
+        alias = self.home / "home-alias"
+        alias.symlink_to(self.home, target_is_directory=True)
+        self.assertEqual(MIGRATION.migrate(alias), 5)
+        self.assertEqual(MIGRATION.migrate(alias, True), 5)
+        self.assertEqual((old / "bin/external").resolve(), external)
+        self.assertEqual((old / "bin/private-tool").stat().st_mode & 0o777, 0o700)
+        self.assertEqual(MIGRATION.migrate(alias, True), 0)
+
+    def test_destination_cannot_overlap_source_tree(self):
+        old = self.local_additions()
+        shutil.rmtree(self.home / ".config")
+        (old / "config/zsh/custom").mkdir(parents=True)
+        (self.home / ".config").symlink_to(old / "config", target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "overlap"), \
+                patch.object(Path, "rename", autospec=True, side_effect=Path.rename) as rename:
+            MIGRATION.migrate(self.home, True)
+        rename.assert_not_called()
+        self.assertTrue((old / "bin/private-tool").is_file())
+
     def test_narrower_destination_and_whole_private_directory_rename_work(self):
         old = self.local_additions()
         old.chmod(0o755)

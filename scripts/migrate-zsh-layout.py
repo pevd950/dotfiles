@@ -104,10 +104,24 @@ def relative_links(source, target):
 
 
 def migrate(home, apply=False):
+    # Resolve the home itself so legitimate aliases (including /var on macOS)
+    # do not look like escapes from its access-control boundary.
+    home = home.resolve(strict=True)
     source = home / ".zshrc_custom"
     target = home / ".config/zsh/custom"
     if not target.is_dir() or target.is_symlink():
         raise ValueError("Pull the reorganized dotfiles before running this migration.")
+    for ancestor in (target.parent.parent, target.parent, target):
+        if not ancestor.resolve(strict=True).is_relative_to(home):
+            raise ValueError(
+                f"The destination leaves the home layout through {ancestor}; "
+                "restore a directory inside the home or migrate manually."
+            )
+    # Use the real destination for relative-link rewrites when an in-home
+    # directory alias changes its depth. Every rename uses this checked path.
+    target = target.resolve(strict=True)
+    if target.is_relative_to(source) or source.is_relative_to(target):
+        raise ValueError("The old and new custom directories overlap; resolve their layout before migrating.")
     if source.is_symlink():
         if source.resolve() != target.resolve():
             raise ValueError("The legacy custom path is a link to a different directory; resolve it first.")

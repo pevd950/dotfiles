@@ -115,6 +115,23 @@ class AgentPolicyTests(unittest.TestCase):
         self.assertIn(prefix, self.config.read_text())
         self.assertFalse(self.fragment.exists())
 
+    def test_malformed_managed_markers_leave_config_and_fragment_untouched(self):
+        start = "# >>> dotfiles 1Password SSH agent\n"
+        end = "# <<< dotfiles 1Password SSH agent\n"
+        cases = [start + "Match all\nHost preserved\n  User fixture\n",
+                 end + "Host preserved\n  User fixture\n",
+                 start + start + "Match all\n" + end]
+        for content in cases:
+            for installed, dry_run in [(True, False), (False, False), (True, True)]:
+                with self.subTest(content=content, installed=installed, dry_run=dry_run):
+                    self.old_fragment()
+                    self.config.write_text(content)
+                    before = {p: p.read_bytes() for p in (self.config, self.fragment)}
+                    with self.assertRaises(subprocess.CalledProcessError) as error:
+                        self.setup_policy(installed=installed, dry_run=dry_run)
+                    self.assertIn("managed block markers", error.exception.stdout)
+                    self.assertEqual(before, {p: p.read_bytes() for p in before})
+
     def test_unowned_fragment_is_not_rewritten_or_deleted(self):
         content = "Host custom\n  IdentityAgent /tmp/custom.sock\nHost *\n"
         self.fragment.write_text(content)
