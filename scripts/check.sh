@@ -11,6 +11,7 @@ fi
 
 bash_files=(
   setup.sh
+  .agents/skills/ops/onepassword-project-setup/templates/envrc
   scripts/setup-checks.sh
   .config/yadm/bootstrap
   .cursor/install.sh
