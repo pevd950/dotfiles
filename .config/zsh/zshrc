@@ -211,3 +211,8 @@ fi
 
 # Matter CLI
 [[ -d "$HOME/.matter/bin" ]] && path=("$HOME/.matter/bin" $path)
+
+# Activate approved project environments for ordinary commands.
+if command -v direnv >/dev/null 2>&1; then
+   eval "$(direnv hook zsh)"
+fi
