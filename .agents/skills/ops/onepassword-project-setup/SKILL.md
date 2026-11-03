@@ -22,6 +22,8 @@ Names: items `<Provider> <Project>-<env>` or `<Project> local <purpose>`; tags `
 | --- | --- |
 | `scripts/build-env-op.py` | Builds `.env.op` from an existing `.env`; creates items for unmatched credentials. |
 | `scripts/store-sa-token.sh` | Stores a service-account token as an `SA Tokens` item from stdin, without printing it. |
+| `scripts/match-env-to-items.py` | Maps a host's plaintext env file to existing items by value hash; prints template lines, never values. |
+| `scripts/setup-host-agent-env.sh` | Installs the shared-keys renderer on a host: refresh script, launchd or systemd schedule, template stub, shell loader. |
 | `templates/env.op.example` | Starting `.env.op` for a project with no `.env`: `op://` references for secrets, literals for config. |
 | `templates/op-run.sh` | `op run` wrapper: loads `~/.config/op/sa/<project>-local.token` (refuses a mode other than 0600) and runs `op run --env-file .env.op -- "$@"`. |
 | `templates/envrc` | Loads the scoped token and resolves `.env.op` for ordinary project commands through direnv, with a 0600 check and no plaintext environment file. |
@@ -73,9 +75,21 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
 | --- | --- | --- |
 | App built and signed by Xcode Cloud, released through GitHub environments | `op` may not be a build or runtime dependency, and Xcode Cloud reads only its own variables | Projection: items in `<Project> Prod`, re-projected into the GitHub environment secrets (`gh secret set`, value over stdin). No `sa-<project>-*` accounts. |
 | Long-running service on a host | 1Password must not be in the boot path | A `sa-<project>-runtime` token file on the host (0600) and a scheduled refresh that renders the env file from the runtime vault; the service reads the file from disk. |
-| Headless machine running agents | The desktop app's agent and CLI integration need an unlocked GUI session | A host-scoped service-account token under `~/.config/op/sa/` that renders the agent environment; plain SSH keys for the agent routes. |
+| Any host's shell and agents (personal keys) | The desktop app's CLI integration needs an unlocked GUI session, and shells must not prompt | A host-scoped `sa-<host>-agents` token that renders one env file on a schedule; see Shared keys on a host. Plain SSH keys for the agent routes. |
 | Repository whose only secret is an agent OAuth token | Nothing project-specific to protect | One shared agents vault and service account for all such repositories, exposed as a repository secret the workflows pass to the composite action. |
 | Recovery material (signing identities, profiles, encryption keys, the plaintext `.env` kept until every check passes) | Needed when the automated path is broken | Prod or human-only vault, never granted to a Dev or CI account; the plaintext `.env` goes only after step 7 passes for every consumer. |
+
+## Shared keys on a host
+
+Personal keys used on every host and by every agent (model providers, task, notes and bookmark apps) are host- and consumer-agnostic: one item per provider in the agent tools vault, titled `<Provider> API`, never by host or consumer. Each host reads them with its own service account and renders one 0600 file; shells source that file and never call 1Password, so login shells, scripts and SSH commands work with the app locked. A key that can mint other credentials (for example a token-creator token) stays in the human-only vault and out of the rendered file.
+
+1. **Inventory.** `scripts/match-env-to-items.py` (defaults to `~/.zshenv.local`) prints each secret-looking variable as a ready template line, `NAME=op://<vault>/<item-id>/<field>  # <title>`, or `NAME=NO 1PASSWORD ITEM`. Values never print; matching is by hash, so a stale or rotated value shows as missing.
+2. **Items.** Store each unmatched value as an item (JSON on stdin, parity checked by hash), or point the variable at the current item when the host only holds an old copy.
+3. **Identity.** Pablo creates the account; grants are permanent: `op service-account create sa-<host>-agents --expires-in 89d --vault "<agent tools vault>:read_items" --raw > ~/.config/op/sa/<host>-agents.token` (under `umask 077`; add a runtime vault only if a host value lives there), then records it with `scripts/store-sa-token.sh`.
+4. **Install.** `scripts/setup-host-agent-env.sh --alias <host>` writes `~/.local/bin/refresh-agent-env`, a launchd agent or systemd user timer (at login and every six hours), the template stub `~/.config/op/env/<host>-agent.env.tpl` and the loader block in `~/.zshenv.local`. Paste the inventory lines into the template and run `refresh-agent-env`; it refuses to replace the rendered file if any reference is unresolved.
+5. **Cut over.** Back up `~/.zshenv.local` (0600), remove the assignments the template now covers, keep the non-secret exports, check a fresh `zsh -l -c` sees every name, then delete the backup with `rm -P`. Never export a service-account token into shells.
+
+The template is the host's inventory of secret variables; `env | cut -d= -f1 | sort` in a new shell shows what is exported. Running processes keep the environment they started with until they restart.
 
 ## Gotchas
 
