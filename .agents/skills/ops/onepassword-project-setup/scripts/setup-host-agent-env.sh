@@ -16,13 +16,15 @@ bin="$HOME/.local/bin/refresh-agent-env"
 umask 077; mkdir -p "$envdir" "$HOME/.local/bin"; chmod 700 "$envdir"
 
 cat > "$bin" <<EOF
-#!/bin/zsh
+#!/bin/zsh -f
 # Render $out from its template with the token in $token. Safe to rerun.
+# -f skips startup files: the ~/.zshenv.local loader calls this script, so reading it here would recurse.
 set -euo pipefail
+[[ -n "\${REFRESH_AGENT_ENV_ACTIVE:-}" ]] && exit 0; export REFRESH_AGENT_ENV_ACTIVE=1
 tpl="$tpl"; out="$out"; tok="$token"
 [[ -r "\$tok" ]] || { echo "refresh-agent-env: missing \$tok, keeping previous file" >&2; exit 1; }
 export OP_SERVICE_ACCOUNT_TOKEN="\$(<"\$tok")"
-umask 077; tmp="\$(mktemp "\$out.XXXXXX")"
+umask 077; tmp="\$(mktemp "\$out.XXXXXX")"; trap 'rm -f "\$tmp"' EXIT
 op inject -i "\$tpl" -o "\$tmp" --force >/dev/null
 if grep -q 'op://' "\$tmp"; then rm -f "\$tmp"; echo "refresh-agent-env: unresolved reference, keeping previous file" >&2; exit 1; fi
 mv -f "\$tmp" "\$out"; chmod 600 "\$out"; echo "rendered \$out (\$(grep -c '=' "\$out") vars)"
@@ -31,7 +33,8 @@ chmod 700 "$bin"
 
 if [ ! -e "$tpl" ]; then cat > "$tpl" <<EOF
 # $alias shared agent and shell secrets, as 1Password references (no values).
-# One NAME=op://<vault>/<item-id>/<field> line per variable, item title in a comment below it.
+# One NAME=<reference> line per variable (reference = vault, item ID and field after the op scheme),
+# item title in a comment below it. Never write the bare scheme in a comment: op inject parses comments too.
 # Reference item IDs so renames never break this host. Edit here, then run refresh-agent-env.
 EOF
   echo "created template stub $tpl"; fi
