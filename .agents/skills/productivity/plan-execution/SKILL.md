@@ -17,7 +17,7 @@ The global instructions define the contract; this skill holds the mechanics. It 
 
 First decide the scope. If the work fits one GitHub Issue, do not create a plan document: update that Issue (create it if missing) and place any personal next action through [task-management](../task-management/SKILL.md). Create a plan document only for a program: work spanning several Issues, repositories, or non-code systems. Tie-breaker for mixed cases: if steps outside the repository need the user's approvals or touch other systems, it is a program; its repository-side pieces still get Issues, and the plan links them with a one-line why rather than restating their plans or acceptance criteria. A checkbox for an Issue ticks when the Issue closes.
 
-Search every plan document by exact title before creating, since plans can live in several folders. Create it in the Plans folder routing gives for its scope and add it to the plans index if routing names one. One document per plan, tagged as a plan, with these sections in this order:
+Search every plan document by exact title before creating, since plans can live in several folders; searching for the plan status marker that routing names finds them all. Create it in the Plans folder routing gives for its scope and add it to the plans index if routing names one. One document per plan, carrying its status marker (active, paused or done) as routing defines it, with these sections in this order:
 
 1. **Aim**: two or three sentences in the user's own framing, plus the date and the statement that saving the plan authorizes nothing by itself.
 2. **Operating model**: who tracks what (plan document for agent work, personal task system for the user's actions, notification rule), restated in one small table so a reader of the document alone understands it.
@@ -40,7 +40,7 @@ Create one only for an action the user must take or a decision only the user can
 
 ## Finishing a plan
 
-When every phase is done or the user closes the plan: record the outcome in the plan, mark it done and move it as routing says, and update its plans index entry in the same step. Never delete a finished plan.
+When the user pauses a plan, change its status marker to paused and update its plans index entry. When every phase is done or the user closes the plan: record the outcome in the plan, change its marker to done, move it as routing says, and update its plans index entry in the same step. Never delete a finished plan.
 
 ## Closing a session
 

@@ -32,7 +32,7 @@ Applies when I ask to execute a plan, run an audit or migration, or do work that
 - Record decisions in the plan the moment I make them (date, choice, one line of rationale). Put anything noticed but out of scope in the Gaps list rather than fixing it silently.
 - Ask before each change that grants access, deletes, rotates credentials, or writes to a system outside the task; batch reversible metadata changes per group and ask once per group. Earlier approval covers only its stated scope.
 - When blocked on me, check the presence signal defined in private routing. Present: ask in the conversation. Absent or unknown: send one notification through the notification skill. Either way, continue with everything that does not depend on me, and do not repeat a notification without a material change.
-- When a plan is finished, mark it done and file it as private routing says, updating any plans index in the same step.
+- Every plan carries a status marker (active, paused or done) that private routing defines and that plain-text search can find, so plans are discoverable across folders. When a plan's status changes, update the marker in the same step; when it is finished, mark it done and file it as private routing says, updating any plans index in the same step.
 - Close every working session in this order: plan document updated, personal tasks commented or completed, the running report appended. Durable cross-host facts go to the shared context hub; secrets never go anywhere but the password manager.
 
 ## Files and visual evidence
