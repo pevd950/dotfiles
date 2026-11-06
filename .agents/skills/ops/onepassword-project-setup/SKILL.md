@@ -37,11 +37,13 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
 1. **Vaults**: `op vault create "<Project> Dev"` and `"<Project> Prod"` with one-line descriptions saying who reads them.
 2. **Items**: move or create the project's credentials in the right tier; tag them. Keep human logins in `Developer Accounts`.
 3. **Service accounts** (each grant list is permanent):
+
    ```bash
    op service-account create sa-<project>-local   --expires-in 89d --vault "<Project> Dev:read_items" --vault "Agent Tools Dev:read_items" --raw
    op service-account create sa-<project>-ci      --expires-in 89d --vault "<Project> Dev:read_items" --raw
    op service-account create sa-<project>-release --expires-in 89d --vault "<Project> Prod:read_items" --raw
    ```
+
    Add `--vault "Indie Infra Prod:read_items"` to the release account only when that project's deploy reads shared providers (Cloudflare, Resend, Azure); grants are permanent, so decide before creating.
    Capture each `--raw` token into a variable, write the local one to `~/.config/op/sa/<project>-local.token` (0600), upload ci/release with `gh secret set OP_SERVICE_ACCOUNT_TOKEN --env <ci|production> < file`, store all three as items in `SA Tokens` (`scripts/store-sa-token.sh`), then delete the local copies of the ci/release tokens. Never echo a token.
 4. **Local .env.op**: with an existing `.env`, `scripts/build-env-op.py --repo <path> --project <slug> --vault "<Project> Dev"` reads it (values stay in-process), matches each credential to an existing item by value hash (single-line fields only), creates `<Project> local <VAR>` items for unmatched credentials, writes `.env.op` with references for credentials and literals for config, and adds `.env.op` and `.envrc` to `.git/info/exclude`. Without a `.env`, copy `templates/env.op.example` to `.env.op`, edit the references, and exclude both files yourself: `for f in .env.op .envrc; do grep -qxF "$f" .git/info/exclude || echo "$f" >> .git/info/exclude; done`.
@@ -50,6 +52,7 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
 
    Copy `templates/op-run.sh` into the repository and replace `PROJECT` for noninteractive launchers. Wrap the agent or server once, rather than resolving secrets for each command; Families accounts have a 1,000-request daily quota. Integrate this into the launcher instead of requiring Pablo to remember a special invocation.
 5. **GitHub Actions**: resolve the `op://` references inside the job that uses them and map each value only into the steps that call the provider; never `export-env: true`, never job outputs (GitHub redacts them). Remove the matching `${{ secrets.X }}` lines. The job declares `environment: ci` (only secret: `OP_SERVICE_ACCOUNT_TOKEN`) or `environment: production` (only secret: the release token). App repositories use the shared composite action `load-1password-secrets` in the indie-infra repository, pinned to a commit, which keeps the action and CLI pins in one place:
+
    ```yaml
          - name: Load secrets from 1Password
            id: op
@@ -62,8 +65,9 @@ Steps 1 and 3 create access and need Pablo's authorization, but a request that a
            env:
              OPENAI_API_KEY: ${{ fromJSON(steps.op.outputs.secrets).OPENAI_API_KEY }}
    ```
+
    A repository with no shared infrastructure uses `templates/load-secrets-step.yml` directly (same pins, values as `steps.op.outputs.<NAME>`).
-6. **Deploys by agents**: if the project has a deploy workflow, create its GitHub App and config per the `github-release-dispatch` skill. Apple projects built by Xcode Cloud: follow `references/xcode-cloud.md` (Xcode Cloud keeps its own secret variables; the Dev vault holds only a Developer-role key for triggering builds).
+6. **Deploys by agents**: read the project's shared release contract and existing identity register first. Reuse one GitHub App per job within its reviewed trust boundary; a new project does not imply a new App. Use `github-release-dispatch` only for an admitted dispatch path. Apple projects follow `references/xcode-cloud.md` and their reviewed operation profiles; new keys, grants and projections retain their own approval.
 7. **Verify**: in a fresh shell with provider variables cleared and biometric unlock disabled, enter the project and verify its normal start command inherits resolved values. Leave the directory and verify they unload. Never print the values. `scripts/op-run.sh sh -c 'env | grep -q op://; [ $? -eq 1 ]'` exits 0 only when no reference is left unresolved: grep status 1 means no match, 0 means an unresolved reference remains, and 2 or higher means grep itself failed, so only status 1 counts as success (a bare `! grep` would also turn a grep error into success); run the test suite through the wrapper; open a PR for the workflow change and let CI prove it.
 8. **Record**: tick the project in the plan document; add a task reminder for the service-account expiry (about five days before).
 
