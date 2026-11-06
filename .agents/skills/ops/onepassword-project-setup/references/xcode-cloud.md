@@ -1,10 +1,31 @@
 # Xcode Cloud and the 1Password model
 
-Xcode Cloud keeps its own secret environment variables, configured per workflow in App Store Connect; they are not read from 1Password and `op run` does not exist inside an Xcode Cloud build. Treat each secret variable there as a copy of an item in the project's vault, recorded by name in the item's notes (where it is deployed), and rotate both together.
+Xcode Cloud keeps its own secret environment variables per workflow. It does
+not read 1Password or run `op run`. Keep each variable as a recorded projection
+of its owning 1Password item, whether project-specific or shared. Record every
+deployed copy in the item's notes and coordinate their replacement on rotation.
 
-What the project's vaults hold for Xcode Cloud:
+Before adding a key, read the project's shared release contract, operation
+profiles and existing identity register. Reuse the reviewed profile and custody;
+this setup step does not require a new per-project App Store Connect key.
 
-- `<Project> Dev`: an App Store Connect API key with the **Developer** role, item `App Store Connect <Project>-ci` (tags `project:<slug>`, `env:ci`, `consumer:ci`). Its only use is to trigger builds through the API (`POST /v1/ciBuildRuns`, after resolving the workflow and git reference IDs) from GitHub Actions or a local script; a Developer key cannot submit or release.
-- `<Project> Prod`: nothing Xcode Cloud specific. The shared release key (Admin or App Manager role, used by `fastlane deliver`, TestFlight distribution, and release workflows) stays the team-level item in the Prod tier and is readable only by `sa-<project>-release`. Never copy it into the Dev vault or into a `ci`-consumer item: a leaked Dev-tier credential must not be able to ship a build.
+- Read/build admission and Apple permissions are different boundaries. A
+  workflow can archive and distribute through its [post-actions][workflow].
+  Development-role or Dev-vault labels are not proof of read-only access;
+  review the workflow and [role permissions][roles] together.
+- Publishing/submission authority stays in its reviewed release custody and
+  approved consumers. Do not copy a shared release key into a Dev/CI item or
+  broaden a consumer's grant to simplify setup.
+- A GitHub callback App is a different job from Apple operations or tag
+  creation. Reuse the existing job-specific App only within its accepted
+  repository/workflow trust boundary; callback access is not tag-write access.
 
-To trigger a build from CI, load the Developer key with the `templates/load-secrets-step.yml` step (`op://<Project> Dev/App Store Connect <Project>-ci/key id`, `.../issuer id`, `.../private key`), mint the JWT in the step that calls the API, and map the outputs only into that step.
+An existing project-specific pilot may keep its reviewed key and projections;
+reconcile its recorded scope before changing it. New credentials, migrations,
+permissions, workflow secret copies and release operations require their own
+applicable authorization. Load approved references only in the provider step
+through the shared loader or the standalone template, as the project contract
+requires. Never print key material or infer release authority from a read check.
+
+[workflow]: https://developer.apple.com/documentation/xcode/xcode-cloud-workflow-reference
+[roles]: https://developer.apple.com/help/app-store-connect/reference/account-management/role-permissions
