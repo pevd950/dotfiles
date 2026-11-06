@@ -1,11 +1,11 @@
 ---
 name: github-release-dispatch
-description: Agent-driven production deploys through a GitHub App identity. Use when Pablo asks an agent to deploy, release, ship or roll out a project to production (or staging) via its GitHub Actions deploy workflow. Mints a short-lived installation token from the project's 1Password item, requires Pablo's explicit go for that specific deploy, dispatches the workflow, watches the run, and notifies him. Never for local builds, TestFlight-only flows, or repositories without a config file here.
+description: Agent-driven production deploys through a reviewed GitHub App identity. Use when Pablo asks an agent to deploy, release, ship or roll out a project to production (or staging) via its GitHub Actions deploy workflow. Reads the manifest's approved 1Password item, mints a short-lived installation token, requires Pablo's go for that deploy, dispatches the workflow, watches the run, and notifies him. Never for local builds, TestFlight-only flows, or repositories without a release-dispatch manifest.
 ---
 
 # GitHub release dispatch
 
-One identity per project (a GitHub App installed only on that repository, credentials in that project's Prod vault), one short-lived token per deploy, one explicit go from Pablo per deploy. GitHub records the app as the dispatching actor; this skill records the approval and the run locally.
+Use the project's reviewed dispatch contract: one job-specific GitHub App within its approved repository and installation scope, one short-lived token per deploy, and one explicit go from Pablo per deploy. A shared dispatch identity may serve several approved projects; an existing project-specific identity may remain narrower. GitHub records the App as the dispatching actor; this skill records the approval and run locally.
 
 ## When to use
 
@@ -42,7 +42,20 @@ What `dispatch-deploy.sh` does: reads the app's manifest from `indie-infra/contr
 
 ## Adding a project
 
-Project configuration does not live in this skill (dotfiles are host tooling). Add `control-plane/apps/<project>/release-dispatch.env` to the indie-infra repository via a PR, with `REPO`, `WORKFLOW_FILE`, `DEFAULT_REF`, `OP_APP_ITEM` (an `op://Vault/Item` base whose item has `app_id`, `installation_id`, `private_key` fields), `GATE_VAR` (empty if the workflow has no variable gate), `ENV_INPUT`, `TAG_INPUT`, `PROD_ENV_NAME`, optional `BUILD_WORKFLOW_FILE`, optional `STANDING_APPROVAL_<ENV>` grants with `STANDING_APPROVAL_<ENV>_UNTIL` dates (scope in Pablo's words, expiry enforced by the script; absent means one go per deploy). Identifiers only, never secrets. The skill reads it from `~/Developer/indie-infra` (or `RELEASE_DISPATCH_CONFIG_DIR`). Create the GitHub App through the manifest flow (actions: write, contents: read, metadata: read; install only on that repo) and store its credentials in the project's Prod vault.
+Project configuration belongs in `control-plane/apps/<project>/release-dispatch.env` in indie-infra, reviewed through a PR. The skill reads that directory from `~/Developer/indie-infra` or `RELEASE_DISPATCH_CONFIG_DIR`. Keep secret values out of the manifest.
+
+The existing manifest fields remain:
+
+- `REPO`, `WORKFLOW_FILE`, `DEFAULT_REF`, `ENV_INPUT`, `TAG_INPUT` and `PROD_ENV_NAME` select the caller.
+- `OP_APP_ITEM` is the approved `op://Vault/Item` base with `app_id`, `installation_id` and `private_key` fields. It may reference the owning shared item or an existing project-specific item; it does not have to live in the project's Prod vault. The executing reader must already have approved access to that vault. Do not duplicate a private key or broaden its grant merely to add a caller.
+- `GATE_VAR` is empty if the workflow has no variable gate. `BUILD_WORKFLOW_FILE` is optional.
+- Optional `STANDING_APPROVAL_<ENV>` and matching `_UNTIL` dates carry Pablo's scope and expiry. Without an applicable grant, obtain a go for the deploy.
+
+Before reusing an App, verify the registered dispatch job, its permissions and the installation's approved repository set. The item must identify the installation for the account that owns `REPO`; an installation ID from another account is not interchangeable. The supported dispatch permissions are Actions write, Contents read and Metadata read. An Actions-only callback identity is reusable only if its reviewed contract also admits this caller and deploy workflow; it grants no tag-writing authority.
+
+The current mint helper requests an installation token without a repository restriction. The later repository check proves only that the token can see `REPO`, not that it is limited to that repository. Shared installation access must therefore be explicitly accepted; stop if the caller requires a narrower token boundary. This documentation does not commission shared access or change token behavior.
+
+New Apps, installations, repository access, credential items and reader grants require their own authorization. If no compatible reviewed identity/item exists, prepare that decision first; do not infer permission to create one from project setup.
 
 ## Failure modes
 
