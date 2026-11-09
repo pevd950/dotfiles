@@ -316,6 +316,11 @@ def reconcile_evictions(root, label, evicted, inventory, transfer, observed_thro
 
 
 def pull(cache, config):
+    """Copy approved roots with source coverage separate from cache observations.
+
+    Archive bounds describe observed cached history, not proof of source absence.
+    Per-root transfer and inventory verification independently govern coverage.
+    """
     if not isinstance(config, dict):
         raise ValueError('Expected a configuration object')
     sources = config.get('sources', [])

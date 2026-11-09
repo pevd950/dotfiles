@@ -739,6 +739,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertTrue(source.exists())
 
     def test_absent_legacy_archive_keeps_review_across_successive_pulls(self):
+        """Stable cached history stays reviewed until a real archive reappearance."""
         old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
         source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
         self.pull(); self.scan()
@@ -801,6 +802,37 @@ class TranscriptReviewTests(unittest.TestCase):
         self.pull(); self.scan()
         self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]['archive_observed_through'], bound)
         self.assertEqual(review_worklist.worklist(self.cache, after, through)['primary'][0]['fingerprint'], group['fingerprint'])
+
+    def test_partial_archive_inventory_keeps_coverage_gap_and_stable_cached_history(self):
+        """A cached observation neither proves source absence nor clears a gap."""
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        snapshot = read_json(self.cache/'snapshot.json')
+        entry = snapshot['sources']['source-a']
+        entry.update(status='partial', inventory_completed_at='2026-07-15T00:00:00Z')
+        entry['files'][relative].update(archive_observed_after='2026-06-15T00:00:00Z', archive_observed_through=None)
+        write_json(self.cache/'snapshot.json', snapshot)
+        real = puller.probe
+        def incomplete_inventory(spec, excluded):
+            result = real(spec, excluded)
+            result['roots']['archived_sessions'].update(status='partial', files={}, gaps=['unreadable_directory'])
+            return result
+        fingerprint = None
+        with patch.object(puller, 'probe', side_effect=incomplete_inventory):
+            for _ in range(2):
+                self.assertEqual(self.pull()['source-a']['status'], 'partial'); self.scan()
+                queue = review_worklist.worklist(self.cache, '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z')
+                self.assertFalse(queue['coverage']['sources']['source-a']['source_bytes_cover_window'])
+                self.assertFalse(queue['review_complete'])
+                group = queue['primary'][0]
+                self.assertEqual(group['window_membership'], 'uncertain')
+                if fingerprint is not None:
+                    self.assertEqual(group['fingerprint'], fingerprint)
+                fingerprint = group['fingerprint']
+                self.assertTrue(source.exists())  # Omitted by a partial probe, not actually absent.
+                self.assertEqual((self.cache/relative).read_bytes(), source.read_bytes())
 
     def evict_archive(self):
         old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
