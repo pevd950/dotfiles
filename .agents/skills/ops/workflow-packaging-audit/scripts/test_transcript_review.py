@@ -738,6 +738,70 @@ class TranscriptReviewTests(unittest.TestCase):
         self.assertEqual(result['evicted_files'], 1)
         self.assertTrue(source.exists())
 
+    def test_absent_legacy_archive_keeps_review_across_successive_pulls(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        snapshot = read_json(self.cache/'snapshot.json')
+        entry = snapshot['sources']['source-a']
+        entry['inventory_completed_at'] = entry['last_successful_pull'] = '2026-07-15T00:00:00Z'
+        entry['files'][relative].update(first_observed_at='2026-07-15T00:00:00Z',
+            archive_observed_after='2026-06-15T00:00:00Z', archive_observed_through=None)
+        source.rename(self.base/'away.jsonl')
+        entry['files'][relative]['present_at_source'] = False
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.assertEqual(self.pull()['source-a']['status'], 'ok'); self.scan()
+        item = read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]
+        self.assertEqual(item['archive_observed_through'], '2026-07-15T00:00:00Z')
+        after, through = '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z'
+        group = review_worklist.worklist(self.cache, after, through)['primary'][0]
+        self.assertEqual(group['archive_appearance']['window_membership'], 'uncertain')
+        decision = self.base/'decision.json'
+        write_json(decision, [{'key': group['key'], 'fingerprint': group['fingerprint'], 'disposition': 'no_change'}])
+        review_worklist.mark(self.cache, after, through, decision)
+        original_bytes = (self.cache/relative).read_bytes()
+        for _ in range(2):
+            self.pull(); self.scan()
+            current = review_worklist.worklist(self.cache, after, through)['primary'][0]
+            self.assertEqual(current['fingerprint'], group['fingerprint'])
+            self.assertEqual(current['disposition'], 'no_change')
+            self.assertEqual((self.cache/relative).read_bytes(), original_bytes)
+        # A genuine reappearance must invalidate the old decision even with
+        # identical bytes, without discarding the earlier observation interval.
+        (self.base/'away.jsonl').rename(source)
+        self.pull(); self.scan()
+        returned = review_worklist.worklist(self.cache, after, through)['primary'][0]
+        self.assertNotEqual(returned['fingerprint'], group['fingerprint'])
+        self.assertIsNone(returned['disposition'])
+        self.assertEqual(returned['archive_appearance']['after'], group['archive_appearance']['after'])
+        self.assertTrue(source.exists())
+
+    def test_absent_legacy_archive_without_inventory_uses_fixed_cache_observation(self):
+        old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
+        source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')
+        self.pull(); self.scan()
+        relative = 'source-a/archived_sessions/old-name.jsonl'
+        snapshot = read_json(self.cache/'snapshot.json')
+        entry = snapshot['sources']['source-a']
+        entry.pop('inventory_completed_at')
+        entry['files'][relative].update(present_at_source=False,
+            archive_observed_after='2026-06-15T00:00:00Z', archive_observed_through=None)
+        source.rename(self.base/'away.jsonl')
+        write_json(self.cache/'snapshot.json', snapshot)
+        self.pull(); self.scan()
+        entry = read_json(self.cache/'snapshot.json')['sources']['source-a']
+        bound = entry['files'][relative]['archive_observed_through']
+        self.assertEqual(bound, entry['inventory_completed_at'])
+        after, through = '2026-07-01T00:00:00Z', '2026-07-20T00:00:00Z'
+        group = review_worklist.worklist(self.cache, after, through)['primary'][0]
+        self.assertEqual(group['window_membership'], 'uncertain')
+        self.assertIsNone(group['first_activity'])
+        self.assertIsNone(group['last_activity'])
+        self.pull(); self.scan()
+        self.assertEqual(read_json(self.cache/'snapshot.json')['sources']['source-a']['files'][relative]['archive_observed_through'], bound)
+        self.assertEqual(review_worklist.worklist(self.cache, after, through)['primary'][0]['fingerprint'], group['fingerprint'])
+
     def evict_archive(self):
         old = record('user_message', message='old'); old['timestamp'] = '2026-01-01T12:00:00Z'
         source = self.write([{'type': 'session_meta', 'payload': {'id': 'old', 'source': 'cli'}}, old], area='archived_sessions')

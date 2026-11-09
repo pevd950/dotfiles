@@ -489,8 +489,11 @@ def pull(cache, config):
                             # A conservative envelope preserves earlier appearances too.
                             archive_after = archive_after or old.get('last_successful_pull')
                             archive_through = inventory_completed_at
-                        elif area == 'archived_sessions' and present and not archive_through:
-                            # Migrate legacy entries once using their last known inventory.
+                        elif area == 'archived_sessions' and not archive_through:
+                            # Freeze legacy observations for retained absent copies too;
+                            # otherwise each inventory reopens unchanged archive history.
+                            # With no prior inventory, this cache observation is only
+                            # a conservative upper bound, never an archive event date.
                             archive_through = old.get('inventory_completed_at') if prior else None
                             archive_through = archive_through or inventory_completed_at
                         inventory[relative] = {

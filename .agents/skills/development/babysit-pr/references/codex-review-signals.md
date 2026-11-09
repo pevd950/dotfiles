@@ -1,4 +1,4 @@
-# Codex Review Reaction Signals
+# Codex Review Completion Signals
 
 GitHub exposes PR-body reactions through the issue reactions API because every pull request is also an issue:
 
@@ -24,8 +24,39 @@ An `eyes` reaction from `chatgpt-codex-connector[bot]` (or another user-approved
 - No newer actionable Codex inline comments, top-level comments, review-body findings, or unresolved Codex review threads.
 - The no-issues evidence is bound to the live `headRefOid`, via one of:
   - a positive Codex review whose `commit_id` is that head;
+  - a trusted structured summary satisfying the versioned contract below;
   - a `+1` from the approved Codex bot on the recorded authorized request ID from its trusted issuer naming that full SHA;
   - after recording the verified live head and its initial reaction IDs, the monitor observed new Codex `eyes` appear and later become `+1` while that head remained unchanged.
+
+## Structured summary contract
+
+A structured summary is independent head-bound code-review evidence; it does not require a captured `eyes` → `+1` transition or a manual request. Accept it only after reading the original comment from the live PR and verifying all of the following:
+
+- GitHub author metadata identifies the approved Codex bot, not a display name, body attribution, quoted copy, or another account posting the same JSON. Resolve API-specific login spelling through verified bot identity; do not simply strip `[bot]` from arbitrary logins.
+- The comment contains `<!-- codex-pull-request-review-summary -->` and one unambiguous `<!-- codex-review-state:v1 {...} -->` payload. Only this known version is supported. Malformed JSON, duplicate keys or state markers, unknown versions, missing fields, and conflicting summaries are unverified.
+- In that JSON, `code_review.commit_sha` is the full live `headRefOid`, `code_review.status` is exactly `"completed"`, and both `code_review.has_any_findings` and `code_review.has_unresolved_findings` are JSON `false`. Missing values, `null`, strings such as `"false"`, and numeric substitutes do not pass. A short SHA or the rendered “Completed” heading is insufficient.
+- The complete live review corpus has no unresolved actionable Codex findings or newer contradictory state. Check comment edits as well as new comments/reviews; do not select an older clean snapshot over a current pending or finding-bearing summary. All relevant `eyes` locks must still be absent. Re-fetch the head after collecting evidence; restart if it changed.
+
+Synthetic example of the supported payload (the SHA is illustrative):
+
+```html
+<!-- codex-pull-request-review-summary -->
+<!-- codex-review-state:v1 {"code_review":{"commit_sha":"0123456789abcdef0123456789abcdef01234567","has_any_findings":false,"has_unresolved_findings":false,"status":"completed"},"security_review":{"commit_sha":null,"has_any_findings":null,"has_unresolved_findings":null,"status":null}} -->
+```
+
+This establishes only the Codex code-review signal. The `security_review` fields above are null: security review is unverified, not passed. Preserve independent security, reviewer, check, acceptance, and action-authorization gates. Record the live comment ID/link, verified author, payload version, full SHA, and observation time in the checkpoint; a copied transcript or previous checkpoint cannot establish current readiness.
+
+### Review scenarios
+
+These synthetic cases exercise the contract; they are not runtime test results.
+
+| Evidence | Expected decision |
+| --- | --- |
+| Trusted live v1 summary, exact full head, completed and both flags false; no locks, findings, or contradictions; initial reactions were not captured | Accept the Codex code-review signal without requesting another review. Evaluate all other readiness gates separately. |
+| Same clean summary with null security fields; a security review is required | Code-review signal passes; security remains unverified and readiness stays blocked. |
+| Copied payload, untrusted author, or unresolved bot identity | Unverified; the marker and JSON cannot establish authorship. |
+| Short/stale SHA, head changes during collection, unknown version, duplicate payload/key, malformed or missing field, string/number/null in place of false, or status other than completed | Unverified; do not infer success or fall back to the rendered heading. |
+| Otherwise valid summary with an active relevant eyes reaction, an unresolved actionable finding, or newer contradictory review/edited summary | Keep readiness blocked; the summary does not override live locks or feedback. |
 
 ## Anti-spoofing rules
 
