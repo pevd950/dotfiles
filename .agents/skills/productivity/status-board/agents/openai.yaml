@@ -1,0 +1,7 @@
+interface:
+  display_name: Status board
+  short_description: Contract for refreshing or correcting the shared status board.
+  default_prompt: Use $status-board to see who may publish the shared status board and how. Codex doesn't publish; it reports verified facts to the coordinator.
+
+policy:
+  allow_implicit_invocation: true
