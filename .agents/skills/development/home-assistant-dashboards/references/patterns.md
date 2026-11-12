@@ -82,3 +82,7 @@ Before choosing an adapter, check current official docs and installed behavior f
 
 A demonstrated gap can justify existing Mushroom templates or a specialized renderer,
 not new backend helpers solely for styling, vendor patches or periodic label rewrites.
+
+## Standing exceptions
+
+- The established light toggle/restore badge stays actionable at zero. Undo behavior exists only there.
