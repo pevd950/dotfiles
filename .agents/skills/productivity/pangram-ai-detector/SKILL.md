@@ -1,6 +1,6 @@
 ---
 name: pangram-ai-detector
-description: Analyze text with Pangram's AI-detection API. Use when asked for a classification, detector score, or segment-level results.
+description: Analyze text with Pangram's AI-detection API or maintain the Pangram AI Detector shortcut. Use for classifications, detector scores, segment-level results, or shortcut input/result changes.
 ---
 
 # Pangram AI Detector
@@ -71,3 +71,7 @@ Report:
 - a short caveat that the result is a detector signal, not definitive proof.
 
 Use Pangram's current asynchronous inference endpoints on `https://text.external-api.pangram.com`: create with `POST /task`, then poll `GET /task/{task_id}` until `STAGE_SUCCESS` or `STAGE_FAILED`. Do not use the deprecated synchronous `https://text.api.pangram.com/v3` endpoint.
+
+## Shortcut maintenance
+
+For changes to the Apple shortcut, follow [shortcut maintenance](references/shortcut-maintenance.md) and the installed Shortcuts Playground skill. Preserve live customizations and verify the result on the installed shortcut.
