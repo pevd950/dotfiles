@@ -1,7 +1,7 @@
 interface:
   display_name: Status board
-  short_description: Contract for refreshing or correcting the shared status board.
-  default_prompt: Use $status-board to see who may publish the shared status board and how. Codex doesn't publish; it reports verified facts to the coordinator.
+  short_description: Contract for building, refreshing or correcting a status board.
+  default_prompt: Use $status-board to build or refresh the status board on the surface you can publish to, or to report a verified fact to a board's coordinator.
 
 policy:
   allow_implicit_invocation: true

@@ -1,0 +1,166 @@
+<title>Status board</title>
+<!-- Skeleton for a status board on an HTML surface. Keep the styles and the section order; replace
+     every {{placeholder}} and repeat rows as needed. Leave out Changed when nothing moved. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* A narrow briefing column: stamp and navigation, what changed, a today band, a goal band, then cards grouped by who acts. */
+  :root {
+    --bg: #f6f7f8; --surface: #ffffff; --fg: #1b2228; --muted: #5d6a74; --line: #d9dfe4;
+    --accent: #0f6e72; --accent-soft: #e2f1f1; --you: #8a4b00; --you-soft: #fbeedd;
+    --standby: #6b6f7a; --standby-soft: #ececf0;
+    --display: "Fraunces", Georgia, "Times New Roman", serif;
+    --body: "Public Sans", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14191d; --surface: #1c2328; --fg: #e8ecef; --muted: #9aa6af; --line: #2d373e;
+      --accent: #5fc2c4; --accent-soft: #163537; --you: #f0b36b; --you-soft: #3a2a15;
+      --standby: #a3a8b3; --standby-soft: #262a33; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14191d; --surface: #1c2328; --fg: #e8ecef; --muted: #9aa6af; --line: #2d373e;
+    --accent: #5fc2c4; --accent-soft: #163537; --you: #f0b36b; --you-soft: #3a2a15;
+    --standby: #a3a8b3; --standby-soft: #262a33; color-scheme: dark;
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 var(--body); }
+  .wrap { max-width: 760px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+  header { display: grid; gap: 6px; margin-bottom: 16px; }
+  .eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(28px, 5vw, 38px); line-height: 1.1; margin: 0; text-wrap: balance; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 14px; margin-bottom: 22px; }
+  .changed { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 0 10px 10px 0; padding: 12px 16px; margin-bottom: 22px; }
+  .changed h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; font-weight: 600; }
+  .today { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--you); border-radius: 10px; padding: 16px; margin-bottom: 22px; display: grid; gap: 14px; }
+  .today h2 { font-family: var(--display); font-size: 22px; margin: 0; font-weight: 600; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+  .today h2 .when { font-family: var(--body); font-size: 13px; font-weight: 500; color: var(--muted); }
+  .today h3 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--you); margin: 0 0 6px; font-weight: 600; }
+  .today .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) { .today .cols { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); } }
+  .goal { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 14px 16px; border-radius: 0 8px 8px 0; margin-bottom: 26px; }
+  .goal h2 { font-family: var(--display); font-size: 20px; margin: 0 0 8px; font-weight: 600; }
+  .goal ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+  h2.section { font-family: var(--display); font-size: 22px; font-weight: 600; margin: 34px 0 12px; display: flex; align-items: baseline; gap: 10px; text-wrap: balance; }
+  .tag { font-family: var(--body); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .tag.you { background: var(--you-soft); color: var(--you); }
+  .tag.agent { background: var(--accent-soft); color: var(--accent); }
+  .tag.standby { background: var(--standby-soft); color: var(--standby); }
+  .group { display: grid; gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .card h3 { font-size: 15px; margin: 0 0 8px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+  .card h3 .when { font-weight: 500; color: var(--muted); font-size: 13px; }
+  ul.check { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+  ul.check li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: start; }
+  ul.check li > span { min-width: 0; }
+  ul.check li::before { content: ""; width: 14px; height: 14px; margin-top: 4px; border: 1.5px solid var(--muted); border-radius: 4px; display: block; }
+  ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .overdue { color: var(--you); font-weight: 600; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  a:hover, a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+  .thread { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td:first-child { font-weight: 600; }
+  td.upd { white-space: nowrap; color: var(--muted); font-size: 13px; }
+  tr.yours td:first-child, tr.yours td:first-child a { color: var(--you); }
+  details.card summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+  details.card[open] summary { margin-bottom: 8px; }
+  footer { margin-top: 36px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">{{refreshed Wed Nov 11, 8:05 AM CT by REFRESHER · read: SOURCES · not read: GAPS}}</div>
+    <h1>Where things stand</h1>
+  </header>
+
+  <nav class="links" aria-label="Daily surfaces">
+    <a href="{{daily page}}">Today</a>
+    <a href="{{today's daily note}}">Daily note</a>
+    <a href="{{tasks due today}}">Tasks today</a>
+    <a href="{{household tasks today}}">Home today</a>
+    <a href="{{active work view}}">Active work</a>
+  </nav>
+
+  <section class="changed" aria-labelledby="changed-h">
+    <h2 id="changed-h">Changed since {{previous refresh}}</h2>
+    <ul class="plain">
+      <li>{{What moved: decided, accepted, newly waiting on the user, newly blocked.}}</li>
+    </ul>
+  </section>
+
+  <section class="today" aria-labelledby="today-h">
+    <h2 id="today-h">Today <span class="when">{{weekday, date}}</span></h2>
+    <div class="cols">
+      <div>
+        <h3>Calendar</h3>
+        <ul class="plain"><li><strong>{{time}}:</strong> {{event}}</li></ul>
+      </div>
+      <div>
+        <h3>Due today</h3>
+        <ul class="check"><li><span><a href="{{task link}}">{{task}}</a> <span class="meta">{{duration, deadline}}</span></span></li></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="goal">
+    <h2>This week</h2>
+    <ol><li><strong>{{goal with its date.}}</strong> {{where it stands}}</li></ol>
+  </section>
+
+  <h2 class="section">Needs you <span class="tag you">{{user}}</span></h2>
+  <div class="group">
+    <div class="card">
+      <h3>{{project}} <span class="when">{{due date}} <span class="overdue">{{overdue since DATE, when it is}}</span></span></h3>
+      <ul class="check">
+        <li><span>{{The one thing to do.}} <a href="{{task link}}">Task</a> · <a href="{{chat link}}">{{chat name}}</a></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section">In flight <span class="tag agent">agents</span></h2>
+  <div class="group">
+    <div class="card">
+      <h3>{{project}} <span class="tag agent">{{moving | in review | waiting | blocked | held | not observed}}</span> <span class="when thread">{{owner}}</span></h3>
+      <ul class="plain">
+        <li>{{Current step.}} {{What is left before it is accepted.}} <a href="{{plan, pull request or chat link}}">{{link label}}</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2 class="section">Plans <span class="tag agent">newest first</span></h2>
+  <div class="group">
+    <div class="card">
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th scope="col">Plan</th><th scope="col">Updated</th><th scope="col">Where it stands</th></tr></thead>
+          <tbody>
+            <!-- class="yours" on a row that waits on the user -->
+            <tr class="yours"><td><a href="{{plan link}}">{{plan}}</a></td><td class="upd">{{date}}</td><td>{{current state and next step}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="meta">Names in your color are waiting on you.</p>
+    </div>
+    <details class="card">
+      <summary>Quiet for two weeks ({{count}})</summary>
+      <ul class="plain"><li><a href="{{plan link}}">{{plan}}</a> <span class="meta">· {{date}} · {{what it waits on}}</span></li></ul>
+    </details>
+    <details class="card">
+      <summary>Paused ({{count}})</summary>
+      <ul class="plain"><li><a href="{{plan link}}">{{plan}}</a> <span class="meta">· {{date}}</span></li></ul>
+    </details>
+  </div>
+
+  <h2 class="section">Parked <span class="tag standby">by your call</span></h2>
+  <div class="card">
+    <ul class="plain"><li>{{item held by the user, with its link}}</li></ul>
+  </div>
+
+  <footer>{{reference links}}</footer>
+</div>
