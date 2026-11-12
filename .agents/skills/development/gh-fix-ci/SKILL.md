@@ -5,7 +5,7 @@ description: Diagnose or repair failing GitHub Actions checks, including local l
 
 # GitHub Actions CI Fix
 
-Use the GitHub app/connector for PR metadata and patch context when available; use `gh` for Actions checks and logs — the connector does not cover that workflow end to end. Summarize the root cause and implement a focused fix when the user requested repair. A review or diagnosis request remains read-only. Ask only when the fix exceeds granted scope or needs a material decision; retain existing authorization through validation.
+Use `gh` for Actions checks and logs. Summarize the root cause and implement a focused fix when the user requested repair. A review or diagnosis request remains read-only. Ask only when the fix exceeds granted scope or needs a material decision; retain existing authorization through validation.
 
 ## Helper script
 
@@ -22,7 +22,7 @@ PYTHON_BIN=${PYTHON_BIN:-python3}; command -v "$PYTHON_BIN" >/dev/null || PYTHON
 
 ## Manual fallback
 
-`gh pr checks <pr> --json name,state,bucket,link,startedAt,completedAt,workflow` — if a field is rejected, retry with the fields the installed `gh` supports. For each failing check, extract the run id from `detailsUrl`/`link`, then `gh run view <run_id> --log`; if the run log says it is still in progress, fetch job logs via `gh api /repos/<owner>/<repo>/actions/jobs/<job_id>/logs`.
+`gh pr checks <pr> --json name,state,bucket,link,startedAt,completedAt,workflow` — if a field is rejected, retry with the fields the installed `gh` supports. For each failing check, extract the run id from `detailsUrl`/`link`, then `gh run view <run_id> --log-failed` (`--log` for the whole run); if the run log says it is still in progress, fetch job logs via `gh api /repos/<owner>/<repo>/actions/jobs/<job_id>/logs`.
 
 ## Scope and reporting
 
