@@ -27,7 +27,7 @@ try {
     Assert ($installedInstructions -notmatch '\]\(\.agents/') 'Installed instructions keep home-relative links'
     Assert ($installedInstructions -match '\]\(\.\./\.agents/skills/productivity/plan-execution/SKILL\.md\)') 'Installed instructions lack the relocated plan-execution link'
     Assert (-not [string]::IsNullOrWhiteSpace($installedInstructions)) 'Installed instructions are empty'
-    Assert ($installedInstructions -match '(?m)^## Authority and scope\r?$') 'Installed instructions are missing the authority heading'
+    Assert ($installedInstructions -match '(?m)^## Authority and privacy\r?$') 'Installed instructions are missing the authority heading'
     Assert (Test-Path (Join-Path $target '.agents/skills/productivity/craft/references/formatting.md')) 'Supporting references missing'
     Assert (-not (Test-Path (Join-Path $target '.agents/skills/design'))) 'Unselected skills deployed'
     Assert (-not (Test-Path (Join-Path $target ('.agents/skills/productivity/craft/' + (Split-Path $untracked -Leaf))))) 'Untracked source file copied'

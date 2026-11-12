@@ -33,6 +33,8 @@ All writes below, including notifications and heartbeat changes, depend on that 
 5. Classify failing checks after inspecting provider logs: use `gh run view <run-id> --log-failed` for GitHub Actions; for external providers, follow the check's details URL and inspect accessible diagnostics, or report the missing access and evidence needed. Fix branch-scoped compile/test/lint/docs failures in touched scope; retry only likely-flaky infra failures; never change code for unrelated outages, runner failures, or stale-main failures. Diagnose queued runs with zero jobs after 15 minutes; notify after 30 minutes or two unchanged scheduled observations of a blocker via `$notify-user` (fan-out script `--check` then `--send`), not ActionBuddy/Poke/Buddy MCP directly. Follow the persisted escalation protocol in `references/heartbeat-automation.md` rather than silently waiting indefinitely.
 6. If checks or reviews will outlast the current turn, hand the loop to a heartbeat automation per `references/heartbeat-automation.md` instead of losing it.
 
+When a PR is marked ready for review, turn on the agent host's own PR monitoring in the same turn if it has one: a built-in watcher that wakes the owning session on CI failures, merge conflicts, and review comments. Include this in any brief that has another agent open PRs. Use the heartbeat when the host has none. Host monitoring wakes the session; it does not expand the grant.
+
 If `gh` auth fails but a GitHub connector is available, gather comments, reviews, threads, checks, and reactions through the connector rather than guessing from stale local state.
 
 ## Bot review trigger policy

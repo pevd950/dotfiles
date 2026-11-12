@@ -67,6 +67,8 @@ The plugin's file-picker tool is interactive. The API supports raw-byte uploads 
 
 This skill explains how to operate Craft task blocks, not which task system should own a commitment. Resolve that choice from the current request, user/repository instructions, or the provider-neutral `task-management` skill. When Craft is selected, confirm the intended location, preserve scheduling/repeat state on updates, and read the task back after mutation.
 
+Keep a task row to one short line. Put its context, evidence and sub-steps inside the task block as the block's own content, with one child task per part; give child tasks the parent's schedule date when they should also appear in the daily view. The user reads tasks from the phone's task view, which shows only the task block and its inner content: indented sibling blocks after the task do not appear there, and a long single line is unreadable. The nesting commands are in `references/plugin-mcp.md`.
+
 ## Safety
 
 Reads and reversible, clearly authorized writes with immediate verification are normally safe. Confirm before destructive changes, permanent deletion, publication, permission changes, or writes outside the requested scope. Never log API keys, private links, personal identifiers, space IDs, or private document contents unnecessarily.

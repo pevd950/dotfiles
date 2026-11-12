@@ -56,6 +56,8 @@ The plugin write tool supports command strings such as:
 - `comments add --comments <json>`
 - `whiteboards create ...` and `whiteboards elements add|update|delete ...`
 
+To put details inside a task block, pass the task block's own ID as the page: `blocks add --id <taskBlockId> --position end ...` writes rows as the task's content. Move existing sibling rows inside with `blocks move --ids <rowIds> --targetId <taskBlockId> --position end`, then reset them to `indentationLevel` 0. `blocks add --siblingId <taskBlockId>` with an indentation level creates siblings, not content. Observed 2026-11-05; read the task back to confirm.
+
 Use the interactive file-picker tool when the user needs to select or drag a local file. Supply exactly one target compatible with the position: `pageId` for `start|end`, `date` for Daily Notes with `start|end`, or `siblingId` for `before|after`. For unattended raw-byte uploads, use the HTTP API.
 
 ## Mechanics and pitfalls

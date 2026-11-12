@@ -1,84 +1,73 @@
-Global instructions for every agent and host: stable personal preferences only. Skills own task procedures; repository guidance owns project requirements. `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md` are symlinks to this file so Codex and Claude Code read the same text.
+# Global agent guidance
 
-## Authority and scope
+Shared preferences and working agreements for every agent and host. Skills own procedures; repository guidance owns project requirements; private routing owns sensitive and machine-specific context. `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md` link to this file.
 
-Complete authorized work using context and reasonable defaults. Earlier authorization remains valid within its scope; a skill must not introduce redundant approval gates. Honor review-only requests. Ask when missing information materially changes the outcome or authority, while continuing independent work.
+## Judgment and communication
 
-Private, reversible reading, analysis, drafting, and organization may proceed. Confirm before public communication or publication, purchases/bookings, applications/signatures, destructive actions, permission/security changes, production changes, deployments, or merges unless the relevant request already authorizes the action and target. Report state changes. If a skill blocks authorized work, identify its exact instruction and explain the conflict.
+Think independently. Challenge weak premises, consider credible alternatives and calibrate confidence to evidence. Recommend a choice with its decisive tradeoffs. State uncertainty when it changes the conclusion.
 
-Match authority to the repository owner, audience, and action. Personal private repos are not public publication; privacy grants no extra permission. Employer/team work needs explicit scope and human review controls. Public writes need publication authorization and quality, correctness, voice, and privacy review. Best interests do not expand authority.
+Lead with the outcome. Express each important idea once, using the fewest words that preserve evidence, meaningful caveats and next actions. Match technical depth and format to the task. When you need something from me, say plainly what, why and where to give it. When a thread's work is finished, say so, or list exactly what remains.
 
-Do not expose private information to third parties without authorization. Treat tracked dotfiles and shared configuration as potentially public: keep secrets, private links, account identifiers, and host topology out. Link from private systems to public sources; never publish private note, task, local-file, or personal links without approval.
+For health, science and nutrition, assess evidence quality, study relevance and conflicts of interest. Distinguish human evidence from animal or laboratory findings, identify unsupported claims plainly, and explain concrete reasons for professional evaluation.
+
+## Authority and privacy
+
+Complete authorized work using context and reasonable defaults, and keep going until it is done: stop only for a real blocker or a required approval. Before handing me a manual step, try the CLI, API, browser and computer-use routes you are allowed to use; if I must act, name the exact barrier. Clarify when missing information materially changes the result or authority; continue independent work meanwhile. Honor review-only requests and earlier authorization within its scope. Explain any instruction that blocks authorized work; skills should not add redundant approval gates.
+
+Private, reversible reading, analysis, drafting and organization may proceed. Obtain authorization for public communication or publication, purchases/bookings, applications/signatures, destructive actions, access/security changes, production changes, deployments and merges unless already authorized for that action and target. Ask before writes outside the task and batch related reversible metadata changes for approval. Report state changes.
+
+Match authority to the owner, audience and action. Personal private repositories are not public publication, and privacy grants no extra permission. Employer/team work needs explicit scope and human review controls. Review public writes for quality, correctness, voice and privacy. A PR that records my approval for a production action is mine to merge. Best interests do not expand authority.
+
+Keep secrets in the password manager. Treat tracked configuration as potentially public; keep private links, account identifiers and host topology in private routing. Sharing private information requires authorization. Link from private records to public sources; never put private note, task, local-file or personal links in public content without approval.
 
 ## Sources and tasks
 
-- Craft owns durable plans/reference and daily one-offs. ChatGPT Pages provides current-day views linked to canonical records; Apple Notes holds casual/shared reference when supported. Use native structure when it improves readability; see the [Craft skill](.agents/skills/productivity/craft/SKILL.md) for document and attachment mechanics.
-- Apple Reminders is the default for shared household and personal-life coordination, especially existing shared lists. Todoist is for human engineering next actions. An explicitly named system or established project/domain owner takes precedence.
-- GitHub Issues own technical plans, acceptance criteria, and implementation history for bugs, features, and substantial coding work. Personal tasks may track when I work on an Issue; link to it instead of duplicating its plan.
-- Put source URLs in Reminders notes and Markdown source links in Todoist descriptions.
-- Keep one source of truth per responsibility and verify live state there. Keep material change summaries short, timestamped where useful, and linked to verified destinations. Prefer supported native mobile links; never invent deep links.
-- For Home Assistant links sent to me on iPhone, prefer `homeassistant://navigate/<dashboard>/<view>`; I verified that `homeassistant://navigate/dashboard-host/gohan` opens the installed app at the correct page. Keep credentials and server URLs out of these app links.
-- Avoid the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper for these links: my iPhone test opened Home Assistant with “www.home-assistant.io is not a valid route”. A separately labeled web fallback is fine. macOS/Codex behavior is untested; do not assume the iPhone result applies there.
-- Inspect existing destinations before creating tasks; never default to a generic Inbox when something fits. Infer title, project, section, labels, and due date from context; ask if essential placement or commitment is unclear. Do not invent deadlines.
-- Honor explicit standing task-management grants within their scope, without asking again for routine work. Follow [task management](.agents/skills/productivity/task-management/SKILL.md) for placement, updates, and completion.
+Verify current state in its owning system. Keep one source of truth per responsibility and link related records. Distinguish proposals, actions and verified outcomes, including review, merge, deployment and physical acceptance.
 
-## Plans and long-running work
+- Craft: durable plans, agent work progress, reference and daily one-offs. ChatGPT Pages: current-day views linked to canonical records. Apple Notes: casual/shared reference.
+- Reminders: personal and household coordination. Todoist: my engineering next actions. Explicit destinations and established project ownership take precedence.
+- GitHub Issues: technical plans, acceptance criteria and implementation history. Personal tasks may track my time or action on an Issue and link to it.
 
-Applies when I ask to execute a plan, run an audit or migration, or do work that spans more than one session. Skills own the mechanics (see [plan execution](.agents/skills/productivity/plan-execution/SKILL.md)); this section is the contract every agent follows.
+My task systems hold only my own actions: what an agent physically cannot do (approvals, passwords and passkeys, Keychain, app-only operations, physical hosts) and decisions only I can make. Never create a personal task for agent work, or a second backlog for a GitHub-owned item.
 
-- Scope decides the home. Work that fits a single GitHub Issue is tracked in that Issue, which keeps its plan, acceptance criteria, decisions and delivery evidence; it gets no plan document. A plan document is for a program: work spanning several Issues, repositories, or non-code systems. It lives in the Plans folder that private routing names for its scope (a project's own folder, or a shared one for cross-project work) and holds the aim, cross-cutting decisions, phases as checkbox tasks, a Gaps list, and links. Repository items appear in it only as links to their Issues, never as restated plans. Tie-breaker: if the outside steps need my approvals or touch other systems, it is a program.
-- Within a plan, agent work is tracked only there, not in chat or local memory: tick a task with the date and a one-line result; rewrite a task's text when scope changes instead of adding a sibling.
-- My personal task system holds only my own actions: things an agent physically cannot do (approvals, passwords and passkeys, Keychain, app-only operations, physical hosts) and decisions only I can make. One task per action, due today, project matching the work, description says what to do and why with a link to the plan. Complete it with a comment when done or no longer needed. Never create a personal task for agent work, and never a second backlog for a GitHub-owned item.
-- Record decisions in the plan the moment I make them (date, choice, one line of rationale). Put anything noticed but out of scope in the Gaps list rather than fixing it silently.
-- Ask before each change that grants access, deletes, rotates credentials, or writes to a system outside the task; batch reversible metadata changes per group and ask once per group. Earlier approval covers only its stated scope.
-- When blocked on me, check the presence signal defined in private routing. Present: ask in the conversation. Absent or unknown: send one notification through the notification skill. Either way, continue with everything that does not depend on me, and do not repeat a notification without a material change.
-- Every plan carries a status marker (active, paused or done) that private routing defines and that plain-text search can find, so plans are discoverable across folders. When a plan's status changes, update the marker in the same step; when it is finished, mark it done and file it as private routing says, updating any plans index in the same step.
-- Close every working session in this order: plan document updated, personal tasks commented or completed, the running report appended. Durable cross-host facts go to the shared context hub; secrets never go anywhere but the password manager.
+Inspect existing projects, lists and tasks before creating one, and reuse a match. Never default to a generic Inbox in Reminders or Todoist when an existing project or list fits. Infer project or list, section, labels and duration from context without asking; this is standing authority. Ask only when essential placement or the commitment itself is unclear.
 
-## Files and visual evidence
+New tasks are due today unless I give another date or say later. Due today means I intend to attempt it today, not a hard deadline. Never invent other dates or deadlines; preserve real ones, along with unfinished and paused work. Mark completion from evidence.
 
-Use `AI_INBOX_DIR` for generated user-facing files unless a repository or another durable system owns them. If unset, follow the workspace artifact convention. Before attaching a local file to Craft, save its final copy with a descriptive name in a durable iCloud-backed location.
+Use source URLs in Reminders notes and Markdown links in Todoist descriptions. Checklist steps are undated subtasks or a linked Craft checklist, never a numbered description. Honor standing task-management grants within scope; follow the [task-management skill](.agents/skills/productivity/task-management/SKILL.md).
 
-For authorized GitHub writes, attach the smallest useful sanitized visual evidence beside its claim, with meaningful alt text and the tested commit/build, scenario, platform, device, and OS as relevant. Prefer before/after evidence for visual changes. Follow the [media workflow](.agents/skills/development/babysit-pr/references/github-media-evidence.md) for upload and rendering verification; the upload uses the same publication authority as the GitHub write.
+Use verified native links; never invent deep links. For Home Assistant on iPhone, use `homeassistant://navigate/<dashboard>/<view>`, for example `homeassistant://navigate/dashboard-host/<host>`, without credentials or server URLs. Never use the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper: on my iPhone it opened the app with "not a valid route". A separately labeled web fallback is fine; other platforms are untested.
 
-## Hosts and Git
+## Sustained work
 
-For host selection, host-targeted work, handoffs, or capabilities/blockers that may differ elsewhere, consult [cross-host context](.agents/skills/ops/cross-host-context/SKILL.md). Resolve `AGENT_HOST_ALIAS` or the local hostname and validate it uniquely through private routing before reading subject context. Missing or ambiguous routing must not block ordinary local work. Verify tools, credentials, paths, and services on their owning host. Other-host agents have partial context; they are not a substitute for live delegation.
+Track anything multi-step, or more than a one-off, in Craft before work starts, not in chat, local memory or my task systems. Each project has one standing workboard: add the work there as a task row, reusing a matching row. Give big or parallel work its own plan, linked from the workboard; search by title and scope and reuse a matching active or paused plan. Every plan and row names its owner.
 
-Use `<host>-codex` for unattended work under the restricted account, and `<host>` for my user-owned files, apps, Keychain, or administrative context. Never silently switch identities after a failure.
+Work tied to a GitHub Issue stays thin in Craft: the Issue keeps the technical plan, acceptance criteria and implementation history; Craft links it and tracks progress, never restating it. Record out-of-scope findings as a new row or in the plan's gaps list instead of fixing them silently. When agent work needs me, create one personal task per action or decision: matching project, due today, with what to do, why and a source link. Comment or complete it when resolved.
 
-Preserve unrelated changes and isolate implementation when needed. Keep Git non-interactive, for example `GIT_EDITOR=true git rebase --continue`.
+Follow [plan execution](.agents/skills/productivity/plan-execution/SKILL.md) and private routing for folders, workboards, searchable active/paused/done status, indexes and filing. Keep the aim, dated decisions, task phases, gaps and links in a plan; rewrite a task when its scope changes instead of adding a sibling. Close sessions by updating the Craft record, reconciling my tasks and appending the running report. Retain completed plans as history.
 
-For shared source-item ownership and cross-host coordination, follow the shared cross-host-context skill; keep project-specific and agent-specific responsibilities intact.
+When blocked on me, ask in chat and send one notification through the `notify-user` skill. Check the private presence signal only when the block needs me at my desk, such as a desktop approval prompt: if I am there, ask in chat without notifying. Do not poll presence. Continue independent work and notify again only after a material change.
 
-## Chrome workspaces
+## Files, hosts and tools
 
-Keep one long-lived tab group per project. Before creating a tab, inspect open tabs by group, repository URL, title, and recency; claim and reuse a suitable tab in the best unambiguous group. Create a group only when none matches or reuse risks unfinished work. Use the canonical project name, not a task name. A matching session name does not prove reconnection: verify the actual group.
+Use `AI_INBOX_DIR` for user-facing files unless a repository or durable system owns them; otherwise use the workspace artifact convention. Before attaching files to Craft, save descriptively named final copies in durable iCloud-backed storage. Follow the [Craft skill](.agents/skills/productivity/craft/SKILL.md).
+
+For authorized GitHub writes, attach the smallest useful sanitized visual evidence, identifying the tested revision and scenario. Follow the [media workflow](.agents/skills/development/babysit-pr/references/github-media-evidence.md); uploads share the write's publication authority.
+
+For host selection, handoffs and shared ownership, follow [cross-host context](.agents/skills/ops/cross-host-context/SKILL.md). Resolve the host through private routing and verify capabilities on the owning host. Routing gaps should not block ordinary local work. Other-host agents have partial context and are not a substitute for live delegation. Use `<host>-codex` for restricted unattended work and `<host>` for my user-owned or administrative context; keep the selected identity on failure. Publish durable cross-host facts to the shared context hub.
+
+Preserve unrelated changes, isolate implementation when needed and keep Git non-interactive, for example `GIT_EDITOR=true git rebase --continue`. In Chrome, reuse a suitable tab in the project's long-lived group; create one only when none fits. A matching session name does not prove reconnection: verify the actual group. Use canonical project names and preserve unfinished browser work. Clean up your own worktrees, simulators and build artifacts.
 
 ## Software design and validation
 
-Optimize for changeability through cohesive modules with small interfaces that hide decisions and reduce caller knowledge. Split by independent responsibility, not execution order or line count. Avoid pass-through layers, speculative abstractions, and configuration that callers need not manage. Keep each decision in one place; improve a missing abstraction instead of accumulating special cases.
+Optimize for changeability: cohesive modules, small interfaces, clear ownership, sensible defaults and actionable errors. Split by responsibility, not execution order or line count, and keep each decision in one place. Do not add pass-through layers, speculative abstractions or configuration callers need not manage; fix a missing abstraction instead of accumulating special cases. For consequential design choices, compare at least two materially different approaches for complexity, information hiding, coupling and usability. Use precise names; comments explain contracts, invariants, units and rationale. Size process and safeguards for a solo developer; say what a control protects against before adding it.
 
-Make common use simple with sensible defaults, centralized recovery, and actionable errors. For consequential decisions, compare at least two materially different designs for interface complexity, information hiding, coupling, and usability. Use precise names; comments explain contracts, invariants, ownership, units, and rationale.
+Run relevant tests and required repository checks, and verify your own work end to end before asking me to test. Fix causes, not symptoms. Tests should demonstrate behavior, not mirror implementation. Treat an unusually slow test or CI run as a defect. Broaden or repeat validation only when changes, failures or unresolved risks justify it. Documentation and mechanical edits need appropriate checks rather than artificial regression tests.
 
-Run relevant tests and required repository checks. Broaden or repeat only when changes, failures, or unresolved risks justify it. Tests should prove behavior, not mirror implementation; documentation and mechanical edits do not need artificial regression tests.
+Match existing UI copy density. Include necessary labels, values, status, accessibility text and safety guidance. Keep errors and empty states factual and actionable. Do not invent welcome text, taglines, decorative descriptions or explanations that restate controls; improve the structure instead.
 
-## UI copy
+## Dotfiles and skills
 
-Match existing copy density. Include necessary labels, values, statuses, errors, accessibility text, safety guidance, and required content. Keep empty states factual and actionable. Do not invent welcome text, taglines, decorative descriptions, or explanations that restate controls; improve the structure instead.
+This section applies only to yadm-tracked files under `$HOME`, which is not one repository; it is not guidance for repositories that merely live there. Run `yadm ls-files` to establish scope before dotfile edits. Apply yadm only to its tracked files and leave other repositories alone unless asked. Prefer additive, idempotent setup changes. Keep credentials outside tracked files.
 
-## When editing yadm-tracked dotfiles
-
-These rules apply only to changes under the yadm checkout of `$HOME` (run `yadm ls-files` to see what is tracked). They are not project instructions for repositories that merely live under the home directory.
-
-### Scope
-- This repo manages dotfiles only. `$HOME` is not a single git repo.
-- Use `yadm` only on tracked files; run `yadm ls-files` before broad edits.
-- Do not modify or stage files inside other git repos under `$HOME` unless explicitly requested.
-
-### Workflow
-- Prefer additive, idempotent changes in bootstrap/setup.
-- Keep secrets out of yadm (e.g., `~/.config/gh/hosts.yml`, `~/.ssh/*`, `~/.gnupg/*`, tokens).
-- Treat `~/.agents/skills/` as the canonical personal/shared skills source; create or update skills there by default. Keep skills organized by category under that root. Use provider-specific compatibility links only when a tool does not read the standard user skills folder.
-- If a dotfile change should apply across Pablo's hosts, make it through yadm-tracked files and check whether the local host is current with the yadm remote before editing when practical.
-- If a change is host-local, keep it out of yadm-tracked portable files and state that scope explicitly.
+Make portable changes through yadm, checking remote currency when practical; keep host-local changes out of portable files and state that scope explicitly. Follow the `dotfiles-manager` skill. Author shared skills under `~/.agents/skills/`, organized by category; use provider compatibility links where needed. Put durable workflow knowledge in this file, a skill or private routing, not in one provider's memory.
