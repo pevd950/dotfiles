@@ -1,6 +1,6 @@
 ---
 name: mela-recipe-manager
-description: Manage Pablo's Mela recipe library from Codex. Use for reading/searching/exporting Mela recipes with mela-cli, adding hand-authored recipes through the Mela macOS UI, creating .melarecipe artifacts, assigning categories, marking Want to Cook/Favorite, auditing duplicates, and verifying changes against the local synced Mela catalog.
+description: Manage Pablo's Mela recipe library. Use for reading/searching/exporting Mela recipes with mela-cli, adding hand-authored recipes through the Mela macOS UI, creating .melarecipe artifacts, assigning categories, marking Want to Cook/Favorite, auditing duplicates, and verifying changes against the local synced Mela catalog.
 ---
 
 # Mela Recipe Manager
