@@ -24,10 +24,15 @@ Use the live `$HOME` checkout for small targeted edits: a personal skill, one AG
 
 Edit exact paths → verify with path-scoped status/diff → validate with the narrowest relevant check → `yadm add <paths>` → review `yadm diff --cached` → commit and push → confirm with `yadm log -1 --oneline` and path-scoped status.
 
+CI runs the full `scripts/check.sh` on every push. Locally, run only what CI cannot do or what takes seconds; push, check the CI result without blocking on it, and fix forward if it fails.
+
+Before every push, scan the staged diff for secrets and private links: the repository is public and CI cannot un-publish. Check path-scoped status after staging so a new file the change depends on is not left behind.
+
 Validation by kind:
 
 - Instruction and skill edits: `scripts/check_instructions.py` (frontmatter and relative links). It reads the yadm index, so a link to a new file passes only after that file is added.
-- Shell or bootstrap: the repo check script, if available and safe.
+- A skill's script: that skill's own tests.
+- Shell, bootstrap, anything under `scripts/`, or a file another test reads (the media-evidence reference, the global file's headings): the full `scripts/check.sh` before pushing, because other hosts pull and run these. Run it on a clean export of the index (`yadm checkout-index -a --prefix=<tmp>/`, then `git init && git add -A` there); the live home fails layout tests unrelated to the change.
 - Config: the tool's non-mutating validation.
 
 ## Skill changes
