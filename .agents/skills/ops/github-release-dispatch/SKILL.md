@@ -42,7 +42,7 @@ What `dispatch-deploy.sh` does: reads the app's manifest from `indie-infra/contr
 
 ## Adding a project
 
-Project configuration belongs in `control-plane/apps/<project>/release-dispatch.env` in indie-infra, reviewed through a PR. The skill reads that directory from `~/Developer/indie-infra` or `RELEASE_DISPATCH_CONFIG_DIR`. Keep secret values out of the manifest.
+Project configuration belongs in `control-plane/apps/<project>/release-dispatch.env` in indie-infra, reviewed through a PR. The scripts read it from indie-infra's `main` on the remote, through the clone at `~/Developer/indie-infra` and whatever branch that clone has checked out, and stop when `main` cannot be refreshed. `RELEASE_DISPATCH_CONFIG_DIR` reads a directory as it is, for trying a manifest still in review; production refuses it. Keep secret values out of the manifest.
 
 The existing manifest fields remain:
 

@@ -16,10 +16,9 @@ while [ $# -gt 0 ]; do
     *) tag="$1"; shift;;
   esac
 done
-cfg="${RELEASE_DISPATCH_CONFIG_DIR:-$HOME/Developer/indie-infra/control-plane/apps}/$project/release-dispatch.env"
-[ -r "$cfg" ] || { echo "no release-dispatch manifest for $project at $cfg (set RELEASE_DISPATCH_CONFIG_DIR or add it to indie-infra control-plane/apps)" >&2; exit 2; }
-# shellcheck disable=SC1090
-source "$cfg"
+# shellcheck source=load-manifest.sh
+source "$(cd "$(dirname "$0")" && pwd)/load-manifest.sh"
+load_manifest "$project" || exit $?
 ref="${ref:-$DEFAULT_REF}"
 log_dir="$HOME/.local/state/github-release-dispatch"; mkdir -p "$log_dir"; log="$log_dir/deploys.log"
 stamp() { date -u +%Y-%m-%dT%H:%M:%SZ; }
@@ -47,6 +46,7 @@ if [ -z "$approval" ]; then
   fi
 fi
 if [ "$environment" = "$PROD_ENV_NAME" ]; then
+  case "$MANIFEST_SOURCE" in unreviewed:*) echo "production deploys read the manifest from indie-infra main only; unset RELEASE_DISPATCH_CONFIG_DIR" >&2; exit 3;; esac
   [ "$watch" = 1 ] || [ -z "${GATE_VAR:-}" ] || { echo "production with a managed gate variable must be watched: --no-watch would reset $GATE_VAR before the run evaluates it" >&2; exit 3; }
   [ -n "$approval" ] || { echo "production needs --approval \"<Pablo's explicit go for this deploy>\" or a STANDING_APPROVAL_$(printf "%s" "$PROD_ENV_NAME" | tr "[:lower:]-" "[:upper:]_") grant in the manifest" >&2; exit 3; }
   [ -n "$tag" ] || { echo "production needs an explicit image tag (use resolve-image-tag.sh)" >&2; exit 3; }
@@ -85,7 +85,7 @@ before_ids=" $(list_runs '.[].databaseId' | tr '\n' ' ') "
 dispatched_epoch=$(date -u +%s)
 args=(-f "$ENV_INPUT=$environment"); [ -n "$tag" ] && args+=(-f "$TAG_INPUT=$tag")
 gh_app workflow run "$WORKFLOW_FILE" -R "$REPO" --ref "$ref" "${args[@]}"
-echo "$(stamp) DISPATCH project=$project env=$environment tag=${tag:-latest} ref=$ref approval=\"${approval:-n/a}\"" >> "$log"
+echo "$(stamp) DISPATCH project=$project env=$environment tag=${tag:-latest} ref=$ref manifest=\"$MANIFEST_SOURCE\" approval=\"${approval:-n/a}\"" >> "$log"
 
 # 4. find the run: a workflow_dispatch run on this ref, created at or after the dispatch, not in the snapshot
 run_id=""
