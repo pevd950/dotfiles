@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 import urllib.error
 from contextlib import redirect_stdout
@@ -21,6 +23,9 @@ SPEC.loader.exec_module(PANGRAM)
 
 SOURCE_TEXT = "PRIVATE SOURCE TEXT THAT MUST NOT APPEAR"
 SEGMENT_TEXT = "PRIVATE SEGMENT TEXT THAT MUST NOT APPEAR"
+IMAGE_BYTES = b"\x89PNG private image bytes"
+IMAGE_B64 = base64.b64encode(IMAGE_BYTES).decode("ascii")
+PRIVATE_METADATA = "PRIVATE CAMERA SERIAL THAT MUST NOT APPEAR"
 
 
 class FakeResponse:
@@ -278,6 +283,243 @@ class PangramDetectTests(unittest.TestCase):
     def test_non_json_response_is_safe(self) -> None:
         with self.assertRaisesRegex(PANGRAM.PangramError, "invalid JSON"):
             self.run_predict([RawResponse(SOURCE_TEXT.encode("utf-8"))])
+
+
+def image_success_result(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "task_id": "image-task",
+        "stage": "STAGE_SUCCESS",
+        "prediction": "Likely AI",
+        "ai_likelihood": 0.91,
+        "confidence": "High",
+        "detection_source": "model",
+        "version": "Pangram Image 1.0",
+        "heatmap": {"grid": [[0.1, 0.9]], "patch_stride": 16},
+        "metadata": {"c2pa": {"present": False}, "camera": PRIVATE_METADATA},
+        "thumbnail": {"data_url": f"data:image/png;base64,{IMAGE_B64}"},
+    }
+    result.update(overrides)
+    return result
+
+
+class PangramImageTests(unittest.TestCase):
+    def run_predict_image(self, responses: list[FakeResponse], **kwargs: object):
+        with (
+            mock.patch.dict(os.environ, {"PANGRAM_API_KEY": "test-only-key"}),
+            mock.patch.object(
+                PANGRAM.urllib.request, "urlopen", side_effect=responses
+            ) as urlopen,
+            mock.patch.object(PANGRAM.time, "sleep"),
+        ):
+            result = PANGRAM.predict_image(
+                IMAGE_BYTES,
+                str(kwargs.get("model", PANGRAM.DEFAULT_IMAGE_MODEL)),
+                timeout=3.0,
+                poll_interval=0,
+                max_polls=3,
+            )
+        return result, urlopen
+
+    def run_cli(self, argv: list[str], responses: list[FakeResponse]) -> str:
+        output = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"PANGRAM_API_KEY": "test-only-key"}),
+            mock.patch.object(sys, "argv", ["pangram_detect.py", *argv]),
+            mock.patch.object(
+                PANGRAM.urllib.request, "urlopen", side_effect=responses
+            ),
+            mock.patch.object(PANGRAM.time, "sleep"),
+            redirect_stdout(output),
+        ):
+            PANGRAM.main()
+        return output.getvalue()
+
+    def image_file(self) -> str:
+        handle = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        self.addCleanup(os.unlink, handle.name)
+        handle.write(IMAGE_BYTES)
+        handle.close()
+        return handle.name
+
+    def test_image_request_contract_and_polling(self) -> None:
+        result, urlopen = self.run_predict_image(
+            [
+                FakeResponse({"task_id": "image-task"}),
+                FakeResponse(
+                    {"task_id": "image-task", "stage": "STAGE_IMAGE_INFERENCE"}
+                ),
+                FakeResponse(image_success_result()),
+            ]
+        )
+
+        create_request = urlopen.call_args_list[0].args[0]
+        self.assertEqual(create_request.full_url, PANGRAM.IMAGE_TASKS_URL)
+        self.assertEqual(create_request.get_method(), "POST")
+        self.assertEqual(
+            json.loads(create_request.data.decode("utf-8")),
+            {"image_b64": IMAGE_B64, "model": "pangram-image-flash-1"},
+        )
+        headers = {key.lower(): value for key, value in create_request.header_items()}
+        self.assertEqual(headers["x-api-key"], "test-only-key")
+        poll = urlopen.call_args_list[2].args[0]
+        self.assertEqual(poll.full_url, f"{PANGRAM.IMAGE_TASKS_URL}/image-task")
+        self.assertEqual(poll.get_method(), "GET")
+        self.assertEqual(
+            result,
+            {
+                "stage": "STAGE_SUCCESS",
+                "prediction": "Likely AI",
+                "ai_likelihood": 0.91,
+                "confidence": "High",
+                "detection_source": "model",
+                "version": "Pangram Image 1.0",
+            },
+        )
+
+    def test_selected_model_is_sent(self) -> None:
+        _, urlopen = self.run_predict_image(
+            [
+                FakeResponse({"task_id": "image-task"}),
+                FakeResponse(image_success_result()),
+            ],
+            model="pangram-image-1",
+        )
+        body = json.loads(urlopen.call_args_list[0].args[0].data.decode("utf-8"))
+        self.assertEqual(body["model"], "pangram-image-1")
+
+    def test_nullable_verdict_fields_are_reported_as_unavailable(self) -> None:
+        result, _ = self.run_predict_image(
+            [
+                FakeResponse({"task_id": "image-task"}),
+                FakeResponse(
+                    image_success_result(
+                        prediction="Unsure",
+                        ai_likelihood=None,
+                        confidence=None,
+                        version=None,
+                    )
+                ),
+            ]
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            PANGRAM.print_image_summary(result)
+        rendered = output.getvalue()
+        self.assertIn("Prediction: Unsure", rendered)
+        self.assertIn("AI likelihood: unavailable", rendered)
+        self.assertIn("Confidence: unavailable", rendered)
+        self.assertNotIn("Pangram version", rendered)
+        self.assertIn("Detector signal only", rendered)
+
+    def test_image_success_requires_prediction_and_valid_likelihood(self) -> None:
+        for override, field in (
+            ({"prediction": None}, "prediction"),
+            ({"ai_likelihood": 1.5}, "ai_likelihood"),
+            ({"ai_likelihood": True}, "ai_likelihood"),
+        ):
+            with self.subTest(override=override):
+                with self.assertRaisesRegex(PANGRAM.PangramError, field):
+                    self.run_predict_image(
+                        [
+                            FakeResponse({"task_id": "image-task"}),
+                            FakeResponse(image_success_result(**override)),
+                        ]
+                    )
+
+    def test_image_failure_reports_code_but_not_provider_text(self) -> None:
+        failed = {
+            "stage": "STAGE_FAILED",
+            "error": {
+                "error": f"Provider echoed {PRIVATE_METADATA}",
+                "error_code": "IMAGE_DECODE_FAILED",
+                "retryable": False,
+            },
+        }
+        with self.assertRaises(PANGRAM.PangramError) as raised:
+            self.run_predict_image(
+                [FakeResponse({"task_id": "image-task"}), FakeResponse(failed)]
+            )
+        self.assertEqual(
+            str(raised.exception),
+            "Pangram could not analyze the submitted image "
+            "(error code IMAGE_DECODE_FAILED).",
+        )
+
+    def test_image_failure_drops_unsafe_error_code(self) -> None:
+        failed = {
+            "stage": "STAGE_FAILED",
+            "error": {"error_code": f"code with {PRIVATE_METADATA}"},
+        }
+        with self.assertRaises(PANGRAM.PangramError) as raised:
+            self.run_predict_image(
+                [FakeResponse({"task_id": "image-task"}), FakeResponse(failed)]
+            )
+        self.assertEqual(
+            str(raised.exception), "Pangram could not analyze the submitted image."
+        )
+
+    def test_invalid_image_input_is_rejected_before_network_access(self) -> None:
+        cases = [
+            {"image": b"", "model": PANGRAM.DEFAULT_IMAGE_MODEL},
+            {"image": IMAGE_BYTES, "model": "not-a-model"},
+        ]
+        for case in cases:
+            with self.subTest(model=case["model"], size=len(case["image"])):
+                with (
+                    mock.patch.object(PANGRAM.urllib.request, "urlopen") as urlopen,
+                    self.assertRaises(PANGRAM.PangramError),
+                ):
+                    PANGRAM.predict_image(case["image"], case["model"], timeout=3.0)
+                urlopen.assert_not_called()
+
+    def test_oversized_image_file_is_rejected_before_submission(self) -> None:
+        # run_cli supplies no responses, so any network call would fail the test.
+        with (
+            mock.patch.object(PANGRAM, "MAX_IMAGE_BYTES", len(IMAGE_BYTES) - 1),
+            self.assertRaisesRegex(SystemExit, "larger than"),
+        ):
+            self.run_cli(["--image", self.image_file()], [])
+
+    def test_cli_image_json_omits_image_data_and_metadata(self) -> None:
+        rendered = self.run_cli(
+            ["--image", self.image_file(), "--json"],
+            [
+                FakeResponse({"task_id": "image-task"}),
+                FakeResponse(image_success_result()),
+            ],
+        )
+        self.assertEqual(json.loads(rendered)["prediction"], "Likely AI")
+        self.assertNotIn(IMAGE_B64, rendered)
+        self.assertNotIn(PRIVATE_METADATA, rendered)
+        self.assertNotIn("heatmap", rendered)
+
+    def test_cli_image_summary(self) -> None:
+        rendered = self.run_cli(
+            ["--image", self.image_file(), "--model", "pangram-image-1"],
+            [
+                FakeResponse({"task_id": "image-task"}),
+                FakeResponse(image_success_result()),
+            ],
+        )
+        self.assertIn("Prediction: Likely AI", rendered)
+        self.assertIn("AI likelihood: 91.0%", rendered)
+        self.assertIn("Confidence: High", rendered)
+        self.assertIn("Pangram version: Pangram Image 1.0", rendered)
+
+    def test_cli_rejects_mixed_text_and_image_options(self) -> None:
+        image = self.image_file()
+        for argv, message in (
+            (["--image", image, "--text", "hello"], "Use only one"),
+            (["--image", image, "--segments"], "text analysis only"),
+            (["--text", "hello", "--model", "pangram-image-1"], "image analysis only"),
+        ):
+            with self.subTest(argv=argv[2:]):
+                with self.assertRaisesRegex(SystemExit, message):
+                    self.run_cli(argv, [])
+
+    def test_missing_image_file_is_reported(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "Could not read image file"):
+            PANGRAM.load_image("/nonexistent/pangram-image.png")
 
 
 if __name__ == "__main__":

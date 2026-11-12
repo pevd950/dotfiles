@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Analyze requested text with Pangram's asynchronous AI-detection API."""
+"""Analyze requested text or an image with Pangram's asynchronous AI-detection APIs."""
 
 from __future__ import annotations
 
 import argparse
+import base64
 import http.client
 import json
 import math
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -25,6 +27,17 @@ DEFAULT_MAX_POLLS = 60
 TERMINAL_SUCCESS = "STAGE_SUCCESS"
 TERMINAL_FAILURE = "STAGE_FAILED"
 KNOWN_CLASSIFICATIONS = {"AI", "AI-Assisted", "Human", "Mixed"}
+
+IMAGE_API_ROOT = "https://image.external-api.pangram.com"
+IMAGE_TASKS_URL = f"{IMAGE_API_ROOT}/v1/tasks"
+IMAGE_MODELS = ("pangram-image-flash-1", "pangram-image-1")
+DEFAULT_IMAGE_MODEL = "pangram-image-flash-1"
+# Pangram's documented limit for the decoded image.
+MAX_IMAGE_BYTES = 32 * 1024 * 1024
+# Image tasks are billed per submission and a retry is a new billed task, so
+# wait as long as Pangram's own client example does before giving up.
+DEFAULT_IMAGE_MAX_POLLS = 300
+_SAFE_ERROR_CODE = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 
 
 class PangramError(RuntimeError):
@@ -63,6 +76,22 @@ def load_text(args: argparse.Namespace) -> str:
     if not text:
         raise SystemExit("The submitted text is empty.")
     return text
+
+
+def load_image(path: str) -> bytes:
+    source = Path(path).expanduser()
+    try:
+        size = source.stat().st_size
+        if size > MAX_IMAGE_BYTES:
+            raise SystemExit(
+                f"Image is larger than Pangram's {MAX_IMAGE_BYTES // (1024 * 1024)} MiB limit: {path}"
+            )
+        image = source.read_bytes()
+    except OSError as exc:
+        raise SystemExit(f"Could not read image file: {path}") from exc
+    if not image:
+        raise SystemExit("The submitted image is empty.")
+    return image
 
 
 def _request_json(
@@ -266,14 +295,14 @@ def _task_stage(result: dict[str, Any], task_id: str) -> str:
     return stage
 
 
-def predict(
-    text: str,
+def _complete_task(
+    tasks_url: str,
+    payload: dict[str, Any],
     timeout: float,
-    poll_interval: float = DEFAULT_POLL_INTERVAL,
-    max_polls: int = DEFAULT_MAX_POLLS,
+    poll_interval: float,
+    max_polls: int,
 ) -> dict[str, Any]:
-    if not isinstance(text, str) or not text.strip():
-        raise PangramError("The submitted text is empty.")
+    """Create a task and poll it; return its terminal result, successful or failed."""
     if not math.isfinite(timeout) or timeout <= 0:
         raise PangramError("The request timeout must be greater than zero.")
     if not math.isfinite(poll_interval) or poll_interval < 0:
@@ -281,12 +310,9 @@ def predict(
     if isinstance(max_polls, bool) or not isinstance(max_polls, int) or max_polls <= 0:
         raise PangramError("The maximum poll count must be greater than zero.")
 
-    body = json.dumps(
-        {"text": text, "public_dashboard_link": False}, ensure_ascii=False
-    ).encode("utf-8")
     create_request = urllib.request.Request(
-        CREATE_TASK_URL,
-        data=body,
+        tasks_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers=_headers(),
         method="POST",
     )
@@ -295,7 +321,7 @@ def predict(
     if not isinstance(task_id, str) or not task_id.strip():
         raise PangramError("Pangram returned an invalid task-creation response.")
     task_id = task_id.strip()
-    task_url = f"{CREATE_TASK_URL}/{urllib.parse.quote(task_id, safe='')}"
+    task_url = f"{tasks_url}/{urllib.parse.quote(task_id, safe='')}"
 
     for poll_number in range(max_polls):
         status_request = urllib.request.Request(
@@ -304,18 +330,103 @@ def predict(
             method="GET",
         )
         result = _request_json(status_request, timeout, "checking the analysis task")
-        stage = _task_stage(result, task_id)
-        if stage == TERMINAL_SUCCESS:
-            return _validate_success(result)
-        if stage == TERMINAL_FAILURE:
-            # Provider failure details may contain submitted text; keep this generic.
-            raise PangramError("Pangram could not analyze the submitted text.")
+        if _task_stage(result, task_id) in (TERMINAL_SUCCESS, TERMINAL_FAILURE):
+            return result
         if poll_number + 1 < max_polls and poll_interval > 0:
             time.sleep(poll_interval)
 
     raise PangramError(
         f"Pangram analysis did not finish after {max_polls} status checks."
     )
+
+
+def predict(
+    text: str,
+    timeout: float,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    max_polls: int = DEFAULT_MAX_POLLS,
+) -> dict[str, Any]:
+    if not isinstance(text, str) or not text.strip():
+        raise PangramError("The submitted text is empty.")
+    result = _complete_task(
+        CREATE_TASK_URL,
+        {"text": text, "public_dashboard_link": False},
+        timeout,
+        poll_interval,
+        max_polls,
+    )
+    if result["stage"] == TERMINAL_FAILURE:
+        # Provider failure details may contain submitted text; keep this generic.
+        raise PangramError("Pangram could not analyze the submitted text.")
+    return _validate_success(result)
+
+
+def _optional_string(
+    result: dict[str, Any], key: str, *, max_length: int
+) -> str | None:
+    return None if result.get(key) is None else _required_string(
+        result, key, max_length=max_length
+    )
+
+
+def _validate_image_success(result: dict[str, Any]) -> dict[str, Any]:
+    """Keep the verdict fields; drop the heatmap, thumbnail and file metadata.
+
+    Labels are checked for type and length only: an image task is billed, so a
+    label Pangram adds later should still be reported.
+    """
+    return {
+        "stage": TERMINAL_SUCCESS,
+        "prediction": _required_string(result, "prediction", max_length=100),
+        "ai_likelihood": (
+            None
+            if result.get("ai_likelihood") is None
+            else _required_fraction(result, "ai_likelihood")
+        ),
+        "confidence": _optional_string(result, "confidence", max_length=30),
+        "detection_source": _optional_string(
+            result, "detection_source", max_length=30
+        ),
+        "version": _optional_string(result, "version", max_length=100),
+    }
+
+
+def _image_failure(result: dict[str, Any]) -> PangramError:
+    # Report only a short provider error code; free-text detail stays out.
+    error = result.get("error")
+    code = error.get("error_code") if isinstance(error, dict) else None
+    if isinstance(code, int) and not isinstance(code, bool):
+        code = str(code)
+    if isinstance(code, str) and _SAFE_ERROR_CODE.fullmatch(code):
+        return PangramError(
+            f"Pangram could not analyze the submitted image (error code {code})."
+        )
+    return PangramError("Pangram could not analyze the submitted image.")
+
+
+def predict_image(
+    image: bytes,
+    model: str,
+    timeout: float,
+    poll_interval: float = DEFAULT_POLL_INTERVAL,
+    max_polls: int = DEFAULT_IMAGE_MAX_POLLS,
+) -> dict[str, Any]:
+    if not isinstance(image, bytes) or not image:
+        raise PangramError("The submitted image is empty.")
+    if len(image) > MAX_IMAGE_BYTES:
+        raise PangramError("The submitted image is larger than Pangram's limit.")
+    if model not in IMAGE_MODELS:
+        raise PangramError(f"Unknown image model. Use one of: {', '.join(IMAGE_MODELS)}.")
+    result = _complete_task(
+        IMAGE_TASKS_URL,
+        {"image_b64": base64.b64encode(image).decode("ascii"), "model": model},
+        timeout,
+        poll_interval,
+        max_polls,
+    )
+    if result["stage"] == TERMINAL_FAILURE:
+        raise _image_failure(result)
+    return _validate_image_success(result)
 
 
 def fraction(result: dict[str, Any], key: str) -> float | None:
@@ -387,13 +498,30 @@ def print_summary(result: dict[str, Any], include_segments: bool) -> None:
     print("Detector signal only — not definitive proof.")
 
 
+def print_image_summary(result: dict[str, Any]) -> None:
+    print(f"Prediction: {result['prediction']}")
+    print(f"AI likelihood: {percent(result['ai_likelihood'])}")
+    print(f"Confidence: {result['confidence'] or 'unavailable'}")
+    if result["detection_source"]:
+        print(f"Detection source: {result['detection_source']}")
+    if result["version"]:
+        print(f"Pangram version: {result['version']}")
+    print("Detector signal only — not definitive proof.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Analyze text with Pangram's asynchronous AI-detection API."
+        description="Analyze text or an image with Pangram's asynchronous AI-detection APIs."
     )
     source = parser.add_argument_group("input")
     source.add_argument("--text", help="Text to analyze (visible in shell history and process lists)")
     source.add_argument("--file", help="UTF-8 text file to analyze")
+    source.add_argument("--image", help="Image file to analyze (billed per image)")
+    parser.add_argument(
+        "--model",
+        choices=IMAGE_MODELS,
+        help=f"Image model (default: {DEFAULT_IMAGE_MODEL}, the cheaper one)",
+    )
     parser.add_argument(
         "--segments",
         action="store_true",
@@ -402,7 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Print JSON without source-text fields",
+        help="Print JSON without source-text fields or image data",
     )
     parser.add_argument(
         "--timeout",
@@ -419,8 +547,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-polls",
         type=int,
-        default=DEFAULT_MAX_POLLS,
-        help=f"Maximum status checks (default: {DEFAULT_MAX_POLLS})",
+        help=(
+            f"Maximum status checks (default: {DEFAULT_MAX_POLLS} for text, "
+            f"{DEFAULT_IMAGE_MAX_POLLS} for images)"
+        ),
     )
     return parser
 
@@ -431,11 +561,38 @@ def main() -> None:
         raise SystemExit("--timeout must be greater than zero.")
     if not math.isfinite(args.poll_interval) or args.poll_interval < 0:
         raise SystemExit("--poll-interval must be zero or greater.")
-    if args.max_polls <= 0:
+    if args.max_polls is not None and args.max_polls <= 0:
         raise SystemExit("--max-polls must be greater than zero.")
+
+    if args.image is not None:
+        if args.text is not None or args.file is not None:
+            raise SystemExit("Use only one of --text, --file, or --image.")
+        if args.segments:
+            raise SystemExit("--segments applies to text analysis only.")
+        image = load_image(args.image)
+        try:
+            result = predict_image(
+                image,
+                args.model or DEFAULT_IMAGE_MODEL,
+                args.timeout,
+                args.poll_interval,
+                args.max_polls or DEFAULT_IMAGE_MAX_POLLS,
+            )
+        except PangramError as exc:
+            raise SystemExit(str(exc)) from exc
+        if args.json:
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            print_image_summary(result)
+        return
+
+    if args.model is not None:
+        raise SystemExit("--model applies to image analysis only.")
     text = load_text(args)
     try:
-        result = predict(text, args.timeout, args.poll_interval, args.max_polls)
+        result = predict(
+            text, args.timeout, args.poll_interval, args.max_polls or DEFAULT_MAX_POLLS
+        )
     except PangramError as exc:
         raise SystemExit(str(exc)) from exc
     if args.json:

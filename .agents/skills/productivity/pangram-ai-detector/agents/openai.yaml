@@ -1,4 +1,4 @@
 interface:
   display_name: "Pangram AI Detector"
-  short_description: "Check text for AI-generated or AI-assisted signals."
-  default_prompt: "Use $pangram-ai-detector to analyze the requested text with Pangram and report the classification as a probabilistic signal."
+  short_description: "Check text or images for AI-generated signals."
+  default_prompt: "Use $pangram-ai-detector to analyze the requested text or image with Pangram and report the classification as a probabilistic signal."
