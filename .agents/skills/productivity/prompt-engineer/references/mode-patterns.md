@@ -13,7 +13,7 @@ Avoid generic `8K`, `masterpiece`, `award-winning`, and long negative lists unle
 ## Image edit
 
 ```text
-Using the provided image, change ONLY:
+Using the provided image, change only:
 - [specific change]
 
 Keep unchanged:
@@ -64,13 +64,12 @@ Use placeholders only when helpful: `{selection}`, `{clipboard}`, `{argument}`, 
 
 ## Prompt review
 
-Score each dimension from 0–10: clarity, completeness, model fit, output control, and practicality. Report the overall score as their rounded average. Then return:
+Judge the prompt on whether the goal and done state are clear, the instructions agree with each other, it fits the named target (see [current-models.md](current-models.md)), and the output is controlled. Then return:
 
 ```text
-Overall score: [0-10]
 Verdict: [Ready to ship | Needs revision] — [one sentence]
 
-Top 3 fixes:
+Top fixes:
 1. ...
 2. ...
 3. ...
@@ -78,3 +77,5 @@ Top 3 fixes:
 Revised prompt:
 [paste-ready prompt]
 ```
+
+List only fixes that change the result, up to three. Say when the revision still needs a run on real tasks to confirm it is better.
