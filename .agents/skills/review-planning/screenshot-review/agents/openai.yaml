@@ -1,0 +1,7 @@
+interface:
+  display_name: "Screenshot Review"
+  short_description: "Iterate a screen with independent screenshot reviewers and a rubric."
+  default_prompt: "Use $screenshot-review to capture this screen, have Claude and Codex reviewers judge the screenshots against a rubric, fix what fails, and stop at a pass, a plateau or three rounds."
+
+policy:
+  allow_implicit_invocation: true

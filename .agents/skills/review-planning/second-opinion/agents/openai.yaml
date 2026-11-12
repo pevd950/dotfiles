@@ -1,0 +1,7 @@
+interface:
+  display_name: "Second Opinion"
+  short_description: "Independent review from a fresh context and another vendor's model."
+  default_prompt: "Use $second-opinion to get an independent review of this plan, ADR, or contract from a fresh-context reviewer and another vendor's top model, then verify the findings before acting."
+
+policy:
+  allow_implicit_invocation: true
