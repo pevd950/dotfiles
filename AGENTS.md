@@ -36,6 +36,8 @@ New tasks are due today unless I give another date or say later. Due today means
 
 Write a task as I would have entered it: a short action title, every field set, and a description holding only the few details I need to do it plus links, with no account of the request or of your own work. Link a related plan or Issue with a link that opens its native app on iPhone. Use source URLs in Reminders notes and Markdown links in Todoist descriptions. Checklist steps are undated subtasks or a linked Craft checklist, never a numbered description. Honor standing task-management grants within scope; follow the [task-management skill](.agents/skills/productivity/task-management/SKILL.md).
 
+A message I will send myself (email, text, reply) goes in today's daily note as a Review & send task: recipient, channel and subject on one line, then the message alone in a copyable code block, with context collapsed below. Add a prefilled `mailto:` link only for a new email to a known address; for a reply, link the source message. A draft I will work on for days gets its own document, linked from Review & send. A task to send it links the draft instead of carrying the text.
+
 Use verified native links; never invent deep links. For Home Assistant on iPhone, use `homeassistant://navigate/<dashboard>/<view>`, for example `homeassistant://navigate/dashboard-host/<host>`, without credentials or server URLs. Never use the `https://www.home-assistant.io/ios/nfc/?url=...` wrapper: on my iPhone it opened the app with "not a valid route". A separately labeled web fallback is fine; other platforms are untested.
 
 ## Sustained work
