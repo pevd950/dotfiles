@@ -4,7 +4,7 @@ This is the complete standalone path for working with Craft when the Craft MCP p
 
 ## Environment and auth
 
-Required local-only variables (from a host-local ignored secrets file or shell startup — ask the user to add them if missing; do not assume a specific path): `CRAFT_API_BASE_URL` (ends in `/api/v1`), `CRAFT_API_KEY`, and optional `CRAFT_FORMATTING_SAMPLE_URL` (private live formatting sample). Never write API keys, private Craft links, user-specific paths, or space IDs into tracked files, PR bodies, Craft demo pages, or logs.
+Required local-only variables (from a host-local ignored secrets file or shell startup — ask the user to add them if missing; do not assume a specific path): `CRAFT_API_BASE_URL` (ends in `/api/v1`) and `CRAFT_API_KEY`. Never write API keys, private Craft links, user-specific paths, or space IDs into tracked files, PR bodies, Craft demo pages, or logs.
 
 Use the bundled helper for routine calls — it centralizes auth, avoids printing secrets, requires an HTTPS base URL ending in `/api/v1` without userinfo, query parameters, or fragments, and follows only strictly same-origin redirects. Set `SKILL_DIR` to the directory containing the parent `SKILL.md`, not this `references/` directory. Other skills needing Craft API access should call this helper instead of reimplementing HTTP:
 
@@ -18,12 +18,12 @@ Pass `--query` values as unencoded `key=value` pairs and quote any value contain
 
 ## Workflow
 
+The common workflow in the parent `SKILL.md` applies (read first, smallest mutation, read back). API specifics:
+
 1. Probe `GET /connection`; confirm the expected space and timezone.
 2. Discover placement (`GET /folders`) and targets (`GET /documents`, `/documents/search`, `/blocks?id=...`).
-3. Read before writing: capture block/document/folder/collection IDs and enough current content to roll back.
-4. Resolve the writable root before body writes. Returned deeplinks, `documentLink`, `clickableLink`, document IDs, and page-block IDs are locators, not proof of a writable block: after `POST /documents`, read the candidate with `GET /blocks?id=<candidate>`; if the read fails or reveals a wrapper/link, resolve it before inserting. For nested pages use a structured `type:"page"` block — markdown headings do not create pages that accept child blocks.
-5. Make the smallest mutation, then read back the changed object before notifying or handing off. When placement matters, create directly into the right folder instead of leaving cleanup in `unsorted`.
-6. Return Craft deeplinks as labeled Markdown links (`[Release notes](craftdocs://open?...)`) — no raw private `craftdocs://` strings in public systems or tracked files.
+3. Resolve the writable root before body writes. Returned deeplinks, `documentLink`, `clickableLink`, document IDs, and page-block IDs are locators, not proof of a writable block: after `POST /documents`, read the candidate with `GET /blocks?id=<candidate>`; if the read fails or reveals a wrapper/link, resolve it before inserting. For nested pages use a structured `type:"page"` block — markdown headings do not create pages that accept child blocks.
+4. Return Craft deeplinks as labeled Markdown links (`[Release notes](craftdocs://open?...)`).
 
 ## Endpoint map
 
@@ -60,11 +60,11 @@ Read the schema before row writes. Live behavior may require the collection's co
 
 ## Images and uploads
 
-Upload raw bytes with the real MIME type (`--body-file ./image.png --content-type image/png`); generic `application/octet-stream` creates a `file` block instead of a visible `image` block. Verify read-back shows `type: "image"` with `https://r.craft.do/...` URLs; if not, retry the same bytes with the correct MIME type, then remove the accidental file block. Local paths and `file://` URLs are not durable in Craft, and MCP-path `file://`/localhost image URLs can fail with a misleading "Document not found". To recover images from expired Codex chat pasteboards, decode `input_image` base64 payloads from the session JSONL structurally and save stable local copies. Desktop fallback: put bitmap data (not the file list) on the clipboard — `osascript` can set it to `(read (POSIX file "<path>") as JPEG picture)` — and paste into the open document.
+Upload raw bytes with the real MIME type (`--body-file ./image.png --content-type image/png`); generic `application/octet-stream` creates a `file` block instead of a visible `image` block. Verify read-back shows `type: "image"` with `https://r.craft.do/...` URLs; if not, retry the same bytes with the correct MIME type, then remove the accidental file block. Local paths and `file://` URLs are not durable in Craft, and MCP-path `file://`/localhost image URLs can fail with a misleading "Document not found". To recover an image that survives only in an expired chat pasteboard, decode its base64 payload from the agent's session log structurally (in Codex, the `input_image` entries in the session JSONL) and save a stable local copy. Desktop fallback: put bitmap data (not the file list) on the clipboard — `osascript` can set it to `(read (POSIX file "<path>") as JPEG picture)` — and paste into the open document.
 
 ## Formatting
 
-For polished, rich, or highly scannable documents, read `references/formatting.md` first (layout patterns, block choices, styling, and the API/MCP markdown mechanics: newline shape, tokens, toggles, highlights, indentation). If `CRAFT_FORMATTING_SAMPLE_URL` is set and live access exists, inspect that private sample for structure without copying private content or storing the URL in shared files.
+The writing rules are in the parent `SKILL.md`; block choices and the Markdown mechanics (newline shape, tokens, toggles, highlights, indentation) are in `formatting.md`.
 
 ## Craft task placement
 

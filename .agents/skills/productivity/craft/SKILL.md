@@ -1,76 +1,65 @@
 ---
 name: craft
-description: Use Craft through the Craft MCP plugin or direct HTTP API for reading, searching, creating, updating, moving, styling, uploading, and organizing Craft documents, blocks, collections, daily notes, and task blocks. Use whenever a request involves Craft, a Craft link, or saving durable notes in Craft.
+description: Write and organize Craft documents, plans, notes and task blocks the way the user would, through the Craft MCP plugin or the direct HTTP API. Use whenever a request involves Craft, a Craft link, a plan or workboard kept in Craft, or saving durable notes there.
 ---
 
 # Craft
 
-Use one workflow across two interchangeable transports: the Craft MCP plugin and Craft's direct HTTP API. Prefer the plugin when it is exposed and healthy; use the API as a complete fallback. Treat both as production access to private user data.
+## Writing in Craft
 
-## Transport selection
+Write what the user would jot down, in the structure Craft provides. This applies to every plan, note and update, not only when a polished page is requested.
 
-1. Inspect the current session's tool inventory. Configuration or a remembered plugin installation does not prove the Craft plugin is callable.
-2. When the Craft plugin is exposed, probe it with the read tool's `connection info` command. Confirm the expected space and timezone before relying on it.
-3. Classify failures accurately. Internal errors, expired authentication, wrong-space connections, missing write tools, or headless-host limitations are reasons to use the direct API.
-4. For the API path, read `references/http-api.md` and probe:
+- **Store the state, not the story.** Record what is true now, what was decided and what happens next. Leave out how the work went and what you checked; link the evidence.
+- **One idea per block, a line or two each.** A paragraph longer than a few lines goes in a nested page or a toggle, or is left out.
+- **Status first.** The top of a document says where things stand in a line or two. Current work comes before finished work.
+- **Anything to be done is a task block** with a short imperative title, and every step of a plan is one. Its context, evidence and sub-steps go inside the task block as its own content, with a child task per part. The user reads tasks from the phone's task view, which shows only the task block and what is inside it, so indented siblings after the task do not appear there. Schedule a task for the day it will be worked; give child tasks the same date when they should show in the daily view. Tick it with the date and a one-line result.
+- **Detail and history collapse.** Reference detail goes in a toggle or nested page with a clear title. Session reports and logs are one line per entry inside a collapsed History toggle or nested page, newest first.
+- **Update in place.** When a fact changes, change the block that states it.
+- **Use the native block for the job:** headings for sections, tables for comparisons and lists of like items, a callout for the one thing to read first, toggles for detail, nested pages for long material, collections when rows need typed properties.
+- **Links are labeled,** and tags follow private routing, such as a plan's status tag.
+
+Which system owns a commitment is the `task-management` skill's question; when Craft holds the task, preserve its schedule and repeat state on updates. Block choices and Markdown quirks are in `references/formatting.md`.
+
+## Transport
+
+Two interchangeable transports: the Craft MCP plugin and Craft's direct HTTP API.
+
+1. Use the plugin when its tools are in this session's tool inventory and the read tool's `connection info` shows the expected space and timezone. A configured or remembered plugin is not proof it is callable.
+2. Use the API when the plugin errors, has expired authentication, is connected to the wrong space, lacks a write tool, or the host is headless. Read `references/http-api.md` and probe:
 
    ```shell
    SKILL_DIR="<directory-containing-this-SKILL.md>"
    python3 "$SKILL_DIR/scripts/craft_api.py" GET /connection
    ```
 
-5. Use desktop or browser interaction only when neither programmatic path supports the required operation or the authenticated UI is itself the source of truth.
+3. Use the desktop app or a browser only when neither path supports the operation or the authenticated UI is itself the source of truth.
 
-The plugin uses MCP tools with a command-style `command` argument. It is not a local `craft` executable. Read `references/plugin-mcp.md` for its command surface.
+The plugin's tools take a command string; it is not a local `craft` executable. `--help` on any command and `blocks learn <topic>` document the syntax. `references/plugin-mcp.md` holds only the quirks verified here.
 
-## Common workflow
+## Workflow
 
-Apply these rules regardless of transport:
-
-1. Verify the connection, expected space, and timezone.
-2. Discover the correct destination before writing. Prefer an explicit private link or configured destination; otherwise inspect folders and search by exact title.
-3. Resolve Craft links before block operations. A URL document ID, document record, page block, and writable root may differ.
-4. Read before writing. Capture the target IDs, surrounding content, schema when relevant, and enough state to undo the change.
-5. Avoid duplicates. Search for the exact intended document, nested-page, collection-item, or dated-section title before creating it.
-6. Use native structure. Create structured page blocks for nested pages; markdown headings alone do not create pages that accept child blocks.
-7. Make the smallest authorized mutation, then read the changed object back before reporting success.
-8. Create directly in the correct folder or document instead of leaving cleanup in an unsorted location.
-9. Return descriptive, verified document/block links, preferring supported native mobile links. Never invent links or share private content beyond its authorized audience; GitHub hosting alone does not make a destination public.
-
-## Rich documents
-
-Keep root pages glanceable. Use native callouts, tables, toggles, pages, and collections where the content benefits; move repeated detail into item bodies or nested pages.
-
-Read `references/formatting.md` before creating or substantially restructuring a polished user-facing document.
+1. Find the destination before writing: an explicit link or configured destination, otherwise folders and an exact-title search. Reuse a matching document, nested page, collection item or dated section.
+2. Resolve a Craft link before block operations. A URL document ID, document record, page block and writable root can differ.
+3. Read before writing: target IDs, surrounding content, schema where relevant, and enough state to undo the change.
+4. Create a nested page as a structured page block; a Markdown heading does not create a page that accepts child blocks.
+5. Make the smallest change, directly in the right folder or document, then read it back before reporting.
+6. Return descriptive, verified document or block links, native mobile links where supported.
 
 ## Files and images
 
-Before attaching a generated or local file to Craft:
-
-1. Apply the user's durable-file location and naming policy before upload.
-2. Confirm the final file is available in that location.
-3. Do not attach temporary, chat-pasteboard, localhost, `file://`, or disposable build paths as durable references.
-4. Use the real MIME type and verify the readback is the intended visible image or file block.
+Attach the final copy saved under the user's durable-file policy; temporary, chat-pasteboard, localhost, `file://`, and disposable build paths do not last as references. Use the real MIME type and verify the readback is the intended visible image or file block.
 
 The plugin's file-picker tool is interactive. The API supports raw-byte uploads and is appropriate for unattended work; see `references/http-api.md`.
 
 ## Daily notes and collections
 
 - Make daily views easy to scan: distinguish actions, waiting, optional work, and done items where useful. Keep standing guidance as reference, not tasks.
-- When useful and authorized, record material outcomes with timestamps and verified links in the existing note. Link to canonical tasks instead of copying them.
+- Record material outcomes with timestamps and verified links in the existing note. Link to canonical tasks instead of copying them.
 - A date-titled regular document is not a native Daily Note. Use the transport's Daily Note/date position and verify by date.
 - Read a collection's schema before row writes. Preserve existing property keys and every field when an operation replaces the full schema.
 - Keep collection properties compact and filterable; put long narrative detail in the item page body.
-- Treat collection-item deletion as destructive because it also removes the item's content.
+- Deleting a collection item also removes its content; treat it as destructive.
 
-## Craft task blocks
-
-This skill explains how to operate Craft task blocks, not which task system should own a commitment. Resolve that choice from the current request, user/repository instructions, or the provider-neutral `task-management` skill. When Craft is selected, confirm the intended location, preserve scheduling/repeat state on updates, and read the task back after mutation.
-
-Keep a task row to one short line. Put its context, evidence and sub-steps inside the task block as the block's own content, with one child task per part; give child tasks the parent's schedule date when they should also appear in the daily view. The user reads tasks from the phone's task view, which shows only the task block and its inner content: indented sibling blocks after the task do not appear there, and a long single line is unreadable. The nesting commands are in `references/plugin-mcp.md`.
-
-## Safety
-
-Reads and reversible, clearly authorized writes with immediate verification are normally safe. Confirm before destructive changes, permanent deletion, publication, permission changes, or writes outside the requested scope. Never log API keys, private links, personal identifiers, space IDs, or private document contents unnecessarily.
+## Drift
 
 When observed behavior contradicts this skill, preserve a sanitized reproduction and update the relevant transport reference rather than creating a second Craft skill.

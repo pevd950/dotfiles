@@ -1,91 +1,37 @@
-# Craft Formatting Patterns
+# Craft Blocks and Markdown Quirks
 
-Use this reference when the user asks for a polished, rich, visual, or highly scannable Craft document. Keep the root page glanceable and move detail into native Craft structures.
+How to choose a block, and what the Markdown paths do with it. The writing rules are in the parent `SKILL.md`.
 
-## Layout Pattern
+## Choosing a block
 
-Prefer this order for durable reference pages:
+- **Task:** anything to be done. Short title; detail inside the task block.
+- **Toggle:** detail, history and repeated cards that most readers skip. Start with `+ Title`; child bullets need two leading spaces.
+- **Nested page:** long runbooks, logs, source notes and deep reference material that would make the root page heavy.
+- **Table:** comparisons, resource lists, scorecards, schedules. Markdown tables become native tables and keep inline links.
+- **Callout:** the one thing to read first, a caveat or a recommendation. One per page section at most; a whole section in a callout defeats it.
+- **Collection:** rows that need typed properties, state, ownership or their own detail page. Read the schema before edits.
+- **Line:** a break between major groups, used sparingly.
+- **Code:** a structured `type: "code"` block with `rawCode` and `language` when using the API directly.
 
-1. Purpose quote or callout
-2. Short "how to use this page" callout
-3. At-a-glance table, status matrix, or phase map
-4. Section dividers between major groups
-5. Toggle cards or nested pages for detailed entries
-6. Final action/recommendation section
+A reference page reads best as: status or at-a-glance table, then sections, then toggles or nested pages for the detail.
 
-Example:
+Themes, fonts, covers and decorative separators are for when the user asks for a styled page. Explore the live options first (`blocks explore-themes`, `blocks explore-washi`, `blocks search-unsplash`) and read the styling back.
 
-```markdown
-> **Purpose:** One sentence that explains what this page helps the reader decide or do.
+## Markdown mechanics (API and plugin)
 
-<callout>**How to use this page:** Start with the table, then open detail cards only where needed.</callout>
+- Markdown insertion is sensitive to newline shape. Pass real newlines, not literal `\n` sequences; read back and fix escaped `\n` artifacts.
+- Insert multiple list items together with real single newlines. If updating one list item into several fails, insert the replacement list after a nearby sibling, then delete the old block.
+- Two leading spaces are one indentation level. Preserve indentation when editing nested lists and nested pages.
+- A Markdown heading or title does not create a nested page. Create a structured page block, then resolve and read it before writing its body.
+- Multi-paragraph callout Markdown creates several callout blocks.
+- `***` or `---` creates a line block.
+- Code fences can round-trip as inline code on some plugin paths; prefer structured code blocks.
+- Craft tokens: `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, and date links in the form `date://YYYY-MM-DD`.
+- Collection tags (`<collection>`, `<collectionItem>`, `<property>`, `<contentPreview>`, `<itemsPreview>`) are output-only.
+- Inline highlights use Craft's named colors, not hex: `yellow`, `green`, `mint`, `cyan`, `blue`, `purple`, `pink`, `red`, `gray`, and gradients such as `gradient-blue`.
 
-## At a Glance
+## Before handing off
 
-| Item | Status | Owner | Next step |
-|---|---|---|---|
-| Example | Active | Owner | Review detail card |
-
-***
-
-## Detail Cards
-
-+ Example detail card
-  - **Summary:** Keep the summary short.
-  - **Why it matters:** Explain the practical value.
-  - **Link:** [Source](https://example.com)
-```
-
-## Craft Blocks That Read Well
-
-- **Callouts:** Use for "read this first", caveats, recommendations, or mutation checklists. Avoid wrapping whole sections in callouts.
-- **Tables:** Use before long prose for comparisons, resource lists, scorecards, schedules, and reading paths. Markdown tables become native Craft tables and preserve inline links.
-- **Toggles:** Use for repeated detail cards. Start with `+ Title`; child bullets need two leading spaces.
-- **Collections:** Use when rows need typed properties, state, ownership, or durable row-level detail pages. Read schema before edits.
-- **Nested pages:** Use for long runbooks, logs, source notes, and deep reference material that would make the root page too heavy.
-- **Tasks:** Use when Craft has already been selected as the task surface or when document-local checklist state is explicitly useful. Task-system selection belongs outside this formatting reference.
-- **Code blocks:** Prefer structured `type: "code"` blocks with `rawCode` and `language` when using the API directly.
-
-## Styling Pattern
-
-For user-facing polished notes:
-
-1. Search for a relevant cover with `blocks search-unsplash "<query>"`.
-2. Apply the cover with attribution.
-3. Choose a restrained theme unless the user asks for a bold visual style.
-4. Apply separators sparingly to major section breaks.
-5. Read back `.styling` and a markdown rendering before handoff.
-
-Safer defaults:
-
-- `--theme-id black-white` or `--theme-id default` for durable reference pages.
-- `--font system` for operational or technical notes.
-- `--separator washi --washi-pattern hex|grid|wave` for a little visual structure without making the page noisy.
-
-Avoid strong tinted backgrounds for reference pages unless the user explicitly wants that look; they can make long notes harder to read.
-
-## Markdown Mechanics (API/MCP)
-
-- Markdown insertion is sensitive to newline shape. In shell commands, pass real newlines, not literal `\n` sequences; read back and fix escaped `\n` artifacts.
-- Insert multiple list items together with real single newlines. If updating one existing list item into multiple items fails, insert the replacement list after a nearby sibling, then delete the old block.
-- Two leading spaces represent one Craft indentation level. Preserve indentation when editing nested lists and nested pages.
-- Plain markdown headings and titles do not necessarily create nested pages. When nesting is required, create a structured page block and resolve/read that page before writing its body.
-- Multi-paragraph callout markdown creates multiple callout blocks — sometimes useful, but make it intentional.
-- Markdown `***` or `---` creates line blocks; the MCP style surface can then apply `--separator washi --washi-pattern <hex|grid|wave|dot|stripe|diagonal>`.
-- Markdown code fences may round-trip as inline code in some MCP paths; prefer structured `type: "code"` blocks with `rawCode` and `language`.
-- Craft-specific markdown tokens from the API docs: `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, `[text](date://YYYY-MM-DD)`.
-- Collection tags — `<collection>`, `<collectionItem>`, `<property>`, `<contentPreview>`, `<itemsPreview>` — are output-only. Do not send them as input.
-- Inline highlights use Craft's named color set, not arbitrary hex: `yellow`, `green`, `mint`, `cyan`, `blue`, `purple`, `pink`, `red`, `gray`, and gradient variants such as `gradient-blue`, `gradient-purple`, `gradient-red`, `gradient-yellow`, `gradient-brown`.
-
-## Live Sample Hook
-
-If `CRAFT_FORMATTING_SAMPLE_URL` is set in the local environment and Craft access is available, use it as a private live sample for visual structure. Resolve the link first, read the sample, extract reusable layout/style patterns, and do not copy private content or hard-code the URL into tracked/shared files.
-
-## Verification Checklist
-
-- The page title is correct.
-- The top of the page is glanceable without opening every toggle.
-- Long repeated detail is behind toggles, nested pages, or collection item pages.
-- Tables and links survived readback.
-- Callouts are used for important summaries, not as decoration.
-- Styling readback shows the intended theme, font, cover, and separator style.
+- The top of the page reads at a glance without opening a toggle.
+- Everything to be done is a task block, and long detail sits behind a toggle or nested page.
+- Tables and links survived the readback.
