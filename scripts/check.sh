@@ -61,8 +61,5 @@ done
 "$checks_python" -m unittest discover \
   -s .agents/skills/productivity/pangram-ai-detector/tests -p 'test_*.py'
 
-"$checks_python" -m unittest discover \
-  -s .agents/skills/productivity/parcel-cli/tests -p 'test_*.py'
-
 "$checks_python" scripts/check_instructions.py
 "$checks_python" -m unittest discover -s scripts -p "test_*.py"

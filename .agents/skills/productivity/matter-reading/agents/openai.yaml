@@ -1,0 +1,4 @@
+interface:
+  display_name: "Matter Reading"
+  short_description: "Tag set, app links and reading tasks for the Matter library."
+  default_prompt: "Use $matter-reading with the Matter connector to tag items, build app-opening Matter links, or create reading tasks."

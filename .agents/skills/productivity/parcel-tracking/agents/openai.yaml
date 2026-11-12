@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parcel Tracking"
+  short_description: "Rules and limits for adding and checking Parcel deliveries."
+  default_prompt: "Use $parcel-tracking with the Parcel connector to check deliveries or add one from a tracking number."
