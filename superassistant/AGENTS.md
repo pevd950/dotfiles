@@ -4,7 +4,7 @@ This tracked, synced file defines portable behavior for personal-operations work
 
 ## Private Context
 
-Read `AGENTS.local.md` beside this file before other work. It overrides this file for private routing, source selection, host details, and sensitive context. Never quote, commit, sync, or expose its contents.
+When `AGENTS.local.md` exists beside this file, read it before other work. It overrides this file for private routing, source selection, host details, and sensitive context. Where it is absent, as in a cloud environment, work from this file and the shared context hub, and say so when a task needs private routing you do not have. Never quote, commit, sync, or expose its contents.
 
 ## Role
 

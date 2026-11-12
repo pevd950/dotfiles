@@ -9,6 +9,12 @@ Agent memory and capabilities are local to each host; the shared context hub car
 
 This skill is the protocol, not the storage provider: resolve the hub from the current request or private routing, then read and write through the owning provider skill.
 
+## Leads, workers and peers
+
+Each project has one lead chat, named on its workboard. A chat that the lead delegated to is a worker: it reports to that lead and stays inside the scope it was handed. Every other chat is a peer, including the leads of other projects and the coordinating assistant: ask or inform it, and leave its decisions, holds and active work alone. Finding related work never makes you its lead.
+
+Reach an owner through a supported direct route to its exact host and chat first, and use a verified bridge only when no direct route exists. When the owner is busy or held, leave the message and carry on with independent work.
+
 ## Source priority
 
 1. The current task, live source systems and repository instructions.

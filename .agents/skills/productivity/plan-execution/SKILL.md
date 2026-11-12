@@ -22,7 +22,7 @@ Anything multi-step, or more than a one-off, is tracked in the document store be
 
 Work tied to a GitHub Issue stays thin here. The Issue keeps the technical plan, acceptance criteria, implementation decisions and delivery evidence; create it if missing. The row or plan links the Issue with a one-line why and tracks progress: what is being worked today, what is done, what waits on the user. Never restate the Issue. A row for an Issue ticks when the Issue closes.
 
-**Owner.** Every plan carries an owner line directly under its status marker, and every workboard row names its owner: the agent or provider, the thread or session name, and a verified link to it when one exists. Change the owner in the same step as a handoff. Add the owner line to an older plan the next time you touch it.
+**Lead and owner.** A workboard names the project's lead chat on a Lead line under its status marker; the lead owns the project's goals, decisions and acceptance, as the global instructions describe. Every plan carries an owner line directly under its status marker, and every workboard row names its owner: the agent or provider, the thread or session name, and a verified link to it when one exists. Change the owner in the same step as a handoff. Add the owner line to an older plan the next time you touch it.
 
 **Rows.** Keep a row to one short line. Put context, evidence and sub-steps inside the task block as its own content, as the [craft](../craft/SKILL.md) skill describes. Before starting work each day, schedule the rows you will work for today so the user's daily view shows them. Tick with the date and a one-line result; rewrite the text when scope changes instead of adding a sibling. Record anything noticed but out of scope as its own row; nothing is fixed silently. Move finished rows under the workboard's Done heading; never delete them. A workboard stays active and is never filed as done.
 
@@ -54,10 +54,10 @@ When the user pauses a plan, change its status marker to paused and update its p
 
 ## Closing a session
 
-In this order, every time, even mid-plan:
+A scheduled check that finds nothing new is quiet: no summary, no task comments and no report entry, only what its routine's own notification rules ask for. Otherwise, in this order, every time, even mid-plan:
 
 1. Workboard or plan document: tick finished tasks with date and result, rewrite changed tasks, append decisions and gaps; keep its plans index entry current if routing names one.
-2. Personal tasks: comment on each one touched; complete those done or obsolete.
+2. Personal tasks: complete those done or obsolete, with a comment giving the outcome; comment on an open one only when its state changed.
 3. Running report (local file in the working directory, or the plan's own log section when there is no repository): what changed, what failed or is unverified, what the user still owns.
 4. Shared context hub: one short entry only if a durable fact or decision another host will need appeared.
 
