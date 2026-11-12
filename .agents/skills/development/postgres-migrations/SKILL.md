@@ -23,18 +23,10 @@ A single migration is fine only when the change is small, reversible, and safe f
 - Follow existing filename, ordering, transaction, and comment conventions; include `Up` and `Down`, or document why rollback is irreversible or lossy.
 - `IF EXISTS` / `IF NOT EXISTS` only when it matches repo style and does not hide real drift.
 - No unbounded full-table rewrites on large tables without accepted risk; watch for defaults and non-null transitions that rewrite existing rows.
-- Consider concurrent index creation and staged constraint validation where the migration tool's transaction behavior allows.
+- Add the indexes and constraints that actual queries and validation need. Consider concurrent index creation and staged constraint validation where the migration tool's transaction behavior allows.
 
 ## Validate locally
 
 Apply → inspect resulting schema and indexes → run affected tests → roll back → re-apply → focused smoke or query check. If rollback is unsupported or unsafe, say so explicitly and validate forward-only.
 
-## Review checklist
-
-- Matches the repository's migration tool and style.
-- Lock duration, transaction scope, and table-rewrite risk identified.
-- Destructive changes split from compatibility changes when needed.
-- Index and constraint changes match actual query and validation needs.
-- Backfills deterministic and bounded where table size matters.
-- Old and new app versions both work through the deploy window; migration order relative to app deploys is explicit.
-- Apply/rollback/re-apply validation run when possible.
+When reviewing a migration, check it against the same points, and confirm that old and new app versions both work through the deploy window and that migration order relative to app deploys is explicit.
