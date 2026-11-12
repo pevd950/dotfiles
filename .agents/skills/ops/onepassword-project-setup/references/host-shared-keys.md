@@ -14,4 +14,4 @@ Script paths are relative to the skill root.
 
 - The template is the host's inventory of secret variables; `env | cut -d= -f1 | sort` in a new shell shows what is exported.
 - Running processes keep the environment they started with until they restart.
-- A host set up before 12 Nov 2026 has the older renderer, which wrote values unquoted. Rerun `scripts/setup-host-agent-env.sh --alias <host>` there, with `--label` when the scheduled job has a custom label; it replaces the renderer and leaves the template and the loader as they are.
+- A host set up before 12 Nov 2026 has the older renderer, which wrote values unquoted. Rerun `scripts/setup-host-agent-env.sh --alias <host>` there, with `--label` when the scheduled job has a custom label; it replaces the renderer, keeps the token file the host already uses, and leaves the template and the loader as they are.

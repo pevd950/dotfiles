@@ -122,6 +122,18 @@ class HostAgentEnvTests(unittest.TestCase):
     def test_line_that_is_not_an_assignment_is_refused(self):
         self.assert_refused('touch /tmp/should-not-run\n', {}, 'not NAME=reference')
 
+    def test_rerun_keeps_a_custom_token_file(self):
+        custom = self.home / '.config/op/sa/custom-name.token'
+        custom.write_text('synthetic-token')
+        subprocess.run(['bash', str(SETUP), '--alias', 'testhost', '--token-file', str(custom)],
+                       env=self.env, check=True, capture_output=True, text=True)
+        (self.home / '.config/op/sa/testhost-agents.token').unlink()
+        subprocess.run(['bash', str(SETUP), '--alias', 'testhost'], env=self.env, check=True, capture_output=True, text=True)
+        ref = 'op://Vault One/id1/credential'
+        result = self.render(f'A={ref}\n', {ref: 'still-works'})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.loaded(['A']), {'A': 'still-works'})
+
     def test_duplicate_variable_is_refused(self):
         ref = 'op://Vault One/id1/credential'
         self.assert_refused(f'A={ref}\nA={ref}\n', {ref: 'x'}, 'appears twice')

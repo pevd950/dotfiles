@@ -10,9 +10,15 @@ while [ $# -gt 0 ]; do case "$1" in
   --label) label="$2"; shift 2;; --interval) interval="$2"; shift 2;;
   *) echo "unknown argument: $1" >&2; exit 2;; esac; done
 [ -n "$alias" ] || { echo "usage: $0 --alias HOST [--token-file PATH] [--label LABEL]" >&2; exit 2; }
+bin="$HOME/.local/bin/refresh-agent-env"
+# A rerun keeps the token file the installed renderer already uses, so a host set up with --token-file
+# is not silently repointed at the default path.
+if [ -z "$token" ] && [ -r "$bin" ]; then
+  previous="$(sed -n 's/^.*tok=\([^;]*\).*$/\1/p' "$bin" | head -1)"; previous="${previous%\"}"; previous="${previous#\"}"
+  if [ -r "$previous" ]; then token="$previous"; fi
+fi
 token="${token:-$HOME/.config/op/sa/$alias-agents.token}"
 envdir="$HOME/.config/op/env"; tpl="$envdir/$alias-agent.env.tpl"; out="$envdir/$alias-agent.env"
-bin="$HOME/.local/bin/refresh-agent-env"
 umask 077; mkdir -p "$envdir" "$HOME/.local/bin"; chmod 700 "$envdir"
 
 {
