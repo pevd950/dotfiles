@@ -1,12 +1,13 @@
-# Patterns and Exceptions
+# Documentation and Capability Checks
 
-Apply the relevant recipes, not a compulsory house-wide layout or frozen frontend
-capability matrix. Current requests and verified installed behavior take precedence.
+General references for any Home Assistant dashboard. House-specific patterns (page
+priorities, display exceptions, thresholds, pet activity and editor rules) live in
+the homelab repository's `docs/dashboard-design.md`.
 
 ## Current Official Documentation
 
 Use only the relevant pages; follow their current schema links rather than copying
-a manual into this skill. The entrypoint requires fresh lookup on every task.
+a manual into this skill.
 
 | Decision | Official references |
 | --- | --- |
@@ -20,57 +21,6 @@ When Mushroom is needed, use its [official project docs](https://github.com/piit
 for the installed card version. Official source at the installed tag can resolve
 documentation gaps; a development-branch schema is not proof of installed support.
 
-## Page Priorities
-
-| Page | Main focus | Complementary content |
-| --- | --- | --- |
-| Needs Attention | Actionable issues and diagnostic links | Presence by floor; expandable air/windows |
-| Admin Control Panel | Modes and common door-lock/presence overrides | Infrequent critical-power/admin controls |
-| Devices | Comparable device items and intentional quick actions | Activity after devices on phones or in a wide-screen sidebar |
-| Hosts overview | Networking/Hubs and one consolidated Hosts list | Combined connection/CPU/memory/free-space metrics, not duplicate navigation |
-| Host detail | Performance, storage/I/O, separate network interfaces | Health/reporting and expandable diagnostics |
-| Plants | Water/sensor issues; floor/room inventory | Irrigation when space permits |
-| Car | State badges; charging/climate and accessible charge limit | Keep both battery/tire charts visible; disclose secondary settings |
-
-Pets order: feeders, fountains, litter boxes, then separate feeder and litter logs.
-Preserve existing plant order until the user's physical room order is supplied.
-Prefer one rendered instance of expensive content. If complementary native visibility
-conditions place it differently on wide/narrow screens, prove exactly one is visible
-and keep both configurations aligned. Preserve existing disclosure keys.
-
-## Display Exceptions
-
-- Presence: consistent motion/presence icon; clear gray, detected amber. Missing
-  sources are not clear rooms. Static temperature icons prefer red, not blue;
-  retain an existing meaningful temperature-dependent color instead of overriding it.
-- Host visual thresholds: CPU amber at 75%, red at 90%; memory/filesystem usage
-  amber at 80%, red at 90%. These are display rules, not alert automations. Reject
-  invalid ranges; gray disconnected/unknown data. A sleeping laptop's stored report
-  is not live; do not pair free capacity with another mount or invent its total.
-- A display change does not authorize entity/area/registry edits, HVAC participation,
-  occupancy/group-control changes or metadata normalization. Preserve intentional
-  native switch behavior on administrative control surfaces.
-- Snack controls belong on overview and feeder detail, with portion-specific
-  confirmation and duplicate-feed protection. Verify model minimums/units; portions
-  do not equal a universal gram amount. New devices use the same UI contract only
-  after identity, capabilities and units are verified.
-- Camera preloading and recording require a separate resource/privacy decision;
-  a snapshot does not prove stream playback, recording or persistence.
-
-## Pet Activity and Editors
-
-- Distinguish usage, cleaning, scheduled/manual feeding, errors and recovery.
-  Daily counters mean the local calendar day and disclose event definition, coverage
-  and history limits. Cleaning cycles are not visits; polling transitions are not
-  meals; food quantity is not a use count. Inferred pet identity stays inferred.
-- Show current meals as readable day/time/device-specific amount rows, with focused
-  editing in a consistent per-feeder UI. No synchronized multi-feeder writes by default.
-  Keep one-off meals/exceptions separate from routine schedules.
-- Full-plan replacement preserves other days and meal metadata. Review/save/cancel/
-  error states must complete; successful local writes are not external conflicts.
-  Verify CRUD, concurrency and restoration only when authorized. Check LAN/mobile
-  browser capabilities rather than assuming secure-context Web Crypto is available.
-
 ## Capability Questions to Recheck
 
 Before choosing an adapter, check current official docs and installed behavior for:
@@ -82,7 +32,3 @@ Before choosing an adapter, check current official docs and installed behavior f
 
 A demonstrated gap can justify existing Mushroom templates or a specialized renderer,
 not new backend helpers solely for styling, vendor patches or periodic label rewrites.
-
-## Standing exceptions
-
-- The established light toggle/restore badge stays actionable at zero. Undo behavior exists only there.

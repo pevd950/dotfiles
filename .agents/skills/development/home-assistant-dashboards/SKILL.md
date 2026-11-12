@@ -18,14 +18,18 @@ sheet per plant, and a health board. Aim for that level of cohesion on every pag
   with identity and status at a glance, put everyday actions next, and keep depth
   one tap away in a sheet or a detail page.
 - **One visual system per dashboard.** Choose a small palette and give each color
-  one meaning everywhere: red needs action now, amber soon, blue for the measured
-  quantity, green only for verified healthy, grey for unknown or stale. Any accent
-  beyond those gets a stated meaning. Pair color with a value or label.
+  one meaning everywhere: red needs action now, amber soon or warning, green only
+  for verified healthy, grey for unknown, stale or clear, plus one color per
+  measured domain (blue for water; red for temperature unless it is colored by
+  value). Any further accent gets a stated meaning, such as teal for presence
+  detected. Add a value or label when the icon and color do not say it alone.
 - **Icons carry meaning.** One MDI icon per concept, reused in headings, chips,
   badges and tiles. Every section heading has an icon.
 - **Tiles are objects, not metrics.** One tile per real thing (a plant, a device,
-  a room) with its photo or icon, its name, one status chip and the one reading
-  that matters. Compact and balanced, with useful secondary state.
+  a room) with its photo or icon, its name, one status chip and the few readings
+  that save opening the page. Dense, with little wasted space, but short of crowded.
+- **Small facts are badges.** Battery, connection, bridge status and the like
+  become a badge or chip with an icon, not a row or a card of their own.
 - **Header badges are the summary and the navigation.** Counts by state, colored
   and icon-led, left-aligned, hidden at zero, each opening the list it counts.
 - **Depth in one place.** One sheet or detail page per object, with tabs when it
@@ -35,8 +39,11 @@ sheet per plant, and a health board. Aim for that level of cohesion on every pag
 - **Charts earn their space.** One compact chart that answers the page's question,
   with a larger view on tap. Keep charts the user asked for visible.
 - **Stable layout.** Cards keep their size as state changes.
+- **Predictable taps.** The card body opens the sheet or detail page and the icon
+  toggles, the way Apple Home behaves. Nothing powers a device off by accident.
 - **Group the way the house is used.** Rooms in the user's own order (a walking or
   care route when given, otherwise floor then room), related outdoor areas together.
+  Long groups collapse.
   Priority content goes in the main column; complementary context sits at the top
   right on wide screens and after the main content on phones.
 - **Running processes stay controllable.** While something multi-stage runs, its
@@ -50,7 +57,8 @@ tall square tiles, and a page with no color or icon system.
 
 Choose the component that produces that result, and say what it costs to maintain.
 
-- Native Sections, headings, badges and tiles with features are the frame.
+- Native Sections, headings, badges and tiles with features are the frame, and a
+  native card or feature is the first choice whenever it gives the result.
 - Installed custom cards such as Mushroom and Bubble Card provide chips, template
   cards and pop-up sheets. Read their official docs for the installed version.
 - When one kind of object would need many conditional copies of a native card,
@@ -65,11 +73,14 @@ Choose the component that produces that result, and say what it costs to maintai
 - Summary counts open actionable filtered items, not count-history graphs. Avoid
   repeated device sections, duplicate destinations and unexplained icon actions.
 - Keep agent commentary, verification notes and filler descriptions out of the app.
+  Write readings in human units (hours, not 229 minutes), and show a summary only
+  when it says something the badges do not.
 
-House-specific patterns: when the homelab repository is checked out, read its
-`docs/dashboard-design.md` and the doc for the dashboard you are changing. Otherwise
-read [patterns and exceptions](references/patterns.md) for page priorities, host
-display thresholds, pet history and editor contracts, and capability checks.
+House-specific patterns (page priorities, display exceptions, thresholds, pet
+activity and editor rules) live in the homelab repository: read its
+`docs/dashboard-design.md` and the doc for the dashboard you are changing, from the
+checkout or through GitHub when the repository is not checked out. The official
+documentation map and capability checks are in [the reference](references/patterns.md).
 
 ## Before changing a dashboard
 
@@ -101,7 +112,7 @@ display thresholds, pet history and editor contracts, and capability checks.
 - Activity shows meaningful events, not running/idle plumbing. State time window,
   identity, units and completeness; no invented backfill, visits inferred from
   cleaning cycles or confirmed labels for inferred identity.
-- Hide empty alerts/zero warnings; the one standing exception is in the patterns reference.
+- Hide empty alerts/zero warnings; the standing exceptions are in the house patterns.
 
 ## Safe Delivery and Acceptance
 
