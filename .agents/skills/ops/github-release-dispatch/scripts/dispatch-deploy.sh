@@ -45,8 +45,14 @@ if [ -z "$approval" ]; then
     else approval="standing grant ($standing_var, until $until): $standing"; fi
   fi
 fi
+# An unreviewed manifest names its own production environment, so it cannot be trusted to say what
+# production is: refuse the literal name as well as the one it declares.
+case "$MANIFEST_SOURCE" in unreviewed:*)
+  if [ "$environment" = "$PROD_ENV_NAME" ] || [ "$environment" = "production" ]; then
+    echo "production deploys read the manifest from indie-infra main only; unset RELEASE_DISPATCH_CONFIG_DIR" >&2; exit 3
+  fi;;
+esac
 if [ "$environment" = "$PROD_ENV_NAME" ]; then
-  case "$MANIFEST_SOURCE" in unreviewed:*) echo "production deploys read the manifest from indie-infra main only; unset RELEASE_DISPATCH_CONFIG_DIR" >&2; exit 3;; esac
   [ "$watch" = 1 ] || [ -z "${GATE_VAR:-}" ] || { echo "production with a managed gate variable must be watched: --no-watch would reset $GATE_VAR before the run evaluates it" >&2; exit 3; }
   [ -n "$approval" ] || { echo "production needs --approval \"<Pablo's explicit go for this deploy>\" or a STANDING_APPROVAL_$(printf "%s" "$PROD_ENV_NAME" | tr "[:lower:]-" "[:upper:]_") grant in the manifest" >&2; exit 3; }
   [ -n "$tag" ] || { echo "production needs an explicit image tag (use resolve-image-tag.sh)" >&2; exit 3; }

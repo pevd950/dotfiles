@@ -87,5 +87,25 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertIn('indie-infra main only', result.stderr)
 
 
+    def test_unreviewed_manifest_cannot_rename_production(self):
+        override = self.root / 'override'
+        manifest = override / 'demo' / 'release-dispatch.env'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(REVIEWED.replace('PROD_ENV_NAME="production"', 'PROD_ENV_NAME="something-else"'))
+        result = subprocess.run(
+            ['bash', str(SCRIPTS / 'dispatch-deploy.sh'), 'demo', 'production', 'sha-0000000', '--approval', 'test'],
+            env={**self.env, 'RELEASE_DISPATCH_CONFIG_DIR': str(override)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 3)
+        self.assertIn('indie-infra main only', result.stderr)
+
+    def test_main_is_read_even_when_the_clone_does_not_track_it(self):
+        self.git('-C', str(self.clone), 'config', 'remote.origin.fetch', '+refs/heads/feature:refs/remotes/origin/feature')
+        other = self.root / 'other'
+        self.git('clone', '--quiet', str(self.origin), str(other))
+        self.commit(other, REVIEWED.replace('owner/reviewed', 'owner/merged-later'), 'merged later')
+        self.git('-C', str(other), 'push', '--quiet', 'origin', 'HEAD:main')
+        self.assertEqual(self.load().stdout.split('|')[0], 'owner/merged-later')
+
+
 if __name__ == '__main__':
     unittest.main()

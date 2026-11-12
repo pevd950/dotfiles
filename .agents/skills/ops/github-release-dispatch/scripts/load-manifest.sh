@@ -23,7 +23,8 @@ load_manifest() {
   GIT_TERMINAL_PROMPT=0 git -C "$clone" fetch --quiet origin main || {
     echo "could not refresh indie-infra main; refusing to deploy from a manifest that may be stale" >&2; return 2; }
   tmp="$(mktemp)"
-  if ! git -C "$clone" show "origin/main:$rel" > "$tmp" 2>/dev/null; then
+  # FETCH_HEAD is what the fetch just returned, whatever the clone's own tracking settings are.
+  if ! git -C "$clone" show "FETCH_HEAD:$rel" > "$tmp" 2>/dev/null; then
     rm -f "$tmp"
     echo "no release-dispatch manifest for $project on indie-infra main ($rel); add it through a PR" >&2
     return 2
@@ -31,6 +32,6 @@ load_manifest() {
   # shellcheck disable=SC1090
   source "$tmp"
   rm -f "$tmp"
-  rev="$(git -C "$clone" rev-parse --short origin/main)"
+  rev="$(git -C "$clone" rev-parse --short FETCH_HEAD)"
   MANIFEST_SOURCE="indie-infra main@$rev"
 }
