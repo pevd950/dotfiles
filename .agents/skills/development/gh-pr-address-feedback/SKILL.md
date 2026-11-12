@@ -5,7 +5,7 @@ description: Validate and fix specific PR review findings or CI failures, then r
 
 # GH PR Address Feedback
 
-Evaluate each comment or failure before acting, apply minimal safe fixes, and respond with evidence. Run `gh-connectivity-preflight` first when auth or transport looks broken — remember `GH_TOKEN`/`GITHUB_TOKEN` override keychain auth, so unset invalid env tokens before assuming the login is broken.
+Evaluate each comment or failure before acting, apply minimal safe fixes, and respond with evidence. When a gh or git command fails with an auth or transport error, follow [developer authentication](../../ops/dotfiles-manager/references/developer-auth.md).
 
 ## Gather the full review corpus
 
@@ -28,7 +28,7 @@ Smallest diff that resolves the validated concern; add or update tests when regr
 
 ## CI failures (GitHub Actions)
 
-- Check `gh pr checks <pr>` before assuming a reviewer comment is the main blocker. Extract the run id from `detailsUrl`/`link`, then `gh run view <run-id> --log`; still-pending logs via `gh api /repos/{owner}/{repo}/actions/jobs/{job_id}/logs`.
+- Check `gh pr checks <pr>` before assuming a reviewer comment is the main blocker. Retrieve failing logs as `gh-fix-ci` describes.
 - For a standalone feedback request, use bounded polling and report remaining pending checks with URLs. When invoked by `babysit-pr`, return pending state to that workflow; its monitoring and heartbeat policy owns continuation. Break waits into intervals supported by the current runtime.
 - External providers: inspect available authorized diagnostics at the details URL; report missing access or evidence. Keep repairs within the requested PR scope.
 - `no checks reported on the '<branch>' branch` right after a push is usually transient — retry after a short delay.

@@ -1,21 +1,23 @@
 ---
 name: workflow-packaging-audit
-description: Identify repeated manual workflows from recent Codex sessions, memories, Chronicle discovery, and existing skills or automations; use when asked what should become a skill, subagent, automation, or extension.
+description: Identify repeated manual workflows worth packaging, working from Codex session data (sessions, memories, Chronicle) plus existing skills and automations. Use when asked what should become a skill, subagent, automation, or extension.
 ---
 
 # Workflow Packaging Audit
 
-Turn recent work history into a small set of practical reusable assets.
+Turn recent work history into a small set of practical reusable assets. The evidence sources and collectors read Codex session data; another agent can run the audit, but only over Codex history.
 
 ## Evidence
 
-Order: recent Codex sessions and task summaries → Codex memories and rollout summaries → Chronicle, if enabled, as a discovery/routing signal only (confirm details in logs, repos, trackers, or files before acting) → existing skills, custom agents, and automations.
+Order: recent Codex sessions and task summaries → Codex memories and rollout summaries → Chronicle, if enabled, as a discovery signal only (confirm details in logs, repos, trackers, or files before acting) → existing skills, custom agents, and automations.
 
-Scan window: for recurring reviews and ad hoc reviews without a requested interval, the preceding 30 complete calendar days in the configured local timezone, excluding the current day; use a requested interval for ad hoc reviews, or all available history when explicitly requested (say so). Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`; prefer structural JSONL reads over broad raw text search, pairing tool calls with tool outputs.
+Scan window: for recurring reviews and ad hoc reviews without a requested interval, the preceding 30 complete calendar days in the configured local timezone, excluding the current day; use a requested interval for ad hoc reviews, or all available history when explicitly requested (say so). A checkpoint from an earlier run resumes work inside that window; it does not narrow it. Scan both `~/.codex/sessions` and `~/.codex/archived_sessions`.
 
-For an authorized full-window review across approved hosts, use [private transcript pull and review](references/transcript-review.md). It copies active/archive transcripts into a private source-separated cache using existing SSH and rsync, resumes local batches until traversal finishes, and retrieves surrounding user/tool/response context. Its session worklist records reviewed, no-change, and pending chats separately from indexing; the local-copy retention policy is independent of source history and backup. Keep unavailable sources, parse gaps, exclusions, and unknown archive history explicit; coverage is separate from completed contextual review.
+Parse session JSONL structurally: pair each tool call with its output and judge friction from real tool outputs such as `function_call_output`. Raw text search over whole session files false-positives on prompts, embedded instruction text, and replayed command output; successful reads of automation memories or older excerpts are replayed context, not fresh friction. Exclude the current run from the evidence, and record source gaps separately from conclusions.
 
-For an explicitly bounded point scan, [the collector interface](references/collector.md) remains available. Its limits do not establish complete monthly or multi-host coverage.
+For an authorized full-window review across approved hosts, use [private transcript pull and review](references/transcript-review.md). It copies active and archived transcripts into a private source-separated cache over existing SSH and rsync, resumes local batches until traversal finishes, and retrieves surrounding user, tool and response context. Its session worklist records reviewed, no-change, and pending chats separately from indexing. Report unavailable sources, parse gaps, exclusions, and unknown archive history; coverage is separate from completed contextual review.
+
+For an explicitly bounded point scan, use [the collector interface](references/collector.md). Its limits do not establish complete monthly or multi-host coverage.
 
 ## Candidate rules
 
@@ -25,16 +27,16 @@ Choose the smallest documented form:
 
 - `Skill` — the default for repeatable instructions, references, and helper scripts.
 - `Custom subagent` — a bounded specialist role worth delegating; the value is the role, not a checklist. Check the current `~/.codex/config.toml` or project `.codex/config.toml` shape first.
-- `Automation` — scheduled or recurring check, report, monitor, or heartbeat; prefer automations that invoke skills. Requires a clear prompt, cadence, permissions, output destination, and stop condition before creation.
-- `Plugin` — a coherent installable bundle or external tool surface only; never for one skill.
-- `Hook` — lightweight, event-driven, safe to run frequently; never a full workflow.
+- `Automation` — scheduled or recurring check, report, monitor, or heartbeat; prefer automations that invoke skills. Needs a clear prompt, cadence, permissions, output destination, and stop condition before creation.
+- `Plugin` — a coherent installable bundle or external tool surface; one skill stays a skill.
+- `Hook` — lightweight, event-driven, safe to run frequently; a full workflow belongs in a skill.
 - `Config` — stable Codex configuration or project-local behavior.
 - `Extend existing` — improve an existing asset instead of duplicating it.
 - `Skip` — one-off, ambiguous, sensitive, poorly evidenced, or already covered.
 
 ## Sources before creating
 
-Load `$skill-creator` for new or updated skills, `$plugin-creator` for plugin bundles, and `$plugin-eval` after meaningful changes. Use official Codex docs under `https://developers.openai.com/codex/` (skills, plugins, app/automations, hooks, config-advanced), preferring the OpenAI docs MCP or `$openai-docs` over memory when available.
+Load the host's skill-authoring skill (`skill-creator`) for new or updated skills and, where the host provides them, its plugin-authoring and plugin-evaluation skills (`plugin-creator`, `plugin-eval` in Codex) for plugin bundles and after meaningful changes. For Codex assets, use the official docs under `https://developers.openai.com/codex/` (skills, plugins, app/automations, hooks, config-advanced), through the OpenAI docs MCP or the `openai-docs` skill when available.
 
 ## Process
 

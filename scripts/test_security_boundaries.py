@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILDER = ROOT / '.agents/skills/ops/onepassword-project-setup/scripts/build-env-op.py'
 PREFLIGHT = ROOT / '.config/zsh/custom/bin/onepassword-dev-preflight'
 MEDIA = ROOT / '.agents/skills/development/babysit-pr/references/github-media-evidence.md'
-DIAGNOSTICS = ROOT / '.agents/skills/development/gh-connectivity-preflight/scripts/git_diagnostics.py'
 
 
 class IsolatedTest(unittest.TestCase):
@@ -227,87 +226,11 @@ class CredentialOutputTests(IsolatedTest):
         self.assertIn('git credential.helper', result.stdout)
         self.assertRegex(result.stdout, r'git credential.helper\s+configured')
 
-    def test_git_diagnostics_only_emit_classifications(self):
-        result = self.run_command([sys.executable, str(DIAGNOSTICS)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(self.secret, result.stdout + result.stderr)
-        self.assertNotIn('private.git', result.stdout + result.stderr)
-        self.assertIn('https', result.stdout)
-        self.assertIn('custom-shell-helper', result.stdout)
-
-    def test_diagnostic_environment_prevents_git_askpass_sources(self):
-        self.run_command([self.git, 'config', '--global', '--unset-all', 'credential.helper'])
-        marker = self.root / 'askpass-called'
-        askpass = self.stub('askpass', 'from pathlib import Path\n'
-                            f'Path({str(marker)!r}).touch()\n'
-                            'print("synthetic-password")\n')
-        runner = ('import importlib.util, subprocess, sys\n'
-                  f'spec = importlib.util.spec_from_file_location("diagnostics", {str(DIAGNOSTICS)!r})\n'
-                  'module = importlib.util.module_from_spec(spec)\n'
-                  'spec.loader.exec_module(module)\n'
-                  f'result = subprocess.run([{self.git!r}, "credential", "fill"],\n'
-                  '    input="protocol=https\\nhost=example.invalid\\nusername=fixture\\n\\n",\n'
-                  '    text=True, capture_output=True, env=module.git_environment(), timeout=5)\n'
-                  'raise SystemExit(result.returncode)\n')
-        for source in ('GIT_ASKPASS', 'SSH_ASKPASS', 'core.askPass'):
-            with self.subTest(source=source):
-                self.env.pop('GIT_ASKPASS', None)
-                self.env.pop('SSH_ASKPASS', None)
-                self.run_command([self.git, 'config', '--global', '--unset-all', 'core.askPass'])
-                marker.unlink(missing_ok=True)
-                if source == 'core.askPass':
-                    self.run_command([self.git, 'config', '--global', source, str(askpass)])
-                else:
-                    self.env[source] = str(askpass)
-                result = self.run_command([sys.executable, '-c', runner])
-                self.assertFalse(marker.exists(), source + ' must not invoke a prompt helper')
-                self.assertNotEqual(result.returncode, 0, 'missing credentials must fail closed')
-
-    def test_multiline_and_scoped_helpers_are_opaque(self):
-        self.run_command([self.git, 'config', '--add', 'credential.https://example.invalid.helper',
-                          'custom\n' + self.secret])
-        self.run_command([self.git, 'config', '--add', 'credential.helper', 'osxkeychain'])
-        result = self.run_command([sys.executable, str(DIAGNOSTICS)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(self.secret, result.stdout + result.stderr)
-        self.assertIn('custom-helper', result.stdout)
-        self.assertIn('osxkeychain', result.stdout)
-
-    def test_probe_discards_output_and_disables_inherited_trace_files(self):
-        trace = self.root / 'raw-trace'
-        self.env.update(GIT_TRACE=str(trace), GIT_TRACE2_EVENT=str(trace), GIT_CURL_VERBOSE='1')
-        self.stub('git', 'import os, sys\n'
-                  'assert not any((k.startswith("GIT_TRACE") or k == "GIT_CURL_VERBOSE") and v != "0" for k, v in os.environ.items())\n'
-                  f'print({self.secret!r}, file=sys.stderr)\n'
-                  'if "ls-remote" in sys.argv:\n'
-                  f'    print({self.secret!r})\n'
-                  '    raise SystemExit(1)\n'
-                  'raise SystemExit(1)\n')
-        result = self.run_command([sys.executable, str(DIAGNOSTICS), '--probe'])
-        self.assertEqual(result.returncode, 1)
-        self.assertNotIn(self.secret, result.stdout + result.stderr)
-        self.assertIn('origin transport probe: unavailable', result.stdout)
-        self.assertFalse(trace.exists())
-
-    def test_local_origin_transport_and_missing_helpers(self):
-        self.run_command([self.git, 'config', '--global', '--unset-all', 'credential.helper'])
-        self.run_command([self.git, 'remote', 'set-url', 'origin', str(self.repo / '.git')])
-        result = self.run_command([sys.executable, str(DIAGNOSTICS), '--probe'])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('origin transport probe: ok', result.stdout)
-        self.assertIn('credential helpers: missing', result.stdout)
-
     def configure_trace(self):
         trace = self.root / 'configured-trace'
         self.run_command([self.git, 'config', '--global', 'trace2.configParams', 'credential.helper'])
         self.run_command([self.git, 'config', '--global', 'trace2.eventTarget', str(trace)])
         return trace
-
-    def test_git_config_cannot_enable_sensitive_trace_capture(self):
-        trace = self.configure_trace()
-        result = self.run_command([sys.executable, str(DIAGNOSTICS)])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertFalse(trace.exists(), 'Git configuration must not enable raw trace output')
 
     @unittest.skipUnless(shutil.which('zsh'), 'zsh required')
     def test_preflight_cannot_log_helpers_through_trace_configuration(self):

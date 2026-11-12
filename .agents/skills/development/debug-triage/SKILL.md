@@ -1,6 +1,6 @@
 ---
 name: debug-triage
-description: "Systematically reproduce, diagnose, and fix bugs; use when debugging failures, crashes, or test errors (trigger keywords: debug, bug, failure, crash, flaky test)."
+description: Systematically reproduce, diagnose, and fix a bug. Use when debugging a crash, wrong behavior, or a failing or flaky test.
 ---
 
 # Debug Triage

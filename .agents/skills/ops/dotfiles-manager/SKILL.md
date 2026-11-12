@@ -5,13 +5,12 @@ description: Inspect or change yadm-managed dotfiles, global instructions, and p
 
 # Dotfiles Manager
 
-The home directory is live operational state, not a scratch repository. Work with exact paths, stage only named files, and never sweep unrelated home changes into a commit.
+The home directory is live operational state, not a scratch repository.
 
-## Safety rules
+## Working rules
 
-- Do not run broad `yadm status --untracked-files=all` from `$HOME` unless the user explicitly asks. Prefer path-scoped commands: `yadm status --short [--untracked-files=all] -- <path>`, `yadm diff [--cached] -- <path>`.
-- Stage only explicit paths with `yadm add <path> ...`. Never `yadm add -A`, broad `git add`, or broad untracked scans in `$HOME`.
-- Apply requested scoped edits without renewed approval. Isolate PR work from live home files; preserve unrelated changes.
+- Scope every yadm command to named paths (`yadm status --short [--untracked-files=all] -- <path>`, `yadm diff [--cached] -- <path>`, `yadm add <path> ...`): a broad status, add or untracked scan from `$HOME` can hang, surface private files, leave yadm locked, or sweep unrelated changes into a commit.
+- Apply requested scoped edits directly. The live checkout can hold unrelated local state; leave it out of your commits.
 - Before committing shell, app, SSH, GPG, token, credential, or auth-related config, inspect the exact diff for secrets.
 - On `index.lock`, verify there is no live yadm/git process before removing or retrying — a lock file is not automatically stale:
   - `ps -axo pid,ppid,stat,command | rg 'yadm|\.local/share/yadm|git'`
@@ -23,15 +22,21 @@ Use the live `$HOME` checkout for small targeted edits: a personal skill, one AG
 
 ## Edit-and-commit loop
 
-Edit exact paths → verify with path-scoped status/diff → validate with the narrowest relevant check (skills: read `SKILL.md` and `agents/openai.yaml`; shell/bootstrap: the repo check script if available and safe; config: the tool's non-mutating validation) → `yadm add <paths>` → review `yadm diff --cached` → commit and push → confirm with `yadm log -1 --oneline` and path-scoped status.
+Edit exact paths → verify with path-scoped status/diff → validate with the narrowest relevant check → `yadm add <paths>` → review `yadm diff --cached` → commit and push → confirm with `yadm log -1 --oneline` and path-scoped status.
+
+Validation by kind:
+
+- Instruction and skill edits: `scripts/check_instructions.py` (frontmatter and relative links). It reads the yadm index, so a link to a new file passes only after that file is added.
+- Shell or bootstrap: the repo check script, if available and safe.
+- Config: the tool's non-mutating validation.
 
 ## Skill changes
 
-Canonical root: `SKILL_ROOT="$HOME/.agents/skills"`, organized by category (for example `development/<skill-name>/SKILL.md`). Create only essential files: `SKILL.md`, `agents/openai.yaml` when useful for UI metadata, and `scripts/`/`references/`/`assets/` only when genuinely needed. No READMEs or changelogs around skills unless asked.
+Create only essential files: `SKILL.md`, `agents/openai.yaml` when useful for UI metadata, and `scripts/`, `references/` or `assets/` when needed. Add READMEs or changelogs around skills only when asked.
 
 ## Cross-machine portability
 
-Write for multiple Macs and future hosts: no hardcoded project paths when a relative or environment-based description works; do not assume identical clone paths, Xcode state, shells, or app auth; prefer discover-then-act over host-specific constants; mark intentionally user-specific paths as such.
+Write for multiple Macs and future hosts: use relative or environment-based paths, discover-then-act instead of host constants, and mark intentionally user-specific paths as such. Clone paths, Xcode state, shells and app auth differ per host.
 
 ## Developer authentication
 
@@ -39,13 +44,11 @@ For auth, SSH-agent, or token routing work, read [the developer baseline](refere
 
 ## Authority boundaries
 
-Confirm destructive home changes, live bootstrap execution, credential/security changes, package installation, system defaults, and human review replies unless already explicitly authorized for that action and target. Preparing a scoped patch for review does not execute it on the machine. Never commit unrelated changes without authorization.
+Beyond the global confirmation list, live bootstrap execution, package installation and system-defaults changes need authorization for that action and target. Preparing a scoped patch for review does not execute it on the machine.
 
 ## Pitfalls
 
-- Broad home scans can hang, surface private noise, or leave yadm locked.
-- The live checkout can hold unrelated local state; a clean-looking summary is not permission to commit it.
-- `codex/...` branch names can collide with existing flat refs in the dotfiles repo; prefer flat branch names for dotfiles PR branches.
+- `codex/...` branch names can collide with existing flat refs in the dotfiles repo; use flat branch names for dotfiles PR branches.
 - A generated local machine file does not belong in dotfiles just because it is under `$HOME`.
 
 ## Reporting

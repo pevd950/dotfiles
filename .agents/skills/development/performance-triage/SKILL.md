@@ -19,10 +19,3 @@ Measure before optimizing; never claim improvement from code inspection alone. T
 ## Handoff
 
 Symptom and impact, baseline evidence, bottleneck hypothesis and evidence, change made, before/after numbers, correctness tests run, tradeoffs, and follow-up monitoring worth adding.
-
-## Do not
-
-- Add Redis, queues, workers, or services just because a path is slow.
-- Optimize cold paths without real user or cost impact.
-- Benchmark debug builds when release behavior matters.
-- Mix unrelated cleanup with performance work.

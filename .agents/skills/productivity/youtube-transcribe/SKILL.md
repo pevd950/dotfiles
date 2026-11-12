@@ -5,13 +5,13 @@ description: Download a YouTube video with yt-dlp, extract audio with ffmpeg, tr
 
 # YouTube Transcribe
 
-Use the bundled script:
+Use the bundled script (path relative to this skill's directory):
 
 ```bash
 scripts/youtube_transcribe.sh "https://www.youtube.com/watch?v=..."
 ```
 
-It creates one folder per video and writes `video.*`, `audio.wav`, `transcript.md`, `transcript.txt`, `transcript.srt`, `transcript.json`, and `metadata.json`. Keep generated artifacts in the per-video folder; do not scatter files into the output root.
+It creates one folder per video and writes `video.*`, `audio.wav`, `transcript.md`, `transcript.txt`, `transcript.srt`, `transcript.json`, and `metadata.json`. Keep generated artifacts in the per-video folder.
 
 ## Environment
 
@@ -26,5 +26,3 @@ Requires `yt-dlp`, `ffmpeg`, `whisper-cli`, and `python3` on `PATH`. Machine-loc
 scripts/youtube_transcribe.sh "$URL" --language auto --title "Short readable folder name"
 scripts/youtube_transcribe.sh "$URL" --output-dir "$DIR" --model "$MODEL"
 ```
-
-Do not hard-code personal filesystem paths into this skill.

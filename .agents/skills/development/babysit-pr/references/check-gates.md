@@ -1,31 +1,27 @@
 # Check classification
 
-Inspect live branch protection, effective rulesets (including inherited rules), current PR checks, and trusted project/user requirements. A successful empty rules response is different from a permission or network failure. No rules does not mean no validation is needed.
-
-Classify by check context, expected provider, revision and applicable policy:
+Once per head, read branch protection, effective rulesets (inherited ones included), the PR's current checks, and any validation the project or user requires. An empty rules response is different from a permission or network failure: report the latter as unverified.
 
 | Class | Treatment |
 | --- | --- |
-| Required | GitHub-enforced or explicitly required by trusted policy. Missing/pending is a blocker. A similarly named check from another provider is not a substitute. |
-| Evidence | Additional validation. Investigate failures; pending alone is not a requirement. Missing acceptance evidence remains a policy blocker. |
-| Duplicate/superseded | Ignore only after proving redundancy or obsolescence; keep the source and rationale. A required context cannot be demoted because another job did similar work. |
+| Required | Enforced by GitHub or explicitly required by trusted policy. Missing or pending blocks. A similarly named check from another provider is not a substitute. |
+| Evidence | Additional validation. Investigate failures; pending alone does not block. |
+| Duplicate/superseded | Ignore once redundancy or obsolescence is shown, and note the reason. A required context stays required even when another job did similar work. |
 
-Resolve reruns and GitHub's effective revision before making a snapshot: head SHA versus current test-merge SHA, event, attempt, check context and provider must match. Never reuse old-head success. A fresh head invalidates old evidence even when commit timestamps look newer. Do not blanket-ignore optional failures or accept a skipped required job without verifying why it was skipped and whether policy permits it.
+Match each result to the current head: head SHA (or GitHub's test-merge SHA), event, attempt, check context and provider. Success on an older head does not carry over. A skipped required job passes only when policy allows the skip.
 
-## Decision helper contract
+## Decision helper (optional)
 
-`check_gate_state.py` reads JSON on stdin and prints a decision. It performs no network access, writes, notifications or merges. The caller supplies live, trusted classification and records the returned checkpoint once per scheduled observation. It is not a GitHub collector or a substitute for the skill's review, worktree and acceptance audit.
+`scripts/check_gate_state.py` turns an already classified snapshot into a decision. It reads JSON on stdin and has no network access or side effects. Its `checks_satisfied` covers checks only, not reviews or the rest of the readiness bar.
 
-Input fields:
+Input:
 
 - `head_sha`, `state` (`OPEN`, `MERGED`, `CLOSED`), `now` (Unix seconds), `rules_verified` (boolean).
-- `checks`: each has stable `id`, `classification` (`required`, `evidence`, `duplicate`), effective `head_sha`, `status`, optional `attempt`, `jobs`, `queued_since`, `skip_allowed`, and `reason`. A duplicate requires a recorded reason. Include missing required contexts with status `missing`; never omit them.
-- `previous`: last returned `checkpoint`, or null. Include repository/base/rules policy changes in `policy_id`; this resets stale block history.
+- `checks`: each with `id`, `classification` (`required`, `evidence`, `duplicate`), `head_sha`, `status`, and optional `attempt`, `jobs`, `queued_since`, `skip_allowed`, `reason`. A duplicate needs a `reason`. List a missing required context with status `missing`.
+- `previous`: the last returned `checkpoint`, or null. Put repository, base and rules changes in `policy_id` so stale block history resets.
 
-`jobs` accepts a nonnegative integer count, an API job array (normalized to its length), or null/omitted for unknown. Equivalent arrays and counts share the same checkpoint fingerprint. A matching checkpoint must contain valid `blocked_since`, `unchanged_polls`, and `last_notified_at` fields; malformed persisted state raises an actionable error rather than silently resetting escalation history. Recover the saved checkpoint before continuing.
+`jobs` is a count, an API job array, or null for unknown. Statuses normalize to `success`, `neutral`, `skipped`, `failure`, `cancelled`, `queued`, `in_progress`, or `missing`.
 
-Stale evidence supplied as relevant blocks assessment even if successful. Classify genuinely obsolete runs as `duplicate` with a verified supersession rationale; do not make every historical run a gate. The pending-evidence exception applies only to current-head additional checks, not missing policy-required acceptance evidence.
+Output: `diagnose` lists runs queued with zero jobs for 15 minutes; `notify` marks the first 30-minute or two-unchanged-observation escalation. Record `last_notified_at` only after the notification is sent. A malformed saved checkpoint raises an error: recover the saved one rather than starting fresh.
 
-Statuses are normalized to `success`, `neutral`, `skipped`, `failure`, `cancelled`, `queued`, `in_progress`, or `missing`. Only verified, policy-allowed skips/neutral conclusions pass. Additional failed/cancelled/unknown checks require investigation. `diagnose` lists 15-minute zero-job queue anomalies; `notify` marks a first 30-minute/two-unchanged-observation escalation. The caller sends via `$notify-user` (`$HOME/.agents/skills/productivity/notify-user/scripts/send_notification.py --check` then `--send`) and only then records `last_notified_at` (or records failure and retries). `checks_satisfied` is **not merge-ready**.
-
-Dry-run fixtures cover the incident shape: passed required validation plus an optional duplicate stuck queued; the same queue as a required check; stale-head success; optional failure; rules lookup failure; unexpected skip; head/policy changes; notification deduplication; and terminal PRs. Do not require installation of this helper or a canonical workflow in every repository.
+Tests: `python3 -m unittest discover -s scripts -p 'test_*.py'` from the skill directory.

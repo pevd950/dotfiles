@@ -1,11 +1,11 @@
 ---
 name: tdd
-description: Use test-driven development for new behavior, bug fixes, API contracts, and safe refactors. Trigger when the user asks for TDD, test-first work, regression tests, characterization tests, or red-green-refactor.
+description: Drive a change test-first. Use when the user asks for TDD, test-first work, regression tests, characterization tests, or red-green-refactor.
 ---
 
 # Test-Driven Development
 
-Drive implementation with a small failing test before production code. Do not force TDD for docs, mechanical renames, generated-code sync, or spikes where the right seam is not yet known.
+Drive implementation with a small failing test before production code. Skip TDD for docs, mechanical renames, generated-code sync, and spikes where the right seam is not yet known.
 
 ## Loop
 
@@ -17,10 +17,6 @@ Drive implementation with a small failing test before production code. Do not fo
 6. **Expand coverage only for real risk:** invalid input, authorization, missing dependencies, concurrency and cancellation, serialization compatibility, boundary sizes and limits, provider failure, migration/rollback. No brittle snapshot or implementation tests just to increase count.
 7. **Final validation:** the focused command and required repository checks. Broaden the suite only when the change or remaining risk warrants it. Report anything not run and why.
 
-## Hard rules
-
-- Do not claim TDD if no failing test was observed.
-- Do not mock the system under test so heavily that the test only proves the mock.
-- Do not leave characterization tests that encode known-bad behavior unless compatibility explicitly requires it.
+Call the work TDD only if you watched the test fail first. Keep mocks at external boundaries so each test exercises the real system under test.
 
 Related: `api-contract-testing` for endpoints, `debug-triage` for repro paths, `architecture-scout` for boundary moves, `code-review` for evaluating test quality.

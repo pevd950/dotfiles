@@ -59,7 +59,7 @@ Start with a small authenticated account read, then a bounded operation that pro
 
 For selected UI surfaces, verify discovery, opening, rendered data, interaction, and conversation context through the installed client using the [UI acceptance checks](references/ui-extensions.md#prove-the-installed-interface). Keep source validation, accepted registration, and observed interface behavior separate.
 
-For failures, use [connector-readiness-triage](../../ops/connector-readiness-triage/SKILL.md) when available. Trace the failing layer before changing anything: client exposure/authentication, transport, runtime, local quota, or provider response. Inspect bounded private logs and status; honor retry/reset guidance and stop at the diagnostic budget. Do not consume scarce reads in retry loops or replay uncertain writes. Loopback health alone cannot exclude host pressure or provider failure.
+For failures, trace the failing layer before changing anything: client exposure/authentication, transport, runtime, local quota, or provider response. Inspect bounded private logs and status; honor retry/reset guidance and stop at the diagnostic budget. Do not consume scarce reads in retry loops or replay uncertain writes. Loopback health alone cannot exclude host pressure or provider failure.
 
 Keep a private operational record of active version/source, configuration and secret references, expiry/renewal, persistence ownership, compatible recovery, tested clients/scenarios, and remaining gaps. Refresh it after verified upgrades. Use the owner's chosen knowledge/task systems and existing operational procedures; ongoing monitoring is optional and requires its own request.
 

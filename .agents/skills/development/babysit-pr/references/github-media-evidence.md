@@ -1,16 +1,14 @@
 # GitHub media evidence
 
-## Choose the upload path
-
 Inspect and sanitize the smallest useful media before any authorized upload. Keep evidence beside its claim, use meaningful image alt text, and identify the tested commit/build, scenario, platform, device, and OS as relevant. Prefer before/after evidence for visual changes.
 
-Check local `gh --version` and the intended command’s `--help`. Native `--attach` arrived in gh 2.99.0 for issue/PR create, edit, and comment commands. GitHub documents repository write access and OAuth or classic PAT authentication; the feature is available across GitHub plans, but not GitHub Enterprise Server. Do not assume an API-readable repository implies upload support. If capability, authentication, or host support is unavailable, use the supported browser attachment flow under the same publication authorization; do not change authentication or upgrade software implicitly.
+`--attach` needs gh 2.99 or later on issue/PR create, edit and comment commands (`gh pr edit --help` shows it). Where it is missing or the host is GitHub Enterprise Server, use the browser attachment flow under the same authorization.
 
-## Place media in the body
+## Commands
 
-Use `--body-file` for multiline Markdown. Repeat `--attach` for different files. Local references matching attached files are rewritten in place and preserve their Markdown alt text; otherwise files are appended. The `path#alt text` form sets alt text only for appended images. Videos have no alt text and need a standalone paragraph to render a player.
+Run from the directory that holds the media. Repeat `--attach` for each file. A body reference that matches an attached path, such as `![alt](./after.png)`, is rewritten to the uploaded asset and keeps its alt text. Unreferenced files are appended, with alt text taken from `path#alt text`. A video has no alt text and needs its own paragraph to render a player.
 
-For an already-authorized PR edit, replace the repository and PR placeholders. Run from the directory containing the sanitized media. Use one dedicated shell session for the following commands. Create a private temporary directory under the system `/tmp`, outside the checkout; never redirect into a repository-supplied `body.md` or symlink. The exit trap removes the body when that shell session ends. Stop if allocation or fetch fails:
+`--body-file` replaces the whole description, so fetch the body, insert the evidence beside its claim, and send it back. Run both blocks in one shell session. The body lives in a private temporary directory outside the checkout, so a repository-supplied `body.md` or symlink is never written through, and a failed fetch stops the run before any upload:
 
 ```sh
 umask 077
@@ -20,52 +18,43 @@ pr_body_file="$pr_body_dir/body.md"
 gh pr view PR_NUMBER --repo OWNER/REPO --json body --jq .body > "$pr_body_file" || exit 1
 ```
 
-Edit the complete body at `"$pr_body_file"` to insert evidence beside its claim, preserving existing scope, validation details, and generated sections. Keep the same shell variables; other tools should use the resulting absolute path. `--body-file` replaces the entire description. Immediately before saving, reread the live body into another file in `"$pr_body_dir"` and reconcile any intervening edits, then upload:
+Edit the file at `"$pr_body_file"`, keeping the existing scope, validation details and generated sections, then upload:
 
 ```sh
 gh pr edit PR_NUMBER --repo OWNER/REPO --body-file "$pr_body_file" \
   --attach ./before.png --attach ./after.png --attach ./interaction.mp4
 ```
 
-Example fragment to insert into the complete temporary body, not a replacement description (replace the test-context placeholders):
+Example fragment to insert:
 
 ```markdown
 Tested COMMIT_OR_BUILD: SCENARIO on PLATFORM / DEVICE / OS.
 
-Before:
-
 ![Settings panel before the layout fix](./before.png)
-
-After:
-
 ![Settings panel with the corrected layout](./after.png)
-
-Interaction:
 
 ![](./interaction.mp4)
 ```
 
-To append an image while retaining the existing PR body:
+Append to the existing body, or attach to a comment:
 
 ```sh
 gh pr edit PR_NUMBER --repo OWNER/REPO \
   --attach './after.png#Settings panel with the corrected layout'
+gh pr comment PR_NUMBER --repo OWNER/REPO --body-file /tmp/pr-evidence.md \
+  --attach ./after.png
 ```
 
-Consult current command help and the linked file documentation for supported formats and limits instead of assuming a remembered limit. Do not use undocumented upload endpoints, token-bearing raw URLs, or commits solely to transport screenshots. Legitimate tracked assets can remain with verified, access-appropriate links; changing a raw URL to a blob URL is not proof of rendering.
+Upload only through `--attach` or the browser flow, never through token-bearing raw URLs or commits made just to carry screenshots.
 
-## Verify and recover
+## Verify
 
-Read back the final saved issue, PR, or comment body and check the intended placement, alt text, and resolved attachment references. For a PR body, use `gh pr view PR_NUMBER --repo OWNER/REPO --json body,headRefOid`. Then inspect the actual saved page in a signed-in browser with repository access: images must display and videos must render/play as intended. A successful edit or body readback alone does not prove rendering. Report unavailable browser validation explicitly; do not claim it passed.
+Read the saved body or comment back (`gh pr view PR_NUMBER --repo OWNER/REPO --json body,headRefOid`) and check placement, alt text and that each reference resolved to an uploaded asset. When a signed-in browser is available, open the page and confirm images display and videos play; otherwise say rendering was not checked. Uploads to a private repository need repository access, so an anonymous 404 is not a failure.
 
-Public repository uploads are anonymously accessible; private/internal uploads require repository access. Limit anonymous checks to already-public assets. A private unauthenticated 404 or denial does not establish missing bytes or a failure for an authorized viewer. Check signed-in access before diagnosing rendering, and never publish private assets merely to test them.
-
-Local `gh pr edit --help` (2.100.0) documents partial success: some uploads and the body update may succeed even when the command exits nonzero. After any failure or ambiguous result, reread the destination before retrying. Preserve successful uploads and retry only confirmed missing attachments, rebuilding any replacement body from the saved result to avoid duplicates or lost edits.
+A nonzero exit can still mean some uploads and the body update succeeded. Reread the destination before retrying, and re-attach only what is missing.
 
 ## Official references
 
-Verified 2026-09-09; examples were checked against documentation and local CLI help, without test publication or public/private runtime rendering tests.
-
-- [GitHub CLI media announcement: availability, access, and authentication](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/)
-- [Attaching files with GitHub CLI: commands and Markdown placement](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)
-- [Attaching files: repository visibility, browser flow, formats, and limits](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
+- [GitHub CLI media announcement](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/)
+- [Attaching files with GitHub CLI](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)
+- [Attaching files: visibility, browser flow, formats and limits](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/attaching-files)
