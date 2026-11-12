@@ -38,4 +38,4 @@ Default SwiftUI skill for new feature work, reviews, and refactors.
 
 ## Specialized follow-ups
 
-`swiftui-liquid-glass` for Liquid Glass adoption or review; `apple-ui-design` for visual direction and HIG quality; `swiftui-performance-audit` when performance is the primary problem; `swift-concurrency-expert` for Swift 6.2+ concurrency.
+`swiftui-liquid-glass` for Liquid Glass adoption or review and `swiftui-performance-audit` when performance is the primary problem (both from the iOS plugin; Xcode's SwiftUI skills where it is not installed); `apple-ui-design` for visual direction and HIG quality; `swift-concurrency-expert` for Swift 6.2+ concurrency.

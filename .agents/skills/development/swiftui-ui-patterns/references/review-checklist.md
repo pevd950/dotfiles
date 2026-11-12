@@ -11,7 +11,7 @@ Use this as a quick final pass after structure, API, accessibility, and navigati
 - Prefer `task()` over `onAppear()` for async work.
 - Use stable identities in lists and collections.
 
-If performance is the main problem, switch to the `swiftui-performance-audit` skill.
+If performance is the main problem, switch to the `swiftui-performance-audit` skill from the iOS plugin.
 
 ## Hygiene checks
 

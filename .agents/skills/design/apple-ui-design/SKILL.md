@@ -23,7 +23,7 @@ Load `references/hig-platform-checklist.md` for detailed platform adaptation and
 
 ## Liquid Glass
 
-Apply intentionally, not decoratively. For SwiftUI implementation and review rules, use the `swiftui-liquid-glass` skill. For UIKit: use glass APIs (`UIGlassEffect`, `UIGlassContainerEffect`) through `UIVisualEffectView` patterns, verify exact signatures against the installed SDK docs before coding, group related glass regions, avoid stacking excessive translucent layers, and provide fallback materials on unsupported versions. `references/liquid-glass-notes.md` has framework-specific notes.
+Apply intentionally, not decoratively. For SwiftUI implementation and review rules, use the `swiftui-liquid-glass` skill from the iOS plugin, or Xcode's SwiftUI skills where that plugin is not installed. For UIKit: use glass APIs (`UIGlassEffect`, `UIGlassContainerEffect`) through `UIVisualEffectView` patterns, verify exact signatures against the installed SDK docs before coding, group related glass regions, avoid stacking excessive translucent layers, and provide fallback materials on unsupported versions. `references/liquid-glass-notes.md` has framework-specific notes.
 
 ## Avoid
 
