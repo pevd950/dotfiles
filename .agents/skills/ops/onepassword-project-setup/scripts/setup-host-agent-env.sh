@@ -15,26 +15,60 @@ envdir="$HOME/.config/op/env"; tpl="$envdir/$alias-agent.env.tpl"; out="$envdir/
 bin="$HOME/.local/bin/refresh-agent-env"
 umask 077; mkdir -p "$envdir" "$HOME/.local/bin"; chmod 700 "$envdir"
 
-cat > "$bin" <<EOF
-#!/bin/zsh -f
-# Render $out from its template with the token in $token. Safe to rerun.
+{
+  printf '#!/bin/zsh -f\n'
+  printf 'tpl=%q; out=%q; tok=%q\n' "$tpl" "$out" "$token"
+  cat <<'EOF'
+# Render $out from the 1Password references in $tpl with the token in $tok. Safe to rerun.
 # -f skips startup files: the ~/.zshenv.local loader calls this script, so reading it here would recurse.
+# Shells source the rendered file, so every value is written single-quoted: a stored value is always
+# data and can never run as shell code. A value must be a single line.
 set -euo pipefail
-[[ -n "\${REFRESH_AGENT_ENV_ACTIVE:-}" ]] && exit 0; export REFRESH_AGENT_ENV_ACTIVE=1
-tpl="$tpl"; out="$out"; tok="$token"
-[[ -r "\$tok" ]] || { echo "refresh-agent-env: missing \$tok, keeping previous file" >&2; exit 1; }
-export OP_SERVICE_ACCOUNT_TOKEN="\$(<"\$tok")"
-umask 077; tmp="\$(mktemp "\$out.XXXXXX")"; trap 'rm -f "\$tmp"' EXIT
-op inject -i "\$tpl" -o "\$tmp" --force >/dev/null
-if grep -q 'op://' "\$tmp"; then rm -f "\$tmp"; echo "refresh-agent-env: unresolved reference, keeping previous file" >&2; exit 1; fi
-mv -f "\$tmp" "\$out"; chmod 600 "\$out"; echo "rendered \$out (\$(grep -c '=' "\$out") vars)"
+[[ -n "${REFRESH_AGENT_ENV_ACTIVE:-}" ]] && exit 0; export REFRESH_AGENT_ENV_ACTIVE=1
+fail() { echo "refresh-agent-env: $1, keeping previous file" >&2; exit 1; }
+[[ -r "$tok" ]] || fail "missing $tok"
+[[ -r "$tpl" ]] || fail "missing $tpl"
+export OP_SERVICE_ACCOUNT_TOKEN="$(<"$tok")"
+umask 077; work="$(mktemp -d "$out.XXXXXX")"; trap 'rm -rf "$work"' EXIT
+
+# 1. Reduce the template to one NAME=reference line per variable. Comment lines, "export", quotes
+#    around the reference and a trailing comment are template conveniences, not part of the value.
+names=(); : > "$work/tpl"
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ "$line" =~ '^[[:space:]]*(#.*)?$' ]] && continue
+  [[ "$line" =~ '^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$' ]] || fail "a template line is not NAME=reference"
+  name="$match[2]"; value="$match[3]"
+  if [[ "$value" =~ '^"([^"]*)"[[:space:]]*(#.*)?$' || "$value" =~ "^'([^']*)'[[:space:]]*(#.*)?\$" ]]; then value="$match[1]"
+  elif [[ "$value" =~ '^(.*[^[:space:]])?[[:space:]]+#.*$' ]]; then value="$match[1]"
+  elif [[ "$value" =~ '^(.*[^[:space:]])?[[:space:]]*$' ]]; then value="$match[1]"; fi
+  (( ${names[(Ie)$name]} )) && fail "$name appears twice in the template"
+  names+=("$name"); print -r -- "$name=$value" >> "$work/tpl"
+done < "$tpl"
+(( ${#names} )) || fail "the template has no variables yet"
+
+# 2. Resolve the references in one call.
+op inject -i "$work/tpl" -o "$work/rendered" --force >/dev/null || fail "1Password could not resolve the template"
+
+# 3. Pair each result line with its variable and write it quoted.
+rendered=("${(@f)$(<"$work/rendered")}")
+(( ${#rendered} == ${#names} )) || fail "a value spans several lines (${#names} variables, ${#rendered} result lines)"
+print -r -- "# Rendered by refresh-agent-env from $tpl. Edit the template, not this file." > "$work/out"
+for (( i = 1; i <= ${#names}; i++ )); do
+  name="$names[$i]"; line="$rendered[$i]"
+  [[ "$line" == "$name="* ]] || fail "result line $i does not belong to $name"
+  value="${line#"$name="}"
+  [[ "$value" == *op://* ]] && fail "unresolved reference for $name"
+  print -r -- "$name=${(qq)value}" >> "$work/out"
+done
+mv -f "$work/out" "$out"; chmod 600 "$out"; echo "rendered $out (${#names} vars)"
 EOF
+} > "$bin"
 chmod 700 "$bin"
 
 if [ ! -e "$tpl" ]; then cat > "$tpl" <<EOF
 # $alias shared agent and shell secrets, as 1Password references (no values).
 # One NAME=<reference> line per variable (reference = vault, item ID and field after the op scheme),
-# item title in a comment below it. Never write the bare scheme in a comment: op inject parses comments too.
+# with the item title in a comment. Values are data: a line holds a reference or a literal, never shell syntax.
 # Reference item IDs so renames never break this host. Edit here, then run refresh-agent-env.
 EOF
   echo "created template stub $tpl"; fi
