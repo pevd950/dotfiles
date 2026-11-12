@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# After every `yadm pull`: link newly pulled skills and refresh the Xcode skills.
+sync="$HOME/scripts/sync-agent-skills.sh"
+if [[ -x "$sync" ]]; then
+  "$sync" || echo "sync-agent-skills failed; run $sync to see why" >&2
+fi

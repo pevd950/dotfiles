@@ -13,7 +13,9 @@ bash_files=(
   setup.sh
   .agents/skills/ops/onepassword-project-setup/templates/envrc
   scripts/setup-checks.sh
+  scripts/sync-agent-skills.sh
   .config/yadm/bootstrap
+  .config/yadm/hooks/post_pull
   .cursor/install.sh
   .config/zsh/custom-path.sh
   .config/zsh/custom/bin/coderabbit
