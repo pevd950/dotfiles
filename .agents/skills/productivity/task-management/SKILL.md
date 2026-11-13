@@ -46,7 +46,7 @@ Write the task as the user would have entered it, with fields carrying what is k
 ## Ownership boundaries
 
 - For project bugs, features, and substantial coding work, the owning repository's issue tracker is authoritative for the implementation plan, acceptance criteria, decisions, and delivery history.
-- A workboard row or plan document (see the plan-execution skill) tracks progress on agent work and links each repository item to its Issue. It is never the destination for an Issue's implementation detail, acceptance criteria, or delivery history.
+- A workboard row or plan page (see the plan-execution skill) tracks progress on agent work and links each repository item to its Issue. It is never the destination for an Issue's implementation detail, acceptance criteria, or delivery history.
 - A personal task-manager item may coexist with a GitHub Issue to track when the user plans to work on it. Keep that item short, link it to the Issue, and do not copy the Issue's technical plan into it.
 - Require evidence for the outcome being claimed. Completing a personal task does not prove implementation or acceptance; closing an Issue needs its own authority and evidence.
 - Use a document-local checklist only once that document system has been selected as the task surface.

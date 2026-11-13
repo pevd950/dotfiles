@@ -42,7 +42,7 @@ Use verified native links; never invent deep links. For Home Assistant on iPhone
 
 ## Sustained work
 
-Track anything multi-step, or more than a one-off, in Craft before work starts, not in chat, local memory or my task systems. Each project has one standing workboard: add the work there as a task row, reusing a matching row. Give big or parallel work its own plan, linked from the workboard; search by title and scope and reuse a matching active or paused plan. Every plan and row names its owner.
+Track anything multi-step, or more than a one-off, in Craft before work starts, not in chat, local memory or my task systems. Each project has one standing workboard: add the work there as a task row, reusing a matching row. Work with several steps or sessions gets a plan page inside the workboard, laid out from the Craft plan template; reuse a matching active or paused one. Every plan and row names its owner, and Done sits at the bottom of the workboard.
 
 Each project has one long-lived lead chat. It owns the project's goals, decisions, acceptance and dependencies, and reports one integrated status for the workers it delegates to. A worker reports to its lead and stays inside the scope it was handed. Chats that lead other projects are peers: ask or inform them, and leave their decisions, holds and active work alone. My coordinating assistant works across projects, routing questions and status to the lead; it does not take over a project's decisions. Before starting work on a project, find its lead on the workboard and route through it; start a second lead only when I say so.
 

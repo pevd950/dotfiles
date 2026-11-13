@@ -28,6 +28,7 @@ Themes, fonts, covers and decorative separators are for when the user asks for a
 - Code fences can round-trip as inline code on some plugin paths; prefer structured code blocks.
 - Craft tokens: `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, and date links in the form `date://YYYY-MM-DD`.
 - Collection tags (`<collection>`, `<collectionItem>`, `<property>`, `<contentPreview>`, `<itemsPreview>`) are output-only.
+- A GitHub rich preview is a `richUrl` block holding only the URL. Craft fills in its title and image afterwards, so a plain-looking read right after insertion is not a failure; read again later, or check in the app when the card matters.
 - Inline highlights use Craft's named colors, not hex: `yellow`, `green`, `mint`, `cyan`, `blue`, `purple`, `pink`, `red`, `gray`, and gradients such as `gradient-blue`.
 
 ## Before handing off

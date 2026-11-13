@@ -16,9 +16,13 @@ Write what the user would jot down, in the structure Craft provides. This applie
 - **Detail and history collapse.** Reference detail goes in a toggle or nested page with a clear title. Session reports and logs are one line per entry inside a collapsed History toggle or nested page, newest first.
 - **Update in place.** When a fact changes, change the block that states it.
 - **Use the native block for the job:** headings for sections, tables for comparisons and lists of like items, a callout for the one thing to read first, toggles for detail, nested pages for long material, collections when rows need typed properties.
-- **Links are labeled,** and tags follow private routing, such as a plan's status tag.
+- **Links are labeled,** and tags follow private routing, such as a plan's status tag. Give each distinct GitHub Issue or PR one rich preview, near where the document mainly discusses it; later mentions are plain links.
 
 Which system owns a commitment is the `task-management` skill's question; when Craft holds the task, preserve its schedule and repeat state on updates. Block choices and Markdown quirks are in `references/formatting.md`.
+
+## Plan pages
+
+A plan is a task inside its project's workboard that opens as a page (`type: "page"` with `listStyle: "task"` through the API). Start a new one from the `Plan page` document in Craft's Templates: read it when you create the page and copy its blocks, replacing every `{placeholder}`. The template is the only copy of the layout, so the user can change it in Craft; read it fresh each time and keep no copy of it elsewhere. What the header and sections mean is the [plan-execution](../plan-execution/SKILL.md) skill's job.
 
 ## Transport
 

@@ -8,7 +8,7 @@ Use these hypothetical cases to review authority, activation, and stopping condi
 | Review this PR; do not edit | Report evidence and findings; no edits, commits, replies, or state changes. |
 | Babysit this PR; unrelated checkout changes exist | Preserve changes and use an isolated PR checkout. Monitoring continues under the babysitter rather than the feedback helper's standalone cutoff. |
 | Watch PR status only | Read and report; no fixes or replies. |
-| Start multi-step work on a project | Add a task row with its owner to the project's Craft workboard before starting, reusing a matching row. Big or parallel work gets its own plan, linked from the workboard. |
+| Start multi-step work on a project | Add a task row with its owner to the project's Craft workboard before starting, reusing a matching row. Work with several steps or sessions gets a plan page inside the workboard, laid out from the Craft plan template. |
 | Multi-step work is tied to a GitHub Issue | The Issue keeps the technical plan, acceptance criteria and history. The Craft row links it and tracks progress without restating it. |
 | Authorized work is blocked on the user | Ask in chat and send one notification through `notify-user`, then continue independent work. Check presence only for a desk-bound approval; notify again only after a material change. |
 | A step looks manual (a setting, an upload, a form) | Try the allowed CLI, API, browser and computer-use routes first. Hand it over only with the exact barrier named, as one personal task. |

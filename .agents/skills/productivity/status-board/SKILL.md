@@ -44,7 +44,7 @@ Every row comes from its owning system, read at refresh time. Never carry a row 
 | This week | The user's active goals with dates, from personal tasks and active plans. |
 | Needs you | High-priority personal tasks; approvals and decisions only the user can give; items held by the user's own call. |
 | In flight | Open pull requests and the current step of each active project; live agent threads, whichever agent runs them. |
-| Plans | Every plan document carrying the active or paused status marker, sorted by last update; open rows on each project's workboard. |
+| Plans | Every plan page or plan document carrying the active or paused status marker, sorted by last update; open rows on each project's workboard. |
 | Parked | Items the user explicitly put on hold. Keep each one until the user releases it. |
 
 Read GitHub and live thread state last, right before publishing. Pull requests merge minutes before a refresh, and a board that lists them as open is wrong the moment it lands.
