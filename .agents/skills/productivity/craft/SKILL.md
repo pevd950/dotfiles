@@ -20,9 +20,9 @@ Write what the user would jot down, in the structure Craft provides. This applie
 
 Which system owns a commitment is the `task-management` skill's question; when Craft holds the task, preserve its schedule and repeat state on updates. Block choices and Markdown quirks are in `references/formatting.md`.
 
-## Plan pages
+## Workboards and plan pages
 
-A plan is a task inside its project's workboard that opens as a page (`type: "page"` with `listStyle: "task"` through the API). Start a new one from the `Plan page` document in Craft's Templates: read it when you create the page and copy its blocks, replacing every `{placeholder}`. The template is the only copy of the layout, so the user can change it in Craft; read it fresh each time and keep no copy of it elsewhere. What the header and sections mean is the [plan-execution](../plan-execution/SKILL.md) skill's job.
+Two documents in Craft's Templates own the layout: `Example — Workboard` for a project workboard and `Plan page` for a plan. Read them fresh whenever you create or restructure either, and copy their structure and styling, replacing every placeholder and example. They are the only copy of the layout, so the user can change them in Craft; keep no copy of it here or anywhere else. A plan page is a task inside the workboard that opens as a page (`type: "page"` with `listStyle: "task"` through the API); a card is a page block with `textStyle: "card"` and a `cardLayout`; a colored callout is `decorations: ["callout"]` with a `#RRGGBB` `color`. What each part means is the [plan-execution](../plan-execution/SKILL.md) skill's job.
 
 ## Transport
 

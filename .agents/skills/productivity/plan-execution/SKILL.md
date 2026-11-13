@@ -17,12 +17,14 @@ The global instructions define the contract; this skill holds the mechanics. It 
 
 Anything multi-step, or more than a one-off, is tracked in the document store before work starts. A single-step one-off needs no record.
 
-Each project has one workboard document, its whole task list. Active and paused rows and plan pages sit at the top level; completed ones go in the Done section at the bottom, the workboard's archive. Routing names where workboards live and the one for work outside any project. Find the workboard through routing, the plans index or its exact title, and create a missing one only with the title routing gives, adding it to the plans index.
+Each project has one workboard document, its whole task list, laid out from the workboard template the [craft](../craft/SKILL.md) skill names. Active and paused work stays at the top; finished work goes in Done. Routing names where workboards live and the one for work outside any project. Find the workboard through routing, the plans index or its exact title, and create a missing one only with the title routing gives, adding it to the plans index.
 
 Before adding, search the workboard and the plans index. Reuse a match only when it covers the same work and is active or paused, and ask when more than one fits. Reusing a paused plan does not resume it; that is the user's call. A done plan is history.
 
 - **Row:** small work is one task row, a short imperative line naming its owner, with any detail inside the task.
-- **Plan page:** work with several steps, sessions or decisions is a task inside the workboard that opens as a page. Lay out a new one from the document store's plan template, as the [craft](../craft/SKILL.md) skill describes; the template owns the layout, so follow it rather than inventing one.
+- **Plan page:** work with several steps, sessions or decisions is a task inside the workboard that opens as a page, laid out from the plan template.
+
+The templates own the layout and styling; follow them rather than inventing one, and bring an older workboard or plan in line the next time you do substantive work on it.
 - **Standalone document:** only for shared reference material, or a plan that spans projects and has no single workboard; routing names where these go.
 
 Link to a plan page itself, not just its workboard. When a plan moves, update the links you can reach; leave no redirect stub behind.
@@ -31,7 +33,7 @@ Work tied to a GitHub Issue stays thin here. The Issue keeps the technical plan,
 
 ## Keeping a plan current
 
-- **Header.** A plan page's first line leads with its status marker (active, paused or done, as routing names them), so the workboard card shows it, then the project, the date of the last substantive work, and who is on it: the lead, and any other thread with its role, such as earlier owner or working in parallel on one part. Name each as agent, harness and thread title, with a verified link when one exists. Working on a plan does not make you its owner: change the lead or a role only on a real handoff or role change, and keep earlier participants listed. Change the date only for substantive work, such as a step done, a decision or a status change; formatting, metadata, migration and link edits leave it alone. Add the header to an older plan the next time you touch it. A workboard names the project's lead the same way.
+- **Header.** The template's header line carries the status marker (active, paused or done, as routing names them), the project, the Worked date and who is on it: the lead and any other thread with its role, such as earlier owner or working in parallel, each linked to its chat. Working on a plan does not make you its owner: change the lead or a role only on a real handoff or role change, and keep earlier participants listed. The Worked date changes only for substantive work, such as a step done, a decision or a status change, never for formatting, metadata, migration or link edits. A plan page's date tracks that plan; the workboard's tracks its top-level tasks. Blocked or paused work also gets the template's colored callout, saying since when and what it waits on.
 - **Steps** are child tasks: imperative, one outcome each, enough detail inside for a fresh agent. Tick with the date and a one-line result; rewrite a step when its scope changes instead of adding a sibling. A step that needs the user becomes a personal task, and the step notes that handoff.
 - **Decisions** are appended the moment the user decides, as date, decision and why; a new entry supersedes an old one rather than rewriting it. **Gaps** record anything noticed but out of scope, with a task link if one exists; nothing is fixed silently.
 - **Dates.** Schedule the rows, plan pages and steps you will work today for today, so they show in the user's daily view. Give a rough future date when the next step's timing is known; leave the date empty when the work waits on something with no date.
