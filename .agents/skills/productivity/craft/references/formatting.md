@@ -29,6 +29,9 @@ Themes, fonts, covers and decorative separators are for when the user asks for a
 - Craft tokens: `<page>`, `<card>`, `<pageTitle>`, `<content>`, `<callout>`, `<caption>`, `<highlight color="...">`, `==yellow highlight==`, `<comment id="...">`, `$inline math$`, `$$block math$$`, `[text](block://blockId)`, and date links in the form `date://YYYY-MM-DD`.
 - Collection tags (`<collection>`, `<collectionItem>`, `<property>`, `<contentPreview>`, `<itemsPreview>`) are output-only.
 - A GitHub rich preview is a `richUrl` block holding only the URL. Craft fills in its title and image afterwards, so a plain-looking read right after insertion is not a failure; read again later, or check in the app when the card matters.
+- Date links (`[13 Nov](date://2026-11-13)`) link to that day's note; bold them where a date leads an entry. Tables are written as Markdown only, and the API rejects indenting one under a toggle.
+- A PUT that rewrites a caption must resend the `<caption>` tags, or the block falls back to body text.
+- Craft rate-limits rapid writes (HTTP 429 after roughly 15 quick calls); pace bulk edits or retry with backoff.
 - Inline highlights use Craft's named colors, not hex: `yellow`, `green`, `mint`, `cyan`, `blue`, `purple`, `pink`, `red`, `gray`, and gradients such as `gradient-blue`.
 
 ## Before handing off
