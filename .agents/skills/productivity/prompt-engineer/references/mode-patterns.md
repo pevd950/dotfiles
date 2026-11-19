@@ -60,7 +60,7 @@ Constraints: [continuity, anatomy, branding, text, or realism requirements].
 
 ## Raycast
 
-Use placeholders only when helpful: `{selection}`, `{clipboard}`, `{argument}`, `{browser-tab format="markdown"}`, and `{date format="yyyy-MM-dd"}`. Use raw modifiers when formatting must remain untouched. Return only the command prompt unless setup notes are requested.
+Use placeholders only when helpful: `{selection}`, `{clipboard}`, `{argument}`, `{browser-tab format="markdown"}`, and `{date format="yyyy-MM-dd"}`. Use raw modifiers when formatting must remain untouched. When a command reads a selection, clipboard or browser tab, wrap that text in named tags and say what it is for. Return only the command prompt unless setup notes are requested.
 
 ## Prompt review
 
