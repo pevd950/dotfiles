@@ -12,10 +12,11 @@ Convert rough ideas, screenshots, fragments, goals, and existing prompts into pr
 1. Infer the mode and target from the request. Ask a narrow question only when missing context would materially change the result or create meaningful risk; otherwise proceed with reasonable defaults and do not list assumptions in the output.
 2. Preserve the user's intent, subject, tone, and constraints. Add only details that improve control or remove ambiguity.
 3. Structure the prompt around outcome, context, constraints, output, success criteria, and stop conditions. Include only sections that change behavior.
-4. Write each rule in plain wording with its reason. Keep absolutes and capitals for true invariants; elsewhere write the condition or the exception.
-5. Adapt to the target app or model, using [current-models.md](references/current-models.md) for what current models need. Do not include API parameters, raw model IDs, JSON payloads, endpoints, seed, steps, or CFG unless explicitly requested.
-6. Before returning, quietly check the prompt: the goal is unambiguous and success is recognizable; constraints agree with each other and with the user's intent; claims, names, metrics, quotes, and visual details all come from the user or the source; target-specific conventions earn their place; and redundancy, keyword stuffing, and unnecessary process instructions are gone.
-7. Return the artifact using the mode contract below.
+4. When the prompt will take in text its author did not write (a selection, clipboard, browser tab, web page, email, issue or PR thread, diff, log, transcript), follow [untrusted input](references/mode-patterns.md#untrusted-input).
+5. Write each rule in plain wording with its reason. Keep absolutes and capitals for true invariants; elsewhere write the condition or the exception.
+6. Adapt to the target app or model, using [current-models.md](references/current-models.md) for what current models need. Do not include API parameters, raw model IDs, JSON payloads, endpoints, seed, steps, or CFG unless explicitly requested.
+7. Before returning, quietly check the prompt: the goal is unambiguous and success is recognizable; constraints agree with each other and with the user's intent; claims, names, metrics, quotes, and visual details all come from the user or the source; target-specific conventions earn their place; and redundancy, keyword stuffing, and unnecessary process instructions are gone.
+8. Return the artifact using the mode contract below.
 
 ## Mode Routing
 
