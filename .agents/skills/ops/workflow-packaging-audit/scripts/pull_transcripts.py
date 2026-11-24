@@ -125,6 +125,55 @@ def validate_source(spec):
             raise ValueError('Only explicit .codex transcript roots are supported')
 
 
+def source_contract(spec, old, adopt_legacy=False):
+    """Bind a cache label before using its route; hostnames are approved synonyms.
+
+    Legacy snapshots did not store the SSH alias. An operator must verify that
+    route separately and explicitly adopt it; hostname/user equality cannot
+    establish which route produced earlier bytes.
+    """
+    contract = {'ssh': spec.get('ssh'), 'user': spec['user'],
+                'roots': dict(spec['roots']), 'hostnames': list(spec['hostnames'])}
+    # Atomic snapshots introduce both fields together. A partial modern record
+    # is damaged provenance, not permission to adopt another route as legacy.
+    if (('source_contract' in old) != ('original_identity' in old) or
+            ('source_contract' in old and old['source_contract'] is None)):
+        raise ProbeRejected('source_provenance_incomplete')
+    prior = old.get('source_contract')
+    if prior is not None:
+        if not isinstance(prior, dict) or set(prior) != set(contract):
+            raise ProbeRejected('source_contract_invalid')
+        for field, reason in (('ssh', 'source_route_changed'),
+                              ('user', 'source_account_changed'),
+                              ('roots', 'source_roots_changed')):
+            if prior[field] != contract[field]:
+                raise ProbeRejected(reason)
+        names = prior['hostnames']
+        if not isinstance(names, list) or not names or not all(isinstance(h, str) and h for h in names):
+            raise ProbeRejected('source_contract_invalid')
+        if {h.casefold() for h in names} != {h.casefold() for h in contract['hostnames']}:
+            raise ProbeRejected('source_hostname_approvals_changed')
+        contract = prior  # Preserve the first binding's exact provenance.
+    approved = {h.casefold() for h in contract['hostnames']}
+    identity = old.get('identity')
+    if identity is None:
+        if prior is not None or old.get('files') or old.get('roots') or old.get('original_identity'):
+            raise ProbeRejected('source_provenance_incomplete')
+        return contract
+    for observed in (identity, old.get('original_identity', identity)):
+        if not isinstance(observed, dict) or not isinstance(observed.get('hostname'), str):
+            raise ProbeRejected('source_provenance_incomplete')
+        if observed.get('user') != contract['user']:
+            raise ProbeRejected('source_account_changed')
+        if observed['hostname'].casefold() not in approved:
+            raise ProbeRejected('source_hostname_not_approved')
+    if old.get('roots') != contract['roots']:
+        raise ProbeRejected('source_roots_changed')
+    if prior is None and not adopt_legacy:
+        raise ProbeRejected('legacy_route_unverified')
+    return contract
+
+
 def probe(spec, exclude):
     payload = json.dumps({'roots': spec['roots'], 'exclude_sessions': exclude, 'hash_files': spec.get('_hash_files', {})})
     command = (SSH + [spec['ssh'], 'python3 -c ' + shlex.quote(PROBE)]
@@ -315,7 +364,7 @@ def reconcile_evictions(root, label, evicted, inventory, transfer, observed_thro
         del evicted[relative]
 
 
-def pull(cache, config):
+def pull(cache, config, adopt_legacy_routes=()):
     """Copy approved roots with source coverage separate from cache observations.
 
     Archive bounds describe observed cached history, not proof of source absence.
@@ -330,6 +379,8 @@ def pull(cache, config):
         validate_source(spec)
     if len({s['label'].casefold() for s in sources}) != len(sources):
         raise ValueError('Supply uniquely labeled approved sources')
+    if not set(adopt_legacy_routes).issubset({s['label'] for s in sources}):
+        raise ValueError('Legacy route adoption must name configured source labels')
     for spec in sources:
         if spec.get('ssh') is None:
             destination = Path(cache).resolve()
@@ -347,9 +398,14 @@ def pull(cache, config):
         if any(spec['label'].casefold() in prior_labels and prior_labels[spec['label'].casefold()] != spec['label'] for spec in sources):
             raise ValueError('Source label differs only by case from prior cache identity')
         evicted = dict(previous.get('evicted', {}))
+        # A subset pull must not forget the binding of bytes it leaves behind.
+        # Omitted sources remain readable but cannot count as freshly covered.
+        retained = {label: {**entry, 'status': 'not_attempted', 'error': 'source_not_configured'}
+                    for label, entry in previous['sources'].items()}
         snapshot = {'observed_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-                    'exclude_sessions': exclude, 'sources': {s['label']: {**previous['sources'].get(s['label'], {}),
-                        'status': 'not_attempted', 'error': None} for s in sources},
+                    'exclude_sessions': exclude, 'sources': {**retained, **{s['label']: {
+                        **previous['sources'].get(s['label'], {}),
+                        'status': 'not_attempted', 'error': None} for s in sources}},
                     'evicted': evicted,
                     'archive_history': 'First observation is a baseline; earlier archive/unarchive transitions are unknown.'}
         write_json(metadata, snapshot)
@@ -359,6 +415,13 @@ def pull(cache, config):
             entry = {**old, 'status': 'unavailable', 'error': None, 'rsync_attempts': {}}
             snapshot['sources'][label] = entry
             try:
+                phase = 'source_continuity'
+                contract = source_contract(spec, old, label in adopt_legacy_routes)
+                directory = cache_path(root, label)
+                if old.get('identity') is None and (
+                        (directory.exists() and any(directory.iterdir())) or
+                        any(path.split('/', 1)[0] == label for path in evicted)):
+                    raise ProbeRejected('source_provenance_incomplete')
                 phase = 'initial_probe'
                 coverage_through = dt.datetime.now(dt.timezone.utc).isoformat()
                 # Hash only tombstoned sources, including same-metadata rewrites.
@@ -372,9 +435,10 @@ def pull(cache, config):
                 probe_spec = {**spec, '_hash_files': hash_files}
                 before, retries = probe_with_retry(probe_spec, exclude)
                 identity = {k: before[k] for k in ('hostname', 'user')}
-                if old.get('identity') not in (None, identity) or old.get('roots') not in (None, spec['roots']):
-                    raise ValueError('Source label was reused; use a new cache label')
                 entry['identity'] = identity
+                entry['original_identity'] = old.get('original_identity', old.get('identity')) or identity.copy()
+                entry['source_contract'] = contract
+                entry['roots'] = dict(spec['roots'])
                 entry['probe_timeout_retries'] = retries
                 skipped = {'sessions': set(), 'archived_sessions': set()}
                 restoring = set()
@@ -431,6 +495,8 @@ def pull(cache, config):
                     transfer[area] = 'ok' if code == 0 else 'rsync_incomplete'
                 phase = 'final_probe'
                 after, extra_retries = probe_with_retry(probe_spec, exclude)
+                if {k: after[k] for k in ('hostname', 'user')} != identity:
+                    raise ProbeRejected('source_identity_changed')
                 entry['probe_timeout_retries'] += extra_retries
                 inventory_completed_at = dt.datetime.now(dt.timezone.utc).isoformat()
                 inventory = {}
@@ -575,10 +641,12 @@ def main():
     parser.add_argument('--cache', type=Path, required=True)
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--authorized', action='store_true', required=True)
+    parser.add_argument('--adopt-legacy-route', action='append', default=[], metavar='SOURCE_LABEL',
+                        help='Bind a legacy label only after separately verifying its unchanged configured SSH route')
     args = parser.parse_args()
     os.umask(0o077)
     try:
-        print(json.dumps(pull(args.cache, read_json(args.config)), indent=2))
+        print(json.dumps(pull(args.cache, read_json(args.config), args.adopt_legacy_route), indent=2))
     except (OSError, ValueError, KeyError, TypeError):
         parser.exit(1, 'Pull failed; inspect private configuration and source availability.\n')
 

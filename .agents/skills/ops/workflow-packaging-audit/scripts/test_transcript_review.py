@@ -65,6 +65,251 @@ class TranscriptReviewTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(ValueError):self.pull()
         self.assertFalse(self.cache.exists())
 
+    def test_approved_hostname_variant_preserves_original_provenance(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'approved-source'}},
+                    record('user_message', message='hello')])
+        original = {'hostname': socket.gethostname(), 'user': getpass.getuser()}
+        variant = 'approved-variant.local'
+        self.spec['hostnames'].append(variant)
+        self.pull()
+        digest = hashlib.sha256((self.cache / self.relative).read_bytes()).hexdigest()
+        real = puller.subprocess.run
+        def renamed(command, **kwargs):
+            result = real(command, **kwargs)
+            if command[-1] == puller.PROBE:
+                value = json.loads(result.stdout)
+                value['hostname'] = variant
+                result.stdout = json.dumps(value)
+            return result
+        with patch.object(puller.subprocess, 'run', side_effect=renamed):
+            self.assertEqual(self.pull()['source-a']['status'], 'ok')
+        source = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        self.assertEqual(source['original_identity'], original)
+        self.assertEqual(source['identity'], {**original, 'hostname': variant})
+        self.assertEqual(source['source_contract'], {
+            'ssh': None, 'user': self.spec['user'], 'roots': self.spec['roots'],
+            'hostnames': self.spec['hostnames']})
+        self.assertEqual(hashlib.sha256((self.cache / self.relative).read_bytes()).hexdigest(), digest)
+        self.pull()
+        source = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        self.assertEqual(source['original_identity'], original)
+        self.assertEqual(source['identity'], original)
+        self.scan()
+        self.assertTrue(self.report()['all_sources_covered'])
+
+    def test_source_contract_changes_reject_before_any_probe_or_transfer(self):
+        self.write([record('user_message', message='hello')])
+        self.pull()
+        cached = (self.cache / self.relative).read_bytes()
+        initial = json.loads(json.dumps(self.spec))
+        cases = [
+            ('ssh', 'unexpected-review', 'source_route_changed'),
+            ('user', 'unexpected-account', 'source_account_changed'),
+            ('roots', {area: str(self.base / 'other' / '.codex' / area)
+                       for area in initial['roots']}, 'source_roots_changed'),
+            ('hostnames', initial['hostnames'] + ['unexpected-host'], 'source_hostname_approvals_changed'),
+        ]
+        for field, value, reason in cases:
+            with self.subTest(field=field):
+                self.spec.clear()
+                self.spec.update(json.loads(json.dumps(initial)))
+                self.spec[field] = value
+                with patch.object(puller, 'probe', side_effect=AssertionError('unverified route used')):
+                    result = self.pull()['source-a']
+                self.assertEqual(result['status'], 'unavailable')
+                self.assertEqual(result['error'], 'source_continuity_' + reason)
+                self.assertNotIn(str(value), result['error'])
+                self.assertEqual((self.cache / self.relative).read_bytes(), cached)
+
+    def test_unapproved_observed_hostname_rejects_without_copying(self):
+        self.write([record('user_message', message='hello')])
+        self.pull()
+        real = puller.subprocess.run
+        transfers = []
+        def unexpected(command, **kwargs):
+            if command[0] == 'rsync':
+                transfers.append(command)
+            result = real(command, **kwargs)
+            if command[-1] == puller.PROBE:
+                value = json.loads(result.stdout)
+                value['hostname'] = 'unexpected-host'
+                result.stdout = json.dumps(value)
+            return result
+        with patch.object(puller.subprocess, 'run', side_effect=unexpected):
+            result = self.pull()['source-a']
+        self.assertEqual(result['error'], 'initial_probe_identity_mismatch')
+        self.assertFalse(transfers)
+
+    def test_legacy_route_requires_explicit_adoption_and_retains_provenance(self):
+        self.write([record('user_message', message='hello')])
+        self.spec['hostnames'].append('approved-old-name.local')
+        self.pull()
+        snapshot = read_json(self.cache / 'snapshot.json')
+        old = snapshot['sources']['source-a']
+        original = {**old['identity'], 'hostname': 'approved-old-name.local'}
+        old['identity'] = original.copy()
+        del old['source_contract']
+        del old['original_identity']
+        write_json(self.cache / 'snapshot.json', snapshot)
+        with patch.object(puller, 'probe', side_effect=AssertionError('legacy route was assumed')):
+            self.assertEqual(self.pull()['source-a']['error'],
+                             'source_continuity_legacy_route_unverified')
+        result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+        self.assertEqual(result['source-a']['status'], 'ok')
+        source = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        self.assertEqual(source['original_identity'], original)
+        self.assertEqual(source['source_contract']['ssh'], self.spec['ssh'])
+        self.assertEqual(self.pull()['source-a']['status'], 'ok')
+
+    def test_legacy_adoption_cannot_override_account_root_or_identity_rejection(self):
+        self.pull()
+        snapshot = read_json(self.cache / 'snapshot.json')
+        del snapshot['sources']['source-a']['source_contract']
+        del snapshot['sources']['source-a']['original_identity']
+        for field, value, reason in [
+            ('user', 'unexpected-account', 'source_account_changed'),
+            ('hostname', 'unexpected-host', 'source_hostname_not_approved')]:
+            changed = json.loads(json.dumps(snapshot))
+            changed['sources']['source-a']['identity'][field] = value
+            write_json(self.cache / 'snapshot.json', changed)
+            with self.subTest(field=field), patch.object(puller, 'probe', side_effect=AssertionError('unsafe adoption')):
+                result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+            self.assertEqual(result['source-a']['error'], 'source_continuity_' + reason)
+        changed = json.loads(json.dumps(snapshot))
+        changed['sources']['source-a']['roots']['sessions'] = '/other/.codex/sessions'
+        write_json(self.cache / 'snapshot.json', changed)
+        with patch.object(puller, 'probe', side_effect=AssertionError('unsafe root adoption')):
+            result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+        self.assertEqual(result['source-a']['error'], 'source_continuity_source_roots_changed')
+
+    def test_changed_original_provenance_is_not_silently_replaced(self):
+        self.pull()
+        snapshot = read_json(self.cache / 'snapshot.json')
+        snapshot['sources']['source-a']['original_identity']['hostname'] = 'different-source'
+        write_json(self.cache / 'snapshot.json', snapshot)
+        with patch.object(puller, 'probe', side_effect=AssertionError('provenance was discarded')):
+            self.assertEqual(self.pull()['source-a']['error'],
+                             'source_continuity_source_hostname_not_approved')
+
+    def test_partial_modern_binding_cannot_be_downgraded_to_legacy(self):
+        self.pull()
+        original = read_json(self.cache / 'snapshot.json')
+        for missing in ('original_identity', 'source_contract', 'null_contract'):
+            snapshot = json.loads(json.dumps(original))
+            source = snapshot['sources']['source-a']
+            if missing == 'null_contract':
+                source['source_contract'] = None
+            else:
+                del source[missing]
+            write_json(self.cache / 'snapshot.json', snapshot)
+            with self.subTest(missing=missing), patch.object(puller, 'probe', side_effect=AssertionError('modern binding downgraded')):
+                result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+            self.assertEqual(result['source-a']['error'], 'source_continuity_source_provenance_incomplete')
+
+    def test_approved_hostname_case_changes_do_not_rebind_contract(self):
+        self.pull()
+        original = read_json(self.cache / 'snapshot.json')['sources']['source-a']['source_contract']
+        self.spec['hostnames'] = [name.swapcase() for name in self.spec['hostnames']]
+        self.assertEqual(self.pull()['source-a']['status'], 'ok')
+        source = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        self.assertEqual(source['source_contract'], original)
+
+    def test_subset_pull_preserves_omitted_binding_and_rejects_retargeting(self):
+        self.write([{'type': 'session_meta', 'payload': {'id': 'kept'}},
+                    record('user_message', message='hello')])
+        other = {**self.spec, 'label': 'source-b'}
+        self.config['sources'].append(other)
+        self.pull()
+        original = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        self.config['sources'] = [other]
+        self.assertEqual(self.pull()['source-a']['status'], 'not_attempted')
+        omitted = read_json(self.cache / 'snapshot.json')['sources']['source-a']
+        for key in ('source_contract', 'original_identity', 'identity', 'files'):
+            self.assertEqual(omitted[key], original[key])
+        self.scan()
+        self.assertFalse(self.report()['sources']['source-a']['source_bytes_cover_window'])
+        self.spec['ssh'] = 'unexpected-review'
+        self.config['sources'] = [self.spec]
+        with patch.object(puller, 'probe', side_effect=AssertionError('omitted binding forgotten')):
+            result = self.pull()['source-a']
+        self.assertEqual(result['error'], 'source_continuity_source_route_changed')
+
+    def test_subset_pull_withholds_retention_of_omitted_source(self):
+        old = record('user_message', message='old')
+        old['timestamp'] = '2026-07-01T12:00:00Z'
+        self.write([{'type': 'session_meta', 'payload': {'id': 'old'}}, old])
+        other = {**self.spec, 'label': 'source-b'}
+        full_config = {'sources': [self.spec, other]}
+        puller.pull(self.cache, full_config)
+        self.scan()
+        puller.pull(self.cache, {'sources': [other]})
+        self.scan()
+        real = cache_retention.probe_with_retry
+        def verified(spec, excluded):
+            self.assertNotEqual(spec['label'], 'source-a', 'omitted source must not be probed')
+            return real(spec, excluded)
+        with patch.object(cache_retention, 'probe_with_retry', side_effect=verified):
+            result = cache_retention.run(self.cache, full_config, days=60,
+                                         timezone='America/Chicago', now=dt.date(2026, 10, 5), apply=True)
+        self.assertEqual(result['source_verification_gaps']['source-a'], 'latest_pull_unavailable')
+        self.assertTrue((self.cache / self.relative).exists())
+
+    def test_orphaned_cache_bytes_and_tombstones_cannot_be_adopted_as_new_source(self):
+        self.write([record('user_message', message='hello')])
+        self.pull()
+        snapshot = read_json(self.cache / 'snapshot.json')
+        snapshot['sources'] = {}
+        write_json(self.cache / 'snapshot.json', snapshot)
+        with patch.object(puller, 'probe', side_effect=AssertionError('orphan bytes relabeled')):
+            result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+        self.assertEqual(result['source-a']['error'], 'source_continuity_source_provenance_incomplete')
+        # Even with the only cached file gone, its tombstone requires provenance.
+        (self.cache / self.relative).unlink()
+        for directory in sorted((self.cache / 'source-a').rglob('*'), reverse=True):
+            directory.rmdir()
+        snapshot['evicted'] = {self.relative: {'sha256': 'synthetic-unattributed-marker'}}
+        write_json(self.cache / 'snapshot.json', snapshot)
+        with patch.object(puller, 'probe', side_effect=AssertionError('orphan tombstone relabeled')):
+            result = puller.pull(self.cache, self.config, adopt_legacy_routes={'source-a'})
+        self.assertEqual(result['source-a']['error'], 'source_continuity_source_provenance_incomplete')
+
+    def test_unexpected_observed_account_is_not_accepted_as_hostname_continuity(self):
+        self.pull()
+        real = puller.subprocess.run
+        transfers = []
+        def changed_account(command, **kwargs):
+            if command[0] == 'rsync':
+                transfers.append(command)
+            result = real(command, **kwargs)
+            if command[-1] == puller.PROBE:
+                value = json.loads(result.stdout)
+                value['user'] = 'unexpected-account'
+                result.stdout = json.dumps(value)
+            return result
+        with patch.object(puller.subprocess, 'run', side_effect=changed_account):
+            self.assertEqual(self.pull()['source-a']['error'], 'initial_probe_identity_mismatch')
+        self.assertFalse(transfers)
+
+    def test_final_probe_identity_change_keeps_copied_bytes_unverified(self):
+        self.write([record('user_message', message='hello')])
+        self.spec['hostnames'].append('approved-variant.local')
+        real = puller.subprocess.run
+        probes = []
+        def changes_mid_pull(command, **kwargs):
+            result = real(command, **kwargs)
+            if command[-1] == puller.PROBE:
+                probes.append(command)
+                if len(probes) == 2:
+                    value = json.loads(result.stdout)
+                    value['hostname'] = 'approved-variant.local'
+                    result.stdout = json.dumps(value)
+            return result
+        with patch.object(puller.subprocess, 'run', side_effect=changes_mid_pull):
+            result = self.pull()['source-a']
+        self.assertEqual(result['error'], 'final_probe_source_identity_changed')
+        self.assertEqual(result['cached_files'], 0)
+        self.assertTrue((self.cache / self.relative).exists())
+
     def test_timed_out_probe_retries_once_without_changing_identity(self):
         self.write([record('user_message', message='hello')])
         real = puller.probe
@@ -123,7 +368,7 @@ class TranscriptReviewTests(unittest.TestCase):
         self.spec['hostnames']=['wrong-identity']
         with patch.object(puller,'probe',wraps=real) as spy:
             self.assertEqual(self.pull()['source-a']['status'],'unavailable')
-        self.assertEqual(spy.call_count,1)
+        self.assertEqual(spy.call_count,0)  # changed approvals reject before using the route
 
     def test_failed_transfer_retries_only_its_root_and_records_recovery(self):
         self.write([{'type':'session_meta','payload':{'id':'keep'}},
