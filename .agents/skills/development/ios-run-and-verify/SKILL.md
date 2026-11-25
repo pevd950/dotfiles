@@ -34,8 +34,10 @@ Xcode's own skills), which carry the mechanics.
 3. **Keep tools on the same target.** Check the actual destination again when
    changing tools; XCTest can run on a clone rather than the requested UDID.
    Record both when they differ. Diagnose the failed phase (lease, boot, build,
-   launch, test discovery, test execution, UI check, or distribution), then try
-   one bounded repo-supported recovery or fallback before reporting the blocker.
+   launch, test discovery, test execution, UI check, or distribution). Try at
+   most one bounded repo-supported recovery or fallback, only if safe and
+   authorized for the target and failed phase. If ownership, the lease, access,
+   or authorization blocks the action, report the blocker; don't retry through it.
 4. **Prove the requested outcome.** For a run, check the expected app state after
    launch. For a test, report which tests actually ran and passed. For motion
    or input behavior, record motion or exercise the interaction; a still image
@@ -50,11 +52,14 @@ Xcode's own skills), which carry the mechanics.
 - Prefer a repo-approved slim target for compatible UI smoke tests. Keep slim
   and full targets separate. Use full when required services, fixture fidelity,
   or the repo's gate are not validated in slim mode.
-- When Device MCP starts the simulator, use its integrated slim mode on a
-  supported runtime; don't layer standalone SimSlim over it. Verify the live
-  Slim/Full state after boot; unsupported runtimes or a different boot tool can
-  result in a full boot. If the repo permits standalone SimSlim, apply it only
-  to a job-owned disposable simulator and verify its live profile.
+- When Device MCP starts the simulator, select integrated slim only if the repo
+  permits it, the runtime supports it, and the workload's required services and
+  fixture behavior are verified in that mode. Otherwise use the repo-approved
+  full simulator; if that fallback is unavailable, report the blocker. Don't
+  layer standalone SimSlim over integrated slim. Verify the live Slim/Full
+  state after boot; the requested mode and actual boot can differ. If the repo
+  permits standalone SimSlim, apply it only to a job-owned disposable simulator
+  and verify its live profile.
 - Check the exact mode against the workload. The two tools do not necessarily
   retain the same services (for example, push, StoreKit, universal links, and
   widgets). Verify the app behavior as well as the profile. If compatibility is
